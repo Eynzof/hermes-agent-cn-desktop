@@ -21,7 +21,9 @@ export function PanelHero({ activeCount }: PanelHeroProps) {
 
   const greeting = getGreeting(now.getHours());
   const stamp = formatHeroTimestamp(now);
-  const healthOk = status?.gateway_running === true;
+  // Dashboard 可达即视为健康。gateway_running（PTY daemon 字段）
+  // 跟 v2 SSE+POST transport 无关，详见 health-grid.tsx 注释。
+  const healthOk = !!status;
   const todayCost = analytics?.daily?.[0]?.estimated_cost ?? 0;
 
   return (

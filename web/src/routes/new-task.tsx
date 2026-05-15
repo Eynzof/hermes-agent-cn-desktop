@@ -182,7 +182,10 @@ export function NewTaskRoute() {
     sendPrompt,
   ]);
 
-  const gatewayOk = !statusError && status?.gateway_running === true;
+  // gateway_running 是 PTY daemon 字段（P-009 之后 v2 transport
+  // 走进程内 dispatch，daemon 默认 stopped）。真正的健康指标是
+  // dashboard 是否响应。详见 health-grid.tsx 顶部注释。
+  const gatewayOk = !statusError && !!status;
   const gatewayLabel = statusError
     ? "Gateway 离线"
     : gatewayOk

@@ -94,13 +94,23 @@ export function Sidebar() {
   const goNew = () => navigate("/new");
   const goSearch = () => navigate("/history");
 
+  // CSS 在 sidebar.module.css 里把 data-state="stopped" / "offline"
+  // 都画成红点。但 PTY daemon 默认就是 stopped（P-009 后 v2 transport
+  // 走进程内 dispatch，不需要 daemon），所以这里把 daemon 的 stopped
+  // 状态归到 "ready"，只有 status 拉不到才真的算 offline。详见
+  // health-grid.tsx 顶部注释。
+  const daemonRunning = status?.gateway_state === "running" || status?.gateway_running;
   const gatewayState = statusError
     ? "offline"
-    : status?.gateway_state || (status ? "ready" : "unknown");
+    : status
+      ? daemonRunning
+        ? "running"
+        : "ready"
+      : "unknown";
   const gatewayLabel = statusError
     ? "离线"
     : status
-      ? status.gateway_state === "running" || status.gateway_running
+      ? daemonRunning
         ? "运行中"
         : "就绪"
       : "连接中";

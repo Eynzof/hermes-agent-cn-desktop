@@ -16,7 +16,9 @@ export function PanelTopChips() {
   const queryClient = useQueryClient();
   const profile = useActiveProfileName();
 
-  const gatewayOk = connectionState === "open" && status?.gateway_running === true;
+  // SSE/WS 连接 open 即视为健康；status?.gateway_running 是 PTY
+  // daemon 字段，与 v2 transport 无关（见 health-grid.tsx 注释）。
+  const gatewayOk = connectionState === "open";
   const gatewayTone = gatewayOk ? "ok" : connectionState === "connecting" ? "warn" : "err";
 
   // Match composer's "model that will be used" semantics: prefer user's last-used

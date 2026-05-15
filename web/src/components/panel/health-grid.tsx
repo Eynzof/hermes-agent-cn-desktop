@@ -75,8 +75,17 @@ export function HealthGrid() {
   }, [open]);
 
   const cells = useMemo<CellData[]>(() => {
-    const gatewayOk = status?.gateway_running === true;
-    const gatewayState = status?.gateway_state || (gatewayOk ? "running" : "stopped");
+    // `gateway_running` is the *PTY daemon* status — a Python subprocess
+    // the dashboard *can* spawn for the embedded chat tab. With P-009
+    // the SSE+POST transport calls tui_gateway.dispatch() in-process,
+    // so the daemon stays "stopped" by design and that's fine. The real
+    // health signal is whether the dashboard responded to /api/status
+    // at all — that's `!!status` (React Query keeps `data` undefined
+    // on transport / 5xx errors).
+    const dashboardReachable = !!status;
+    const daemonRunning = status?.gateway_running === true;
+    const gatewayState =
+      status?.gateway_state || (daemonRunning ? "running" : "stopped");
 
     const tokenKeys = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GLM_API_KEY", "DEEPSEEK_API_KEY"];
     const setTokens = env ? tokenKeys.filter((k) => env[k]?.is_set) : [];
@@ -116,11 +125,15 @@ export function HealthGrid() {
     return [
       {
         label: "Gateway",
-        tone: gatewayOk ? "ok" : "err",
+        tone: dashboardReachable ? "ok" : "err",
         value: "127.0.0.1:9119",
-        sub: gatewayOk ? "已连接" : `状态: ${gatewayState}`,
+        sub: dashboardReachable
+          ? daemonRunning
+            ? "运行中"
+            : "就绪 · in-process"
+          : "未响应",
         mono: true,
-        title: `gateway_state: ${gatewayState}`,
+        title: `dashboardReachable=${dashboardReachable}; gateway_state=${gatewayState}. P-009 后 SSE+POST 走进程内 dispatch，gateway_state=stopped 是预期值。`,
       },
       {
         label: "Token",
