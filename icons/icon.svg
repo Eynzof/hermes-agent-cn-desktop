@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="1024" height="1024" aria-label="Hermes Agent">
+  <rect width="80" height="80" rx="18" fill="#0a0a0a"/>
+  <g fill="#fbfaf6">
+    <rect x="22" y="22" width="8" height="36" rx="0.5"/>
+    <rect x="50" y="22" width="8" height="36" rx="0.5"/>
+    <rect x="30" y="36" width="20" height="8" rx="0.5"/>
+  </g>
+</svg>
