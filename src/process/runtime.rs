@@ -473,7 +473,27 @@ pub async fn install_runtime_update(
         };
     }
 
-    // Download artifact
+    // Validate URL scheme before downloading
+    match url::Url::parse(&resolved.artifact_url) {
+        Ok(u) if u.scheme() == "https" => {}
+        Ok(u) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!("artifact_url must be https, got {}", u.scheme())),
+            };
+        }
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!("Invalid artifact_url: {}", e)),
+            };
+        }
+    }
+
     let artifact = match reqwest::get(&resolved.artifact_url).await {
         Ok(res) if res.status().is_success() => match res.bytes().await {
             Ok(b) => b.to_vec(),
@@ -696,24 +716,47 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
     }
 }
 
+const MAX_ZIP_FILES: usize = 5_000;
+const MAX_ZIP_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
+
 fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
 
+    if archive.len() > MAX_ZIP_FILES {
+        return Err(format!("Zip contains {} files (limit {})", archive.len(), MAX_ZIP_FILES));
+    }
+
+    let dest = dest.canonicalize().unwrap_or_else(|_| dest.to_path_buf());
+    let mut total_bytes: u64 = 0;
+
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-        let out_path = dest.join(entry.name());
+
+        // Prevent zip-slip: use enclosed_name() which rejects ".." and absolute paths
+        let relative = match entry.enclosed_name() {
+            Some(p) => p.to_path_buf(),
+            None => return Err(format!("Refusing path traversal in zip: {:?}", entry.name())),
+        };
+        let out_path = dest.join(&relative);
+        if !out_path.starts_with(&dest) {
+            return Err(format!("Path escapes destination: {:?}", relative));
+        }
 
         if entry.is_dir() {
             fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
         } else {
+            total_bytes += entry.size();
+            if total_bytes > MAX_ZIP_TOTAL_BYTES {
+                return Err(format!("Zip exceeds size limit ({} MB)", MAX_ZIP_TOTAL_BYTES / 1024 / 1024));
+            }
+
             if let Some(parent) = out_path.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
             let mut out_file = fs::File::create(&out_path).map_err(|e| e.to_string())?;
             std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
 
-            // Preserve executable permission on Unix
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;

@@ -7,9 +7,10 @@
     "dev": "pnpm web:dev",
     "web:dev": "pnpm --filter @hermes/web dev",
     "web:build": "pnpm --filter @hermes/web build",
-    "tauri:dev": "pnpm web:dev & sleep 3 && cd . && npx @tauri-apps/cli dev",
-    "tauri:build": "pnpm web:build && npx @tauri-apps/cli build",
-    "tauri:build:debug": "pnpm web:build && npx @tauri-apps/cli build --debug",
+    "web:build:desktop": "pnpm --filter @hermes/web build:desktop",
+    "tauri:dev": "pnpm exec tauri dev",
+    "tauri:build": "pnpm exec tauri build",
+    "tauri:build:debug": "pnpm exec tauri build --debug",
     "tauri:run": "cargo run",
     "typecheck": "pnpm -r run typecheck",
     "test:unit": "pnpm --filter @hermes/web test:unit"

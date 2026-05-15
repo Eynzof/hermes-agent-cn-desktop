@@ -159,8 +159,8 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<std::process::Chi
             "HERMES_DASHBOARD_TUI",
             std::env::var("HERMES_DASHBOARD_TUI").unwrap_or_else(|_| "1".to_string()),
         )
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
 
     // Windows: hide the console window for the child process
     #[cfg(target_os = "windows")]
