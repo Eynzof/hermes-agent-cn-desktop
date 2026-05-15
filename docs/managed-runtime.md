@@ -1,0 +1,298 @@
+# Managed Runtime — 端到端流程文档
+
+桌面端 (`hermes-cn-desktop-v2`) 是一个 Tauri 壳子，自己不带 agent
+逻辑。所有 RPC / 事件流的另一端是 `hermes-agent-cn`（[fork] of
+NousResearch/hermes-agent）的 dashboard 子进程。
+
+本文档讲：那个 dashboard 子进程是**怎么进到用户机器上**的，桌面端
+怎么找到它、用它、更新它，以及"你好"那一刻 SSE 帧是如何穿过整条
+链路的。读完应该能够：
+
+- 知道每个组件的职责和它们存放在哪个 repo 里
+- 知道一次"首次启动"具体在做什么（按时间顺序）
+- 知道一次"runtime 升级"具体在做什么
+- 知道一次"桌面端升级"具体在做什么
+- 知道有人攻击这条链路时，哪一处会挡住他
+
+[fork]: https://github.com/Eynzof/hermes-agent-cn
+
+## 一、关键问题：桌面端怎么找到 agent
+
+历史上桌面端假定用户机器里**全局装了** `hermes` CLI（pip install
+hermes-agent），调用 `subprocess.spawn("hermes", "dashboard")`
+来起后端。两个隐患：
+
+1. **版本错配**：用户全局装的是上游 NousResearch 版本，桌面端依赖
+   的是 fork 的 P-009 patch（`/api/v2/events` 和 `/api/v2/rpc`
+   两条 SSE+POST 路由）。结果"你好"一发出 → SSE 401 → 桌面端报
+   "SSE closed during connect" → 用户一脸懵。
+2. **零安装体验差**：用户必须自己 `pip install hermes-agent-cn`，
+   还要装对 Python 版本（3.11+）、装对 fork 而不是上游。不是面向
+   终端用户的产品形态。
+
+解决方向：**桌面端自带 runtime**。安装包带不进去（150MB 太大），
+所以走"首次启动云拉"路线。整套机制叫 **managed runtime**。
+
+## 二、组件 + 文件分布
+
+```
+hermes-cn-desktop-v2/        ← 桌面壳子
+├── src/main.rs                  setup() 触发 bootstrap
+├── src/process/
+│   ├── runtime.rs               下载 / 签名校验 / 安装 / 回滚
+│   └── dashboard.rs             启动 dashboard 子进程，优先 managed
+├── src/commands/
+│   └── runtime_manager.rs       4 个 Tauri command (info/check/install/rollback)
+├── web/src/lib/tauri-bridge.ts  前端等 ready 事件 + 显示覆盖层
+└── .github/workflows/
+    └── release-desktop.yml      tag v* → 跨平台打 .msi/.dmg/.AppImage
+
+hermes-agent-cn/             ← 实际 agent（fork of NousResearch/hermes-agent）
+├── tui_gateway/
+│   ├── ws.py                    /api/ws WebSocket transport（旧）
+│   └── sse.py                   /api/v2/events SSE transport（P-009 新增）
+├── hermes_cli/
+│   └── web_server.py            FastAPI 入口，路由 /api/v2/{events,rpc}
+├── scripts/
+│   └── sign_runtime_manifest.py Ed25519 签 manifest
+├── docs/RUNTIME_RELEASES.md     fork 侧发布流程
+└── .github/workflows/
+    └── release-runtime.yml      tag runtime-v* → PyInstaller + 签 + 发 Release
+```
+
+## 三、首次启动时序（桌面端 PROD 模式）
+
+```
+用户双击 .msi 装好 → 第一次开桌面端
+
+[tauri::Builder::default().setup() 开始]
+  ↓
+1. resolve HERMES_HOME，读 sticky profile，准备 host/port
+  ↓
+2. runtime::get_runtime_info() → current.json 不存在
+  ↓
+3. info.updates_configured == true 因为 BASE_URL + 公钥都有
+   （baked-in fallback 在 src/process/runtime.rs:30-37 行）
+  ↓
+4. tauri::async_runtime::spawn(async move {...}) 起一个后台任务，
+   setup() 立刻 return Ok(()) → 窗口立刻弹出
+  ↓
+[窗口已经开了，前端开始 bootstrap]
+  ↓
+5. tauri-bridge.ts::installTauriBridge() 调 get_runtime_config
+   → 拿到 api_base_url="" 因为 Rust 还没填
+  ↓
+6. 检测到 prod 模式 + 空 url → 注入 Block H 覆盖层 DOM
+   "正在下载 hermes-agent-cn runtime..."
+  ↓
+7. 监听 Tauri 事件 "runtime-status"
+  ↓
+[同时 Rust 后台任务在跑]
+  ↓
+8. emit runtime-status "installing"
+   runtime::install_runtime_update(None) 开始：
+   a. configured_manifest_url() →
+      https://github.com/Eynzof/hermes-agent-cn/releases/latest/download/stable-win32-x64.json
+   b. reqwest GET → 拿到 manifest JSON
+   c. configured_public_key() → baked-in PEM
+   d. verify_signature(manifest) → Ed25519 验证 channel/platform/arch/
+      version/artifact_url/sha256/upstream_repo/upstream_commit 8 字段
+      canonical payload 的签名（src/process/runtime.rs::signature_payload）
+   e. reqwest GET artifact_url (https 强校验) → 拿到 ~35MB zip
+   f. sha256(zip) == manifest.sha256 (大小写不敏感)
+   g. tempfile::tempdir() 解压（zip-slip 防御 + 5000 文件 + 500MB 上限）
+   h. find_executable_in(staging) 找 hermes-agent-cn-runtime-<plat>-<arch>.exe
+   i. smoke_check_runtime(exe) 跑 `dashboard --help`，返回码 0
+   j. fs::rename(staging, target) 装到
+      %APPDATA%/cn.hermes.agent.desktop/runtime/versions/0.13.0/
+   k. write current.json 指向这个版本
+  ↓
+9. emit runtime-status "starting-dashboard"
+   dashboard::ensure_hermes_dashboard():
+   a. dashboard.rs::resolve_hermes_command() →
+      runtime::read_current_record() 命中 → 返回 versions/0.13.0/exe path
+   b. spawn 子进程，传 HERMES_HOME 等 env
+   c. wait_for_dashboard 轮询 /api/status 直到 2xx 或 401
+  ↓
+10. probe dashboard_supports_sse → openapi.json 里有 /api/v2/events
+    → 不报错
+  ↓
+11. fetch_session_token 从 dashboard 的 HTML 里 regex 出
+    __HERMES_SESSION_TOKEN__
+  ↓
+12. 把 api_base_url / gateway_url / session_token / dashboard_handle
+    全部写进 AppState
+  ↓
+13. emit runtime-status "ready"
+  ↓
+[前端那边]
+  ↓
+14. tauri-bridge 收到 ready 事件 → 关掉覆盖层 → 重新调
+    get_runtime_config 拿到完整配置
+  ↓
+15. window.__HERMES_RUNTIME__ 写好 → installTauriBridge resolve
+  ↓
+16. main.tsx createRoot.render(<App />) → React mount
+  ↓
+17. App 内部 gateway-sse-client.ts::connect() →
+    new EventSource("/api/v2/events?token=...")
+  ↓
+18. 服务端 hermes_cli/web_server.py::gateway_events:
+    - token query 验签（auth 中间件已放行 _PUBLIC_API_PATHS）
+    - 生成 client_id (uuid hex)
+    - 发 SSETransport 进 SSE_CLIENTS 注册表
+    - emit "event: client_id\ndata: {client_id}\n\n"
+    - emit gateway.ready 事件
+    - 每 15s emit ": ping\n\n"
+  ↓
+19. 前端 gateway-sse-client.ts 收到 client_id 帧 → finishConnect()
+    → 用户可以发"你好"了
+  ↓
+20. 用户发"你好"
+  ↓
+21. gateway-sse-client.ts::request():
+    POST /api/v2/rpc
+    headers: Authorization: Bearer <token>, X-Hermes-Client-Id: <id>
+    body: {"jsonrpc": "2.0", "id": "...", "method": "prompt.submit", ...}
+  ↓
+22. web_server.py::gateway_rpc:
+    - auth 中间件验 Bearer token
+    - 从 X-Hermes-Client-Id 查 SSE_CLIENTS 拿 transport
+    - asyncio.to_thread(tui_gateway.server.dispatch, body, transport)
+    - 短 handler → 立即返回 response
+    - 长 handler → 返回 {"accepted": true, "async": true}，
+      pool worker 通过 transport.write() 推到 SSE 流
+  ↓
+23. agent 真的开始处理 → emit message.delta / tool.start / ...
+    → 都通过同一个 transport 进 SSE_CLIENTS[client_id] 的队列
+    → SSE 流 yield data: {...}\n\n
+    → 前端 gateway-sse-client.ts::handleFrame 派发到 typed listeners
+    → React 组件更新
+```
+
+## 四、后续启动（managed runtime 已装）
+
+跳过 1-15 大部分：
+
+```
+setup() → runtime::read_current_record() 返回 Some(record)
+       → 走 ensure_hermes_dashboard 直接用 record.executable_path
+       → 拉 token，写 state，emit "ready"
+       → 窗口已 visible，bridge 看到 apiBaseUrl 非空，不显示覆盖层
+       → React 直接 mount
+```
+
+冷启动延迟约 1-3s（cargo 优化构建 + 一次 ensure_dashboard 探测）。
+
+## 五、Runtime 升级
+
+```
+fork main 收到 P-009 之后的新代码 → 你 git tag runtime-v0.13.1; git push origin runtime-v0.13.1
+  ↓
+fork CI release-runtime.yml 触发：
+  matrix: win32-x64 / darwin-arm64 / linux-x64
+  per job:
+    1. setup-python 3.11
+    2. pip install -e . + pyinstaller + cryptography
+    3. pyinstaller --onedir --name hermes-agent-cn-runtime-<plat>-<arch> hermes_cli/main.py
+    4. <NAME>.exe dashboard --help（smoke test，验证 PyInstaller 包对了）
+    5. zip dist/<NAME>
+    6. python scripts/sign_runtime_manifest.py 用 RUNTIME_SIGN_PRIVATE_KEY_PEM
+       签 manifest JSON （channel-platform-arch.json）
+  release job:
+    softprops/action-gh-release → 把 3 zip + 3 manifest 发到
+    releases/runtime-v0.13.1
+  ↓
+现在 https://github.com/Eynzof/hermes-agent-cn/releases/latest/download/
+指向 runtime-v0.13.1 这个 Release
+  ↓
+任何已装桌面端下次启动时：
+  1. 看到 current.json 里是 0.13.0
+  2. 用户在 UI 里点 "Check for update"，或者首次启动逻辑就会
+     check_runtime_update() → 拿到 0.13.1 manifest → update_available
+  3. 用户确认升级 → runtime_install_update → 走 first-run 那条
+     install 路径
+  4. current.json 改指 0.13.1，previous_version=0.13.0
+  5. 出问题可以 runtime_rollback 回 0.13.0
+```
+
+## 六、桌面端升级
+
+```
+你 git tag v0.2.0; git push origin v0.2.0
+  ↓
+desktop CI release-desktop.yml 触发：
+  matrix: windows-latest / macos-14 (arm64) / ubuntu-latest
+  per job:
+    1. setup-node + pnpm + rust toolchain
+    2. pnpm install
+    3. tauri-apps/tauri-action@v0 → 打 .msi / .dmg / .AppImage
+       runtime URL + 公钥 都是 baked-in（src/process/runtime.rs
+       的硬编码 fallback），不需要 env wire 进 CI
+  ↓
+新装包发到 releases/v0.2.0 → 用户下载装新版
+  ↓
+新版起来后，看到 current.json 已经有 runtime → 不下载 → 直接用
+（除非要升级 runtime，那是独立流程，见上一节）
+```
+
+## 七、信任链 / 攻击面
+
+谁要伪造一个 hermes-agent-cn runtime 让所有桌面端装上它？得同时
+做到：
+
+1. **替换 GitHub Release 的 zip**：需要 push 权限到
+   `Eynzof/hermes-agent-cn` repo（或者干掉 GitHub 自己）。
+2. **重签 manifest**：需要 `RUNTIME_SIGN_PRIVATE_KEY_PEM` 私钥。
+   这个 key 只存在 GitHub Actions secret 里，写一次就不能读出。
+3. **桌面端公钥被替换**：桌面端的公钥是**硬编码进 binary**的
+   （`src/process/runtime.rs::FALLBACK_PUBLIC_KEY_PEM`）。要替换
+   就得让用户安装一个用不同公钥编出的桌面端，回到 #1。
+
+也就是说，攻击者要拿下 `Eynzof` 在 GitHub 的账号 + 私钥 secret，
+才能投毒。普通 CDN 投毒（HTTPS 中间人 / 缓存毒化）不工作，因为
+Ed25519 验签会失败、SHA-256 校验会失败、桌面端拒绝安装。
+
+正交防御：
+
+- `artifact_url` 必须 `https://` 开头（`runtime.rs:477-495`），
+  防止有人把 manifest 改成 `file://` / `http://` 引用本地或明文。
+- zip 解压做 zip-slip 防御 + 5000 文件 + 500MB 上限
+  （`runtime.rs:722-771`）。
+- 解压后跑 smoke test (`dashboard --help`)，挂了就不切到这个版本。
+- AppState 里 `previous_version` 字段支持一键 rollback。
+
+## 八、密钥轮转
+
+如果私钥泄露 / 怀疑被偷：
+
+1. 本地生成新 Ed25519 keypair（参考 fork 的 `docs/RUNTIME_RELEASES.md`）
+2. 私钥 → 用 `gh secret set RUNTIME_SIGN_PRIVATE_KEY_PEM` 替换
+3. 公钥 → 改 `src/process/runtime.rs::FALLBACK_PUBLIC_KEY_PEM`
+   常量 + 同步到 `hermes-agent-cn/docs/RUNTIME_RELEASES.md`
+4. 桌面端 tag 一个新 v（让所有用户拿到新公钥的 binary）
+5. fork 端 tag 一个新 runtime-v（用新私钥重签）
+
+**注意**：步骤 4 必须先做完且所有用户都升级了，再做步骤 5。否则
+旧公钥的桌面端会拒绝新签名，直接卡在覆盖层不进。或者保留两套
+keypair 同时签的过渡期（这个我们的代码现在不支持，要的话改
+`signature_payload` 增加 `key_id` 字段，桌面端按 key_id 选公钥）。
+
+## 九、调试问题
+
+| 现象 | 多半的原因 | 怎么查 |
+|---|---|---|
+| 桌面端窗口卡在 "正在下载 runtime" 不动 | manifest URL 404 / 网络不通 | F12 → Network 看 GET stable-win32-x64.json |
+| 显示 "runtime 安装失败：SHA-256 mismatch" | artifact 被劫持 / CDN 缓存了旧版 | 强制刷新 GitHub Release 缓存，或重发布 |
+| 显示 "runtime 安装失败：Signature verification failed" | 公私钥不匹配 / fork 重签了 manifest | 对照桌面端二进制里的公钥 vs `RUNTIME_SIGN_PRIVATE_KEY_PEM` |
+| dashboard 起来但 UI 报 "SSE closed during connect" | dashboard 缺 P-009 路由 | `curl http://localhost:9119/openapi.json | jq '.paths | keys' | grep v2`，应该看到 events + rpc |
+| 升级后启动闪退 | 新 runtime 跑不起来 | 删 `%APPDATA%\cn.hermes.agent.desktop\runtime\current.json` 让桌面端重新走 first-run |
+| 升级想回滚 | runtime 出 bug | UI 调 `runtime_rollback` 或手动改 current.json 指 versions/旧版本/ |
+
+## 十、Issue 链接
+
+* [#10] desktop tracking issue — 全链路的"做了什么"
+* `hermes-agent-cn` PR #4 — P-009 server-side patch + 发布管线
+* fork 的 `docs/RUNTIME_RELEASES.md` — 签名密钥、发布操作细节
+
+[#10]: https://github.com/Eynzof/hermes-cn-desktop-v2/issues/10
