@@ -155,11 +155,25 @@ export function DetailRoute() {
     }
   }, [copyableSessionId, markSessionIdCopyState]);
 
+  // Snapshot of the current route taskId so async work below can detect
+  // whether the user has navigated away while it was awaiting. Updated
+  // synchronously on every render via the assignment below the ref decl.
+  const taskIdRef = useRef<string | undefined>(taskId);
+  taskIdRef.current = taskId;
+
   const ensureGatewaySession = useCallback(async (): Promise<string> => {
     if (!taskId) throw new Error("缺少会话 ID");
     if (restSessionId && taskId === restSessionId && !activeMappedGatewaySessionId) {
+      const startedFor = taskId;
       const gatewaySessionId = await resumeSession(restSessionId);
-      navigate(`/tasks/${gatewaySessionId}`, { replace: true });
+      // If the user navigated to a different session while we were
+      // resuming (resume can take 1–2s on cold sessions), DO NOT
+      // navigate — `replace`ing the URL here would yank them back to
+      // the gateway-id form of the session they already left. See
+      // issue #12.
+      if (taskIdRef.current === startedFor) {
+        navigate(`/tasks/${gatewaySessionId}`, { replace: true });
+      }
       return gatewaySessionId;
     }
     return activeMappedGatewaySessionId ?? taskId;
