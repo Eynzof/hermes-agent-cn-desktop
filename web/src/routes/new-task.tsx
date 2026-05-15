@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
@@ -17,6 +17,7 @@ import {
   writeWorkspacePath,
 } from "@/lib/workspaces";
 import { composerPrefillAtom } from "@/stores/panel";
+import { activeSessionIdAtom } from "@/stores/ui";
 import { TopBar } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
 import { QuickStart, RECIPES_NEW_TASK } from "@/components/panel/quick-start";
@@ -76,6 +77,7 @@ export function NewTaskRoute() {
   );
   const [prefilledText, setPrefilledText] = useState("");
   const [prefill, setPrefill] = useAtom(composerPrefillAtom);
+  const setActiveSessionId = useSetAtom(activeSessionIdAtom);
   const composerRef = useRef<HTMLDivElement>(null);
   const initialWorkspacePath = normalizeWorkspacePath(searchParams.get("workspace"));
 
@@ -162,6 +164,9 @@ export function NewTaskRoute() {
         uploadFile: uploadAttachmentFile,
         onAttachmentUpdate: controls.updateAttachment,
       });
+      // Atom-driven (#53): set the atom *before* navigating so detail
+      // route mounts with the correct sessionId already in atom state.
+      setActiveSessionId(sessionId);
       navigate(`/tasks/${sessionId}`);
       await sendPrompt(sessionId, prepared.promptText, {
         displayText: prepared.displayText,
@@ -180,6 +185,7 @@ export function NewTaskRoute() {
     detectDroppedPath,
     navigate,
     sendPrompt,
+    setActiveSessionId,
   ]);
 
   // gateway_running 是 PTY daemon 字段（P-009 之后 v2 transport

@@ -45,10 +45,16 @@ import s from "./detail.module.css";
 const ACTIVE_USAGE_POLL_INTERVAL_MS = 5_000;
 
 export function DetailRoute() {
-  const { taskId } = useParams<{ taskId: string }>();
+  // URL drives the *initial* selection (deep links, browser back/forward),
+  // but `activeSessionIdAtom` is the runtime source of truth. This lets
+  // sidebar / history / panel clicks update the atom synchronously and
+  // keeps async work (resumeSession, RPCs) from racing the route.
+  // See issue #53.
+  const { taskId: urlTaskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [, setActiveId] = useAtom(activeSessionIdAtom);
+  const [activeSessionId, setActiveId] = useAtom(activeSessionIdAtom);
+  const taskId = activeSessionId ?? urlTaskId;
 
   const gwSessionId = useAtomValue(gwSessionIdAtom);
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
@@ -109,7 +115,13 @@ export function DetailRoute() {
     runtime.pendingApprovals.length > 0 ||
     runtime.messages.length > 0;
 
-  useEffect(() => { if (taskId) setActiveId(taskId); }, [taskId, setActiveId]);
+  // Sync URL → atom on mount and whenever URL changes (browser back/forward
+  // or a deep-link entry). Sidebar / history clicks already update the atom
+  // synchronously *before* navigating, so this only matters for the cases
+  // where atom was empty/stale when this component mounted.
+  useEffect(() => {
+    if (urlTaskId && urlTaskId !== activeSessionId) setActiveId(urlTaskId);
+  }, [urlTaskId, activeSessionId, setActiveId]);
 
   // Reset the user-selected model whenever the route changes to a different
   // session — otherwise the composer chip would carry over the previous
@@ -155,29 +167,20 @@ export function DetailRoute() {
     }
   }, [copyableSessionId, markSessionIdCopyState]);
 
-  // Snapshot of the current route taskId so async work below can detect
-  // whether the user has navigated away while it was awaiting. Updated
-  // synchronously on every render via the assignment below the ref decl.
-  const taskIdRef = useRef<string | undefined>(taskId);
-  taskIdRef.current = taskId;
-
   const ensureGatewaySession = useCallback(async (): Promise<string> => {
     if (!taskId) throw new Error("缺少会话 ID");
     if (restSessionId && taskId === restSessionId && !activeMappedGatewaySessionId) {
-      const startedFor = taskId;
-      const gatewaySessionId = await resumeSession(restSessionId);
-      // If the user navigated to a different session while we were
-      // resuming (resume can take 1–2s on cold sessions), DO NOT
-      // navigate — `replace`ing the URL here would yank them back to
-      // the gateway-id form of the session they already left. See
-      // issue #12.
-      if (taskIdRef.current === startedFor) {
-        navigate(`/tasks/${gatewaySessionId}`, { replace: true });
-      }
-      return gatewaySessionId;
+      // No URL navigate after the resume — atom + gwSessionIdAtom hold
+      // the authoritative state; downstream callers go through
+      // resolveGatewaySessionId / resolvePersistentSessionId helpers
+      // which understand both id shapes. The async navigate that used
+      // to live here was the source of #52 (closure-stale replace
+      // yanking the URL back to the previous session after rapid
+      // switches). See #53 for the broader rework.
+      return await resumeSession(restSessionId);
     }
     return activeMappedGatewaySessionId ?? taskId;
-  }, [activeMappedGatewaySessionId, navigate, restSessionId, resumeSession, taskId]);
+  }, [activeMappedGatewaySessionId, restSessionId, resumeSession, taskId]);
 
   const usageGatewaySessionId = runtimeSessionId ?? activeMappedGatewaySessionId;
 

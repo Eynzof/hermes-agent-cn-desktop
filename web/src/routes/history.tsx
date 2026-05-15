@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { useNavigate } from "react-router-dom";
 import {
   Archive,
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { SessionSummary } from "@hermes/protocol";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
+import { activeSessionIdAtom } from "@/stores/ui";
 import { useArchiveSession, useDeleteSession, useSessions } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
 import { isSessionRunning } from "@/lib/session-activity";
@@ -444,11 +445,16 @@ export function HistoryRoute() {
     setPinnedSources(togglePinnedSource(key));
   }, []);
 
+  const setActiveSessionId = useSetAtom(activeSessionIdAtom);
   const goSession = useCallback(
     (session: SessionSummary) => {
+      // Atom is the source of truth (#53). Set synchronously *before*
+      // navigate so any async work that mounts as part of the detail
+      // route reads the post-click value, not the previous one.
+      setActiveSessionId(session.id);
       navigate(`/tasks/${session.id}`);
     },
-    [navigate],
+    [navigate, setActiveSessionId],
   );
 
   const startRename = useCallback((session: SessionSummary) => {
