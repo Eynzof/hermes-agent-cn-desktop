@@ -4,5 +4,6 @@ pub mod http_client;
 pub mod process;
 pub mod session_archive;
 pub mod session_log;
+pub mod prevent_sleep;
 pub mod state;
 pub mod update_stage;
