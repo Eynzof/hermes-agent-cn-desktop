@@ -221,18 +221,28 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
 }
 
 // Compile-time defaults — populated by setting the matching env vars in
-// the build environment (e.g. `cargo build` invoked by the release CI
-// with HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT=https://github.com/...).
-// Runtime env vars always take precedence; these only kick in when the
-// runtime env is empty, so dev builds with no env set behave exactly as
-// before (no auto-install, no signature verify, fall through to PATH
-// `hermes`). See issue #10 P2.
+// the build environment. Cascade (highest first):
+//   1. Runtime env (HERMES_RUNTIME_UPDATE_*)
+//   2. Compile-time env override (HERMES_RUNTIME_UPDATE_*_DEFAULT)
+//   3. Hardcoded fallback below — points at the Eynzof/hermes-agent-cn
+//      production release pipeline + its Ed25519 public key.
+// Forks rebuilding the desktop should set the compile-time env override
+// to point at their own release pipeline + key (or edit the constants
+// below).
 const BAKED_MANIFEST_BASE_URL: Option<&str> =
     option_env!("HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT");
 const BAKED_MANIFEST_CHANNEL: Option<&str> =
     option_env!("HERMES_RUNTIME_UPDATE_CHANNEL_DEFAULT");
 const BAKED_PUBLIC_KEY_PEM: Option<&str> =
     option_env!("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT");
+
+const FALLBACK_MANIFEST_BASE_URL: &str =
+    "https://github.com/Eynzof/hermes-agent-cn/releases/latest/download";
+const FALLBACK_PUBLIC_KEY_PEM: &str = concat!(
+    "-----BEGIN PUBLIC KEY-----\n",
+    "MCowBQYDK2VwAyEAqPkLQ4o67G2GMTgkQQQZXWwDBZM/4hqq5thSZSNhoC0=\n",
+    "-----END PUBLIC KEY-----\n"
+);
 
 fn configured_manifest_url() -> Option<String> {
     // 1. Fully-formed URL via runtime env (highest precedence)
@@ -243,11 +253,13 @@ fn configured_manifest_url() -> Option<String> {
         }
     }
 
-    // 2. Construct from base URL — runtime env wins, then compile-time default.
+    // 2. Construct from base URL — runtime env wins, then compile-time
+    //    default, then the hardcoded production fallback.
     let base = std::env::var("HERMES_RUNTIME_UPDATE_BASE_URL")
         .ok()
         .filter(|s| !s.trim().is_empty())
-        .or_else(|| BAKED_MANIFEST_BASE_URL.map(|s| s.to_string()))?;
+        .or_else(|| BAKED_MANIFEST_BASE_URL.map(|s| s.to_string()))
+        .unwrap_or_else(|| FALLBACK_MANIFEST_BASE_URL.to_string());
     let base = base.trim();
     if base.is_empty() {
         return None;
@@ -297,7 +309,8 @@ fn configured_public_key() -> Option<String> {
             return Some(pem);
         }
     }
-    None
+    // 4. Hardcoded fallback — the Eynzof/hermes-agent-cn production key.
+    Some(FALLBACK_PUBLIC_KEY_PEM.to_string())
 }
 
 /// Get current runtime information.
