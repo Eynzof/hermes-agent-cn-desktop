@@ -10,7 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use hermes_agent_cn::commands;
-use hermes_agent_cn::process::dashboard;
+use hermes_agent_cn::process::{dashboard, runtime};
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 
@@ -102,6 +102,50 @@ fn main() {
                     child: None,
                 }
             } else {
+                // First-run bootstrap: install the managed hermes-agent-cn
+                // runtime before spawning dashboard. Without this we fall
+                // through to PATH `hermes` (typically upstream hermes-agent
+                // without P-009 SSE routes) and the UI hits an opaque
+                // "SSE closed during connect" once it loads. See issue #10.
+                //
+                // Blocking by design for this first cut: first launch waits
+                // for the download to complete before the window appears.
+                // Subsequent launches see current.json and skip this entirely.
+                // A non-blocking variant with a UI overlay is tracked as P3
+                // in issue #10.
+                let info = runtime::get_runtime_info(None);
+                if info.current.is_none() {
+                    if info.updates_configured {
+                        log::info!(
+                            "No managed runtime present; attempting first-run install"
+                        );
+                        let result = tauri::async_runtime::block_on(
+                            runtime::install_runtime_update(None),
+                        );
+                        if let Some(installed) = &result.installed {
+                            log::info!(
+                                "Installed managed runtime v{}",
+                                installed.version
+                            );
+                        }
+                        if !result.ok {
+                            log::error!(
+                                "First-run runtime install failed: {}",
+                                result.error.as_deref().unwrap_or("unknown error")
+                            );
+                            // Fall through; PATH `hermes` may still work
+                            // (or the dashboard spawn below will fail with
+                            // a clearer error than we can synthesize here)
+                        }
+                    } else {
+                        log::warn!(
+                            "No managed runtime installed and update channel \
+                             is not configured; relying on PATH `hermes` \
+                             (likely upstream, missing SSE routes)"
+                        );
+                    }
+                }
+
                 match tauri::async_runtime::block_on(
                     dashboard::ensure_hermes_dashboard(
                         dashboard::EnsureDashboardOptions {

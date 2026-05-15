@@ -122,8 +122,23 @@ pub struct EnsureDashboardOptions {
 }
 
 /// Find and resolve the hermes executable path.
-/// Tries: HERMES_DESKTOP_AGENT_COMMAND env → "hermes" on PATH.
+/// Order: managed runtime (current.json) → HERMES_DESKTOP_AGENT_COMMAND env
+/// → "hermes" on PATH.
+///
+/// The managed runtime is preferred because it's a fork-specific binary
+/// we installed and signature-verified ourselves. Falling through to PATH
+/// `hermes` is the legacy path that hits upstream `hermes-agent` (without
+/// P-009 SSE routes) on most user machines — see issue #10.
 fn resolve_hermes_command() -> (String, Vec<String>) {
+    if let Some(record) = crate::process::runtime::read_current_record() {
+        log::info!(
+            "Using managed runtime v{} at {}",
+            record.version,
+            record.executable_path
+        );
+        return (record.executable_path, vec![]);
+    }
+
     if let Ok(cmd) = std::env::var("HERMES_DESKTOP_AGENT_COMMAND") {
         if !cmd.is_empty() {
             // Shell-wrapped command (matches Electron's `shell: true` behavior)

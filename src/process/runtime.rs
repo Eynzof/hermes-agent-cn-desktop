@@ -209,7 +209,7 @@ fn find_executable_in(dir: &Path, max_depth: u32) -> Option<PathBuf> {
     None
 }
 
-fn read_current_record() -> Option<RuntimeInstallRecord> {
+pub fn read_current_record() -> Option<RuntimeInstallRecord> {
     let record: RuntimeInstallRecord = read_json_file(&current_record_path())?;
     if record.platform != current_platform() || record.arch != current_arch() {
         return None;
