@@ -350,6 +350,44 @@ describe("message adapter", () => {
     expect(merged).toHaveLength(1);
     expect(merged[0]?.id).toBe("live-assistant-10");
   });
+
+  // Regression for issue #11: stored builds the assistant from multiple
+  // non-adjacent text parts (text → tools → text → ...) so textFromParts
+  // joins with "" (no separator). The live path can produce the same
+  // material with adjacent text parts that `mergeParts` folds with `\n\n`.
+  // Before the fix, canonicalText differed by exactly the seam whitespace
+  // ("代码。好的" vs "代码。\n\n好的" → after old comparableText collapsing
+  // to "代码。 好的") so `===` failed and the assistant rendered twice.
+  it("dedups stored vs live assistant when only inter-part whitespace differs", () => {
+    const storedAssistant = uiMessage({
+      id: "stored-1",
+      parts: [
+        { type: "text", text: "好的，我先全面了解一下这个项目的结构和代码。" },
+        { type: "tool", toolCallId: "c1", name: "read", state: "done" },
+        { type: "tool", toolCallId: "c2", name: "read", state: "done" },
+        { type: "text", text: "好的，我已经阅读了项目的核心代码。" },
+      ],
+      metadata: { persistedId: 200 },
+    });
+    const liveAssistant = uiMessage({
+      id: "live-1",
+      parts: [
+        {
+          type: "text",
+          text: "好的，我先全面了解一下这个项目的结构和代码。\n\n好的，我已经阅读了项目的核心代码。",
+        },
+        { type: "tool", toolCallId: "c1", name: "read", state: "done" },
+        { type: "tool", toolCallId: "c2", name: "read", state: "done" },
+      ],
+    });
+
+    const merged = mergeHermesUIMessages([storedAssistant], [liveAssistant]);
+
+    expect(merged).toHaveLength(1);
+    // Live wins because it carries richer metadata (the same reason
+    // mergeHermesUIMessages prefers consolidated live entries elsewhere).
+    expect(merged[0]?.id).toBe("live-1");
+  });
 });
 
 describe("assistant stats derivation", () => {

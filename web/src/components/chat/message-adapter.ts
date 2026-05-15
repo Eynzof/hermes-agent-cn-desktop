@@ -493,7 +493,17 @@ export function hermesUIMessagesToChatMessages(messages: HermesUIMessage[]): Cha
 }
 
 function comparableText(value: string | undefined): string {
-  return (value ?? "").replace(/\s+/g, " ").trim();
+  // Strip ALL whitespace (not just collapse) for canonical dedup
+  // comparison. The two paths that produce assistant message text have
+  // subtly different separators: `legacySessionMessagesToHermesUIMessages`
+  // builds text parts that are non-adjacent (tools between turns) and
+  // `textFromParts` joins them with `""`; the live SSE path can leave
+  // adjacent text parts that `mergeParts` folds with `\n\n`. After
+  // collapsing `\s+ -> " "` you still have a one-space gap on the live
+  // side but a no-space seam on the stored side — `===` fails and the
+  // dedup miss renders the same assistant twice. Removing whitespace
+  // entirely makes both paths converge. See issue #11.
+  return (value ?? "").replace(/\s+/g, "");
 }
 
 function canonicalText(message: HermesUIMessage): string {
