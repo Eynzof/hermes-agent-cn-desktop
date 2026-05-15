@@ -156,8 +156,16 @@ function legacyMetadata(msg: SessionMessage): HermesMessageMetadata | undefined 
   return metadata;
 }
 
+// Roles we know how to render. Hermes integrations (Feishu bridge etc.)
+// emit extra marker roles like "session_meta" into the persisted log —
+// the response schema accepts arbitrary strings so the row doesn't
+// blank the whole history, but we drop them here cleanly.
+const RENDERABLE_LEGACY_ROLES = new Set(["user", "assistant", "system", "tool"]);
+
 export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): HermesUIMessage | null {
   const createdAt = msg.timestamp ? msg.timestamp * 1000 : Date.now();
+
+  if (!RENDERABLE_LEGACY_ROLES.has(msg.role)) return null;
 
   if (msg.role === "tool") {
     return {
@@ -193,10 +201,12 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
 
   if (!parts.length) return null;
 
+  // role was narrowed by RENDERABLE_LEGACY_ROLES + the "tool" early-return
+  // above; the remaining values are exactly user/assistant/system.
   return {
     id: `stored-${msg.id}`,
     sessionId: msg.session_id,
-    role: msg.role,
+    role: msg.role as "user" | "assistant" | "system",
     createdAt,
     status: msg.finish_reason === "error" ? "error" : "complete",
     parts,

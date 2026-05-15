@@ -72,7 +72,16 @@ export type SessionsResponse = z.infer<typeof SessionsResponse>;
 export const SessionMessage = z.object({
   id: z.number(),
   session_id: z.string(),
-  role: z.enum(["user", "assistant", "system", "tool"]),
+  // role was a strict enum, but Hermes-side integrations (e.g. the
+  // Feishu bridge) write extra marker roles like "session_meta" into
+  // the persisted session log. A strict enum rejected the whole
+  // response on the first unknown row, so a 23-message Feishu session
+  // showed "暂无对话记录" in our UI while hermes-desktop loaded it
+  // fine. Keep this loose so any future role doesn't blank the
+  // history; the renderer (legacySessionMessageToHermesUIMessage)
+  // returns null for roles it doesn't know how to draw, which drops
+  // those rows cleanly without crashing the parse.
+  role: z.string(),
   content: z.union([z.string(), z.null()]),
   tool_call_id: z.string().nullable(),
   tool_calls: z.any().nullable(),
