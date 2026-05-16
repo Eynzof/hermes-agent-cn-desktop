@@ -16,6 +16,7 @@ import {
   type ProviderPreset,
 } from "@/lib/provider-catalog";
 import { ModelCombobox } from "@/components/settings/model-combobox";
+import { rememberLastUsedModel } from "@/lib/last-used-model";
 import type { EnvVarInfo } from "@hermes/protocol";
 import { OAuthProvidersSection } from "./settings-oauth-section";
 import s from "./settings.module.css";
@@ -72,6 +73,15 @@ export function ModelsSection() {
     baseUrl: initialProvider?.baseUrl ?? "",
     model: initialProvider?.defaultModel ?? "",
   });
+  // Last saved values for the selected provider. Used to compute whether the
+  // form is dirty (vs. baseline) so the save button can show an idle "已保存"
+  // state until the user actually changes something.
+  const [savedSnapshot, setSavedSnapshot] = useState<{
+    baseUrl: string;
+    model: string;
+    providerId: string;
+  } | null>(null);
+  const [savedFlashFor, setSavedFlashFor] = useState<string | null>(null);
   const [editKey, setEditKey] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
   const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
@@ -227,11 +237,25 @@ export function ModelsSection() {
       ? selectedProviderEntry.base_url
       : selectedProvider.baseUrl;
     setProviderForm({ apiKey: "", baseUrl, model });
+    setSavedSnapshot({ baseUrl, model, providerId: selectedProvider.id });
   }, [
     selectedProvider,
     selectedProviderEntry.base_url,
     selectedProviderEntry.model,
   ]);
+
+  // Switching to a different provider hides any stale "已保存" indicator.
+  useEffect(() => {
+    setSavedFlashFor(null);
+  }, [selectedProvider?.id]);
+
+  const isFormDirty = !!(
+    selectedProvider &&
+    (providerForm.apiKey.trim() !== "" ||
+      providerForm.baseUrl !== (savedSnapshot?.baseUrl ?? "") ||
+      providerForm.model !== (savedSnapshot?.model ?? ""))
+  );
+  const showSavedFlash = !isFormDirty && savedFlashFor === selectedProvider?.id;
 
   const handleReveal = async (key: string) => {
     if (revealedValues[key]) {
@@ -282,11 +306,28 @@ export function ModelsSection() {
     if (newApiKey && !isCustomProvider && selectedProvider.apiKeyLabel) {
       setEnv.mutate({ key: selectedProvider.apiKeyLabel, value: newApiKey });
     }
+    const savedBaseUrl = providerForm.baseUrl;
+    const savedModel = providerForm.model;
     saveConfig.mutate(
       buildProviderConfigUpdate(config, selectedProvider, providerForm),
       {
         onSuccess: () => {
           setProviderForm((prev) => ({ ...prev, apiKey: "" }));
+          setSavedSnapshot({
+            baseUrl: savedBaseUrl,
+            model: savedModel,
+            providerId: selectedProvider.id,
+          });
+          setSavedFlashFor(selectedProvider.id);
+          // PanelComposer / NewTaskRoute seed their model picker from
+          // localStorage on mount. Without this, "保存并设为当前模型" updates
+          // config.yaml but the workbench keeps showing the previously-used
+          // model until the user manually picks one again.
+          rememberLastUsedModel({
+            model: savedModel,
+            provider: selectedProvider.id,
+            providerName: selectedProvider.name,
+          });
         },
       },
     );
@@ -486,10 +527,18 @@ export function ModelsSection() {
             <div className={s.providerActions}>
               <button
                 className={s.btnPrimary}
-                disabled={saveConfig.isPending || (!selectedHasCredentials && !providerForm.apiKey.trim())}
+                disabled={
+                  saveConfig.isPending ||
+                  !isFormDirty ||
+                  (!selectedHasCredentials && !providerForm.apiKey.trim())
+                }
                 onClick={handleProviderSave}
               >
-                {saveConfig.isPending ? "保存中…" : "保存并设为当前模型"}
+                {saveConfig.isPending
+                  ? "保存中…"
+                  : showSavedFlash
+                    ? "✓ 已保存"
+                    : "保存并设为当前模型"}
               </button>
             </div>
           </div>
