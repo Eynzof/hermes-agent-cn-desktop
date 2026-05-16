@@ -272,6 +272,16 @@ export function ModelsSection() {
 
   const handleProviderSave = () => {
     if (!config || !selectedProvider) return;
+    const newApiKey = providerForm.apiKey.trim();
+    const isCustomProvider = selectedProvider.id.startsWith("custom:");
+    // Built-in providers (alibaba, deepseek, zai, kimi, ...): hermes-agent
+    // only reads their API key from environment variables / ~/.hermes/.env,
+    // never from config.yaml's providers.<id>.api_key. Mirror the key into
+    // the named env var so chat requests actually find credentials. Custom
+    // providers are read inline from config.yaml, so they don't need this.
+    if (newApiKey && !isCustomProvider && selectedProvider.apiKeyLabel) {
+      setEnv.mutate({ key: selectedProvider.apiKeyLabel, value: newApiKey });
+    }
     saveConfig.mutate(
       buildProviderConfigUpdate(config, selectedProvider, providerForm),
       {
