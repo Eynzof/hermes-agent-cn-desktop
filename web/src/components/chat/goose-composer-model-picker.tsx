@@ -23,6 +23,7 @@ import {
   subscribeModelUsage,
   type ModelUsageEntry,
 } from "@/lib/model-usage-log";
+import { expandSearchQuery } from "@/lib/model-search-aliases";
 import type { ComposerModelPickerProps, ComposerModelSelection } from "./composer-types";
 import s from "./goose-composer.module.css";
 
@@ -260,13 +261,17 @@ function buildCandidates(
   return { all, recent, configured, recommended, more };
 }
 
-function candidateMatchesQuery(c: Candidate, query: string): boolean {
-  if (!query) return true;
+function candidateMatchesQuery(c: Candidate, expandedQuery: string): boolean {
+  if (!expandedQuery) return true;
   const haystack = [c.model, c.providerName, c.vendor, c.providerSlug, c.apiKeyLabel]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-  return haystack.includes(query);
+  // Expanded query is space-separated alternatives (raw + CN-alias
+  // expansions). Match if ANY token hits — so typing "千问" finds qwen
+  // models without forcing the user to know the English slug.
+  const tokens = expandedQuery.split(/\s+/).filter(Boolean);
+  return tokens.some((token) => haystack.includes(token));
 }
 
 function candidateMatchesCaps(c: Candidate, activeCaps: Set<CapabilityKey>): boolean {
@@ -327,6 +332,10 @@ interface ModelPickerViewProps {
   selected?: ComposerModelSelection | null;
   switchingModel: boolean;
   onSelectModel: (selection: ComposerModelSelection) => void;
+  /** ⌘↵ variant — set this model AND make it the global default. Picker
+   * fires this when meta/ctrl is held during click; falls back to
+   * onSelectModel when unset. */
+  onSelectAndSetDefault?: (selection: ComposerModelSelection) => void;
   /** When a user clicks an unconfigured-provider CTA, the host route navigates
    * to /models with the provider id so the settings page can scroll to + focus
    * the relevant section. */
@@ -351,6 +360,7 @@ function ModelPickerBody({
   selected,
   switchingModel,
   onSelectModel,
+  onSelectAndSetDefault,
   onConfigureProvider,
   searchInputRef,
   closeControl,
@@ -373,7 +383,7 @@ function ModelPickerBody({
     [modelOptions, usageEntries],
   );
 
-  const query = modelSearch.trim().toLowerCase();
+  const query = expandSearchQuery(modelSearch);
   const usageByKey = useMemo(() => {
     const map = new Map<string, ModelUsageEntry>();
     for (const e of usageEntries) map.set(e.key, e);
@@ -472,14 +482,21 @@ function ModelPickerBody({
         className={s.mpCard}
         data-current={isCurrent ? "true" : undefined}
         disabled={switchingModel}
-        onClick={() =>
-          onSelectModel({
+        title="↵ 仅本会话 · ⌘↵ 同时设为全局默认"
+        onClick={(event) => {
+          const selection = {
             model: candidate.model,
             provider: candidate.providerSlug,
             providerName: candidate.providerName,
             contextWindow: candidate.caps?.contextWindow,
-          })
-        }
+          };
+          const setAsDefault = event.metaKey || event.ctrlKey;
+          if (setAsDefault && onSelectAndSetDefault) {
+            onSelectAndSetDefault(selection);
+          } else {
+            onSelectModel(selection);
+          }
+        }}
       >
         {isCurrent && <span className={s.mpCardStrip} aria-hidden="true" />}
         <div className={s.mpCardHead}>

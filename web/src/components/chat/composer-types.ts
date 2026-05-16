@@ -55,6 +55,10 @@ export interface ComposerModelPickerProps {
    * showing a spinner on first open when the data is already in cache. */
   initialOptions?: ModelOptionsResult | null;
   onSelect?: (selection: ComposerModelSelection) => void | Promise<void>;
+  /** ⌘↵ variant of onSelect — switches the current session AND persists the
+   * choice as the global default for future sessions. When unset, ⌘↵
+   * degrades to plain onSelect. */
+  onSelectAndSetDefault?: (selection: ComposerModelSelection) => void | Promise<void>;
   /** Called when the user clicks "去设置" on an unconfigured provider card.
    * Host routes wire this to React Router navigation (/models#<provider>). */
   onConfigureProvider?: (providerId: string) => void;

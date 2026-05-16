@@ -662,6 +662,15 @@ export function GooseComposer({
           selected={modelPicker?.selected}
           switchingModel={switchingModel}
           onSelectModel={(selection) => void selectModel(selection)}
+          onSelectAndSetDefault={
+            modelPicker?.onSelectAndSetDefault
+              ? (selection) => {
+                  void Promise.resolve(modelPicker.onSelectAndSetDefault?.(selection))
+                    .then(() => setModelOpen(false))
+                    .catch(() => {});
+                }
+              : undefined
+          }
           onConfigureProvider={(providerId) => {
             setModelOpen(false);
             modelPicker?.onConfigureProvider?.(providerId);

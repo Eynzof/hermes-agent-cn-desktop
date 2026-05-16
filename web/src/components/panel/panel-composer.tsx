@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAtom } from "jotai";
 import { useNavigate } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
-import { useConfig, useModelInfo } from "@/hooks/use-config";
+import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
@@ -36,6 +36,7 @@ export function PanelComposer() {
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
+  const saveConfig = useSaveConfig();
   const [sending, setSending] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(
     () => readLastUsedModel(),
@@ -84,6 +85,21 @@ export function PanelComposer() {
   const onConfigureProvider = useCallback((providerId: string) => {
     navigate(`/models#provider-${providerId}`);
   }, [navigate]);
+
+  const onSelectAndSetDefault = useCallback((selection: ComposerModelSelection) => {
+    onModelSelect(selection);
+    if (!config) return;
+    saveConfig.mutate({
+      ...config,
+      model: {
+        ...(typeof config.model === "object" && config.model !== null && !Array.isArray(config.model)
+          ? config.model as Record<string, unknown>
+          : {}),
+        provider: selection.provider,
+        default: selection.model,
+      },
+    });
+  }, [config, onModelSelect, saveConfig]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
@@ -166,6 +182,7 @@ export function PanelComposer() {
           loadOptions: () => getModelOptions(),
           initialOptions: modelOptionsCache ?? null,
           onSelect: onModelSelect,
+          onSelectAndSetDefault,
           onConfigureProvider,
           disabled: sending,
         }}

@@ -6,15 +6,13 @@ import { useProviderModels } from "@/hooks/use-provider-models";
 import {
   BUILTIN_PROVIDER_CATALOG,
   buildProviderConfigUpdate,
-  fetchRemoteProviderCatalog,
   getProviderEntry,
-  mergeProviderCatalog,
   providerHasSavedCredentials,
   sortProvidersForCnEdition,
   TOP5_PROVIDER_IDS,
-  type ProviderCatalog,
   type ProviderPreset,
 } from "@/lib/provider-catalog";
+import { useProviderCatalog } from "@/hooks/use-provider-catalog";
 import { ModelCombobox } from "@/components/settings/model-combobox";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
 import type { EnvVarInfo } from "@hermes/protocol";
@@ -62,8 +60,7 @@ export function ModelsSection() {
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
   const revealEnv = useRevealEnv();
-  const [catalog, setCatalog] = useState<ProviderCatalog>(BUILTIN_PROVIDER_CATALOG);
-  const [catalogMessage, setCatalogMessage] = useState("");
+  const { catalog, message: catalogMessage, refresh: refreshCatalog } = useProviderCatalog();
   const initialProvider =
     BUILTIN_PROVIDER_CATALOG.providers.find((p) => p.id === TOP5_PROVIDER_IDS[0]) ??
     BUILTIN_PROVIDER_CATALOG.providers[0];
@@ -300,22 +297,8 @@ export function ModelsSection() {
     setEditVal("");
   };
 
-  const handleCatalogRefresh = async () => {
-    const url = import.meta.env.VITE_HERMES_PROVIDER_CATALOG_URL;
-    if (!url) {
-      setCatalog(BUILTIN_PROVIDER_CATALOG);
-      setCatalogMessage(`当前使用内置预设 ${BUILTIN_PROVIDER_CATALOG.version}`);
-      return;
-    }
-
-    try {
-      const remote = await fetchRemoteProviderCatalog(url);
-      setCatalog(mergeProviderCatalog(BUILTIN_PROVIDER_CATALOG, remote));
-      setCatalogMessage(`已刷新预设 ${remote.version}`);
-    } catch (error) {
-      setCatalog(BUILTIN_PROVIDER_CATALOG);
-      setCatalogMessage(error instanceof Error ? error.message : "刷新失败，已回退内置预设");
-    }
+  const handleCatalogRefresh = () => {
+    void refreshCatalog();
   };
 
   const handleProviderSave = () => {

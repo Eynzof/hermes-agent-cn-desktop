@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAtom, useSetAtom } from "jotai";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
-import { useConfig, useModelInfo } from "@/hooks/use-config";
+import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import { useStatus } from "@/hooks/use-status";
@@ -73,6 +73,7 @@ export function NewTaskRoute() {
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
+  const saveConfig = useSaveConfig();
   const { data: status, isError: statusError } = useStatus();
   const [sending, setSending] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(
@@ -131,6 +132,21 @@ export function NewTaskRoute() {
   const onConfigureProvider = useCallback((providerId: string) => {
     navigate(`/models#provider-${providerId}`);
   }, [navigate]);
+
+  const onSelectAndSetDefault = useCallback((selection: ComposerModelSelection) => {
+    onModelSelect(selection);
+    if (!config) return;
+    saveConfig.mutate({
+      ...config,
+      model: {
+        ...(typeof config.model === "object" && config.model !== null && !Array.isArray(config.model)
+          ? config.model as Record<string, unknown>
+          : {}),
+        provider: selection.provider,
+        default: selection.model,
+      },
+    });
+  }, [config, onModelSelect, saveConfig]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
@@ -261,6 +277,7 @@ export function NewTaskRoute() {
                 loadOptions: () => getModelOptions(),
                 initialOptions: modelOptionsCache ?? null,
                 onSelect: onModelSelect,
+                onSelectAndSetDefault,
                 onConfigureProvider,
                 disabled: sending,
               }}
