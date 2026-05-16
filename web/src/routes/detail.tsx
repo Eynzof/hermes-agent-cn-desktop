@@ -16,6 +16,7 @@ import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { recordModelUsage } from "@/lib/model-usage-log";
+import { forgetSessionModelOverride, readSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
@@ -130,9 +131,16 @@ export function DetailRoute() {
   // session — otherwise the composer chip would carry over the previous
   // session's choice (or the global last-used model) instead of reflecting
   // this session's own model.
+  //
+  // Prefer a session-model override from sessionStorage when present: that's
+  // the path new-task / panel-composer use to hand off the just-picked
+  // model so detail doesn't briefly show the global default before the
+  // backend round-trips back with the real session model.
   useEffect(() => {
-    setSelectedModel(null);
+    const override = taskId ? readSessionModelOverride(taskId) : null;
+    setSelectedModel(override);
     setSessionUsage(null);
+    if (taskId && override) forgetSessionModelOverride(taskId);
   }, [taskId]);
 
   useEffect(() => {

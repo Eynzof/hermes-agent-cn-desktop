@@ -7,6 +7,7 @@ import { useModelOptions } from "@/hooks/use-model-options";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
+import { rememberSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { uploadAttachmentFile } from "@/lib/transport";
 import { titleFromPrompt, titleWithSessionSuffix } from "@/lib/session-title";
@@ -130,6 +131,7 @@ export function PanelComposer() {
           payload.modelSelection.model,
           payload.modelSelection.provider,
         );
+        rememberSessionModelOverride(sessionId, payload.modelSelection);
       }
       if (payload.workspacePath) {
         rememberWorkspaceProject(payload.workspacePath);

@@ -5,6 +5,7 @@ import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { recordModelUsage } from "@/lib/model-usage-log";
+import { rememberSessionModelOverride } from "@/lib/session-model-override";
 import { useStatus } from "@/hooks/use-status";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { resolveModelContextWindow } from "@/lib/model-context";
@@ -177,6 +178,11 @@ export function NewTaskRoute() {
           payload.modelSelection.model,
           payload.modelSelection.provider,
         );
+        // The detail route mounts before /api/sessions/<id> reflects this
+        // setSessionModel write, so without this override the composer chip
+        // briefly shows the global default model (modelInfo). sessionStorage
+        // is consumed on detail mount and forgotten.
+        rememberSessionModelOverride(sessionId, payload.modelSelection);
       }
       if (payload.workspacePath) {
         rememberWorkspaceProject(payload.workspacePath);
