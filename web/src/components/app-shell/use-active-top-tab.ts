@@ -1,6 +1,6 @@
 import { useLocation } from "react-router-dom";
 
-export type TopTab = "workbench" | "projects" | "skills" | "automation" | "observability";
+export type TopTab = "workbench" | "projects" | "skills" | "automation" | "observability" | "models";
 
 export interface TopTabDef {
   id: TopTab;
@@ -37,7 +37,6 @@ export const TOP_TABS: readonly TopTabDef[] = [
     matches: (path) =>
       path.startsWith("/skills") ||
       path.startsWith("/mcp") ||
-      path.startsWith("/models") ||
       path.startsWith("/profiles"),
   },
   {
@@ -53,6 +52,13 @@ export const TOP_TABS: readonly TopTabDef[] = [
     label: "可观测",
     href: "/health",
     matches: (path) => path.startsWith("/health") || path.startsWith("/logs"),
+  },
+  {
+    id: "models",
+    num: "06",
+    label: "模型",
+    href: "/models",
+    matches: (path) => path.startsWith("/models"),
   },
 ];
 

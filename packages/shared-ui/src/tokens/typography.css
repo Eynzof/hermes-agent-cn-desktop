@@ -40,6 +40,6 @@
     "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
   --h-font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "SF Mono",
     Consolas, monospace;
-  --h-font-serif: "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
-    Georgia, "Times New Roman", serif;
+  --h-font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC",
+    STSongti-SC, Fraunces, Georgia, "Times New Roman", serif;
 }

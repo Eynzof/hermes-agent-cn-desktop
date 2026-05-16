@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Folder } from "lucide-react";
+import { Folder, Plus, Search } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useSessions } from "@/hooks/use-sessions";
@@ -133,8 +133,19 @@ export function WorkbenchSidebar() {
   return (
     <aside className={s.sidebar}>
       <button type="button" className={s.newTask} onClick={() => navigate("/new")}>
-        <span>新任务</span>
+        <span className={s.newTaskLead}>
+          <Plus size={14} strokeWidth={2.2} />
+          <span>新建任务</span>
+        </span>
         <span className={s.newTaskKbd}>⌘ N</span>
+      </button>
+
+      <button type="button" className={s.searchRow} onClick={() => navigate("/history")}>
+        <span className={s.searchLead}>
+          <Search size={13} />
+          <span>搜索…</span>
+        </span>
+        <span className={s.searchKbd}>/</span>
       </button>
 
       <div className={s.scrollY}>

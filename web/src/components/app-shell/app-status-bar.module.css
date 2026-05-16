@@ -19,6 +19,10 @@
   gap: 6px;
 }
 
+.stat[data-tone="warn"] .val {
+  color: var(--amber);
+}
+
 .lbl {
   color: var(--bone-600);
   text-transform: uppercase;

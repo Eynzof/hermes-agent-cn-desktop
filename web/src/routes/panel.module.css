@@ -63,9 +63,10 @@
 .sectionTitle {
   margin: 0;
   font-family: var(--h-font-serif);
-  font-style: italic;
+  /* CN locale: same rationale as hero — keep upright, not italic. */
+  font-style: normal;
   font-weight: 400;
-  font-size: 22px;
+  font-size: 26px;
   color: var(--bone-100);
   letter-spacing: -0.01em;
 }

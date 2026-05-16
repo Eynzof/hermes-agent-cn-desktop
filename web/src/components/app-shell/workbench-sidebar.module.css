@@ -29,7 +29,7 @@
 }
 
 .newTask {
-  margin: 12px;
+  margin: 12px 12px 6px;
   height: 36px;
   background: var(--persimmon);
   color: #1a0c04;
@@ -53,6 +53,12 @@
   background: #ff8a52;
 }
 
+.newTaskLead {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .newTaskKbd {
   background: rgba(0, 0, 0, 0.2);
   color: rgba(0, 0, 0, 0.6);
@@ -62,6 +68,47 @@
   padding: 1px 4px;
   border-radius: 2px;
   letter-spacing: 0.04em;
+}
+
+.searchRow {
+  margin: 0 12px 10px;
+  height: 28px;
+  background: var(--ink-200);
+  border: 1px solid var(--h-line);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.searchRow:hover {
+  color: var(--h-text);
+  background: var(--ink-300);
+}
+
+.searchLead {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.searchKbd {
+  font-family: var(--h-font-mono);
+  font-size: 9.5px;
+  color: var(--bone-600);
+  border: 1px solid var(--h-line);
+  background: var(--ink-100);
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: 0.04em;
+  min-width: 14px;
+  text-align: center;
 }
 
 .scrollY {
