@@ -29,21 +29,24 @@ impl HermesHttpClient {
 
     pub fn with_logging(mut self) -> Self {
         self.before_request.push(Arc::new(|req| {
-            log::debug!(
-                "[http] {} {}",
-                req.method(),
-                req.url().path(),
-            );
+            log::debug!("[http] {} {}", req.method(), req.url().path(),);
         }));
 
         self.after_response.push(Arc::new(|res, elapsed| {
             let status = res.status().as_u16();
-            let level = if status >= 400 { log::Level::Warn } else { log::Level::Debug };
+            let level = if status >= 400 {
+                log::Level::Warn
+            } else {
+                log::Level::Debug
+            };
             log::log!(
                 level,
                 "[http] {} {} → {} ({:.0?})",
                 res.url().path(),
-                res.url().query().map(|q| format!("?{}", q)).unwrap_or_default(),
+                res.url()
+                    .query()
+                    .map(|q| format!("?{}", q))
+                    .unwrap_or_default(),
                 status,
                 elapsed,
             );

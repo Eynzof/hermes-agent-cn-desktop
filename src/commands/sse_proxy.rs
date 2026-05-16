@@ -44,7 +44,10 @@ pub async fn connect_gateway_sse(
         req = req.header("Authorization", format!("Bearer {}", token));
     }
 
-    let response = req.send().await.map_err(|e| AppError::SseConnect(e.to_string()))?;
+    let response = req
+        .send()
+        .await
+        .map_err(|e| AppError::SseConnect(e.to_string()))?;
     if !response.status().is_success() {
         return Err(AppError::SseConnect(format!("HTTP {}", response.status())));
     }
@@ -81,8 +84,7 @@ pub async fn connect_gateway_sse(
                 let line = buffer[..pos].trim_end_matches('\r').to_string();
                 buffer = buffer[pos + 1..].to_string();
 
-                if line.starts_with("data: ") {
-                    let data = &line[6..];
+                if let Some(data) = line.strip_prefix("data: ") {
                     let _ = app_clone.emit("gateway-sse-event", data.to_string());
                 }
             }

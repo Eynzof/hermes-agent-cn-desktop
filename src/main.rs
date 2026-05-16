@@ -10,8 +10,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use hermes_agent_cn::commands;
-use hermes_agent_cn::process::{dashboard, runtime};
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
+use hermes_agent_cn::process::{dashboard, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 use tauri::Emitter;
 
@@ -38,9 +38,8 @@ fn resolve_hermes_home() -> PathBuf {
         }
     }
 
-    let data_dir = dirs::data_dir().unwrap_or_else(|| {
-        dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
-    });
+    let data_dir =
+        dirs::data_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")));
     let hermes_home = data_dir.join("cn.hermes.agent.desktop").join("hermes-home");
     let _ = fs::create_dir_all(&hermes_home);
     hermes_home
@@ -99,14 +98,12 @@ fn main() {
             // 4. In dev mode, just probe; in production, ensure dashboard is running
             // Use tauri::async_runtime::block_on (not tokio::runtime::Handle::current)
             // because Tauri's setup closure runs outside the tokio runtime context.
-            let is_dev = std::env::var("HERMES_DESKTOP_DEV_URL").is_ok()
-                || cfg!(debug_assertions);
+            let is_dev = std::env::var("HERMES_DESKTOP_DEV_URL").is_ok() || cfg!(debug_assertions);
 
             let handle = if is_dev {
                 let api_base_url = dashboard::dashboard_base_url(&host, port);
-                let alive = tauri::async_runtime::block_on(
-                    dashboard::probe_dashboard(&api_base_url),
-                );
+                let alive =
+                    tauri::async_runtime::block_on(dashboard::probe_dashboard(&api_base_url));
                 if !alive {
                     log::warn!("Dev mode: dashboard not reachable at {}", api_base_url);
                 }
@@ -251,22 +248,18 @@ fn main() {
                     );
                 }
 
-                match tauri::async_runtime::block_on(
-                    dashboard::ensure_hermes_dashboard(
-                        dashboard::EnsureDashboardOptions {
-                            host: host.clone(),
-                            port,
-                            hermes_home: boot_home_str.clone(),
-                        },
-                    ),
-                ) {
+                match tauri::async_runtime::block_on(dashboard::ensure_hermes_dashboard(
+                    dashboard::EnsureDashboardOptions {
+                        host: host.clone(),
+                        port,
+                        hermes_home: boot_home_str.clone(),
+                    },
+                )) {
                     Ok(h) => h,
                     Err(e) => {
                         log::error!("Failed to start dashboard: {}", e);
-                        return Err(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            e,
-                        )) as Box<dyn std::error::Error>);
+                        return Err(Box::new(std::io::Error::other(e))
+                            as Box<dyn std::error::Error>);
                     }
                 }
             };
@@ -277,9 +270,9 @@ fn main() {
             // to send a message. Surface a clear warning at startup so users
             // and bug reports know the root cause rather than chasing the
             // opaque error. See issue #10 P2.
-            let supports_sse = tauri::async_runtime::block_on(
-                dashboard::dashboard_supports_sse(&handle.api_base_url),
-            );
+            let supports_sse = tauri::async_runtime::block_on(dashboard::dashboard_supports_sse(
+                &handle.api_base_url,
+            ));
             if !supports_sse {
                 log::error!(
                     "Dashboard at {} lacks /api/v2/events (P-009 patch missing). \
@@ -295,9 +288,9 @@ fn main() {
             let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
             let session_token = match env_token {
                 Some(t) => Some(t),
-                None => tauri::async_runtime::block_on(
-                    dashboard::fetch_session_token(&handle.api_base_url),
-                ),
+                None => tauri::async_runtime::block_on(dashboard::fetch_session_token(
+                    &handle.api_base_url,
+                )),
             };
 
             let gateway_url =

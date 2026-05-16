@@ -45,7 +45,10 @@ pub async fn runtime_install_update(
             ok: false,
             installed: result.installed,
             previous: result.previous,
-            error: Some(format!("Runtime installed, but dashboard restart failed: {}", e)),
+            error: Some(format!(
+                "Runtime installed, but dashboard restart failed: {}",
+                e
+            )),
         });
     }
 
@@ -75,7 +78,10 @@ pub async fn runtime_rollback(
             ok: false,
             installed: result.installed,
             previous: result.previous,
-            error: Some(format!("Runtime rolled back, but dashboard restart failed: {}", e)),
+            error: Some(format!(
+                "Runtime rolled back, but dashboard restart failed: {}",
+                e
+            )),
         });
     }
 
@@ -96,8 +102,8 @@ async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), AppError> 
         }
         inner.dashboard_handle = None;
 
-        let host = std::env::var("HERMES_DESKTOP_API_HOST")
-            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let host =
+            std::env::var("HERMES_DESKTOP_API_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
         let port = std::env::var("HERMES_DESKTOP_API_PORT")
             .ok()
             .and_then(|p| p.parse().ok())

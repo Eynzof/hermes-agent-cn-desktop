@@ -10,10 +10,10 @@
 
 #[cfg(target_os = "macos")]
 mod mac {
-    use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+    use objc2::rc::Retained;
     use objc2::runtime::ProtocolObject;
     use objc2_foundation::NSObjectProtocol;
-    use objc2::rc::Retained;
+    use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
 
     pub struct Guard {
         process_info: Retained<NSProcessInfo>,
@@ -25,8 +25,8 @@ mod mac {
             unsafe {
                 let process_info = NSProcessInfo::processInfo();
                 let reason_str = NSString::from_str(reason);
-                let options = NSActivityOptions::UserInitiated
-                    | NSActivityOptions::IdleSystemSleepDisabled;
+                let options =
+                    NSActivityOptions::UserInitiated | NSActivityOptions::IdleSystemSleepDisabled;
                 let token = process_info.beginActivityWithOptions_reason(options, &reason_str);
                 Some(Self {
                     process_info,
