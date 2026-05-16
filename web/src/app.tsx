@@ -18,6 +18,7 @@ import { CronRoute } from "@/routes/cron";
 import { HealthRoute } from "@/routes/health";
 import { LogsRoute } from "@/routes/logs";
 import { SettingsRoute } from "@/routes/settings";
+import { DebugRoute } from "@/routes/debug";
 import { DevPrimitivesRoute } from "@/routes/dev-primitives";
 
 export function App() {
@@ -43,6 +44,7 @@ export function App() {
           <Route path="/cron" element={<CronRoute />} />
           <Route path="/health" element={<HealthRoute />} />
           <Route path="/logs" element={<LogsRoute />} />
+          <Route path="/debug" element={<DebugRoute />} />
           <Route path="/settings" element={<ErrorBoundary><SettingsRoute /></ErrorBoundary>} />
           {import.meta.env.DEV && (
             <Route path="/dev/primitives" element={<DevPrimitivesRoute />} />

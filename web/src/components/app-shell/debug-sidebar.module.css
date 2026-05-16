@@ -1,0 +1,119 @@
+/* Debug sidebar — flat nav to every route, scoped to the 07 T tab.
+   Visually shares the workbench-sidebar look (mono labels, ink-100 bg). */
+
+.sidebar {
+  height: 100%;
+  background: var(--ink-100);
+  border-right: 1px solid var(--h-line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.sidebar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(255, 122, 61, 0.25) 30%,
+    rgba(255, 122, 61, 0.25) 70%,
+    transparent
+  );
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.scrollY {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-top: 4px;
+}
+
+.section {
+  padding: 6px 0 10px;
+}
+
+.section + .section {
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 6px 16px;
+  font-family: var(--h-font-mono);
+  font-size: 9.5px;
+  color: var(--bone-600);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.labelNum {
+  opacity: 0.7;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 12.5px;
+  color: var(--h-text-2);
+  cursor: pointer;
+  position: relative;
+  border-left: 2px solid transparent;
+  background: transparent;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--h-font-cn);
+}
+
+.item:hover {
+  color: var(--h-text);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.item[data-active="true"] {
+  color: var(--bone-100);
+  background: var(--ink-300);
+  border-left-color: var(--persimmon);
+}
+
+.itemIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--bone-600);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.item[data-active="true"] .itemIcon {
+  color: var(--persimmon);
+}
+
+.itemLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.itemPath {
+  font-family: var(--h-font-mono);
+  font-size: 9.5px;
+  color: var(--bone-600);
+  letter-spacing: 0.02em;
+}
