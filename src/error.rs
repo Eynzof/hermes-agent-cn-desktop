@@ -139,3 +139,93 @@ impl From<url::ParseError> for AppError {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use std::sync::{Mutex, PoisonError};
+
+    #[test]
+    fn from_io_error_maps_to_file_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        let app: AppError = io_err.into();
+        assert!(matches!(app, AppError::FileError(msg) if msg.contains("denied")));
+    }
+
+    #[test]
+    fn from_poison_error_maps_to_state_lock_poisoned() {
+        let m = Mutex::new(0u8);
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = m.lock().unwrap();
+            panic!("poison");
+        });
+        let err: AppError = m.lock().unwrap_err().into();
+        assert!(matches!(err, AppError::StateLockPoisoned));
+    }
+
+    #[test]
+    fn from_poison_error_synthetic_also_works() {
+        let poison: PoisonError<()> = PoisonError::new(());
+        let err: AppError = poison.into();
+        assert!(matches!(err, AppError::StateLockPoisoned));
+    }
+
+    #[test]
+    fn from_url_parse_error_maps_to_invalid_request() {
+        let err: url::ParseError = url::Url::parse("not a url").unwrap_err();
+        let app: AppError = err.into();
+        assert!(matches!(app, AppError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn serialize_emits_display_string() {
+        let err = AppError::DashboardStartup("boom".to_string());
+        let json = serde_json::to_string(&err).unwrap();
+        assert_eq!(json, "\"Dashboard startup failed: boom\"");
+    }
+
+    #[test]
+    fn display_runtime_checksum_mismatch_includes_both_fields() {
+        let err = AppError::RuntimeChecksumMismatch {
+            expected: "abc".to_string(),
+            actual: "def".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("abc"));
+        assert!(msg.contains("def"));
+        assert!(msg.contains("expected"));
+    }
+
+    #[test]
+    fn display_dashboard_unreachable_contains_url() {
+        let err = AppError::DashboardUnreachable("http://127.0.0.1:9119".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Dashboard not reachable at http://127.0.0.1:9119"
+        );
+    }
+
+    #[test]
+    fn display_origin_violation_contains_origin() {
+        let err = AppError::OriginViolation("https://evil.example".to_string());
+        assert!(err.to_string().contains("https://evil.example"));
+    }
+
+    #[test]
+    fn display_runtime_no_previous_version_is_static() {
+        let err = AppError::RuntimeNoPreviousVersion;
+        assert_eq!(
+            err.to_string(),
+            "No previous runtime version to rollback to"
+        );
+    }
+
+    #[test]
+    fn display_profile_switch_in_flight_is_static() {
+        assert_eq!(
+            AppError::ProfileSwitchInFlight.to_string(),
+            "Profile switch already in progress"
+        );
+    }
+}

@@ -67,3 +67,145 @@ impl UpdateStage {
             )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn v(s: &str) -> String {
+        s.to_string()
+    }
+
+    #[test]
+    fn terminal_states_are_terminal() {
+        assert!(UpdateStage::Idle.is_terminal());
+        assert!(UpdateStage::NoUpdateAvailable.is_terminal());
+        assert!(UpdateStage::Complete {
+            new_version: v("1"),
+            previous_version: None
+        }
+        .is_terminal());
+        assert!(UpdateStage::Failed {
+            error: v("e"),
+            new_version: None
+        }
+        .is_terminal());
+        assert!(UpdateStage::RolledBack {
+            restored_version: v("0.9")
+        }
+        .is_terminal());
+    }
+
+    #[test]
+    fn active_states_are_not_terminal() {
+        assert!(!UpdateStage::Checking.is_terminal());
+        assert!(!UpdateStage::UpdateAvailable {
+            current_version: None,
+            new_version: v("1")
+        }
+        .is_terminal());
+        assert!(!UpdateStage::Downloading {
+            new_version: v("1")
+        }
+        .is_terminal());
+        assert!(!UpdateStage::Verifying {
+            new_version: v("1")
+        }
+        .is_terminal());
+        assert!(!UpdateStage::Extracting {
+            new_version: v("1")
+        }
+        .is_terminal());
+        assert!(!UpdateStage::SmokeChecking {
+            new_version: v("1")
+        }
+        .is_terminal());
+        assert!(!UpdateStage::Installing {
+            new_version: v("1")
+        }
+        .is_terminal());
+        assert!(!UpdateStage::RestartingDashboard {
+            new_version: v("1")
+        }
+        .is_terminal());
+        assert!(!UpdateStage::RollingBack.is_terminal());
+    }
+
+    #[test]
+    fn active_install_stages_are_in_progress() {
+        assert!(UpdateStage::Checking.is_in_progress());
+        assert!(UpdateStage::Downloading {
+            new_version: v("1")
+        }
+        .is_in_progress());
+        assert!(UpdateStage::Verifying {
+            new_version: v("1")
+        }
+        .is_in_progress());
+        assert!(UpdateStage::Extracting {
+            new_version: v("1")
+        }
+        .is_in_progress());
+        assert!(UpdateStage::SmokeChecking {
+            new_version: v("1")
+        }
+        .is_in_progress());
+        assert!(UpdateStage::Installing {
+            new_version: v("1")
+        }
+        .is_in_progress());
+        assert!(UpdateStage::RestartingDashboard {
+            new_version: v("1")
+        }
+        .is_in_progress());
+        assert!(UpdateStage::RollingBack.is_in_progress());
+    }
+
+    #[test]
+    fn terminal_states_are_not_in_progress() {
+        assert!(!UpdateStage::Idle.is_in_progress());
+        assert!(!UpdateStage::NoUpdateAvailable.is_in_progress());
+        assert!(!UpdateStage::Complete {
+            new_version: v("1"),
+            previous_version: None
+        }
+        .is_in_progress());
+        assert!(!UpdateStage::Failed {
+            error: v("e"),
+            new_version: None
+        }
+        .is_in_progress());
+        assert!(!UpdateStage::RolledBack {
+            restored_version: v("0.9")
+        }
+        .is_in_progress());
+    }
+
+    #[test]
+    fn update_available_is_neither_terminal_nor_in_progress() {
+        // Distinct "awaiting user confirmation" state — explicit by design.
+        let s = UpdateStage::UpdateAvailable {
+            current_version: Some(v("0.9")),
+            new_version: v("1.0"),
+        };
+        assert!(!s.is_terminal());
+        assert!(!s.is_in_progress());
+    }
+
+    #[test]
+    fn serialize_emits_stage_tag() {
+        let json = serde_json::to_value(UpdateStage::Idle).unwrap();
+        assert_eq!(json["stage"], "idle");
+
+        // rename_all = "camelCase" applies to variant identifiers only; struct
+        // variant fields stay snake_case. Lock that contract — the frontend
+        // consumes new_version, not newVersion.
+        let json = serde_json::to_value(UpdateStage::Downloading {
+            new_version: v("1.2.3"),
+        })
+        .unwrap();
+        assert_eq!(json["stage"], "downloading");
+        assert_eq!(json["new_version"], "1.2.3");
+    }
+}
