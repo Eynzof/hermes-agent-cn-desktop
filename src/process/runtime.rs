@@ -5,10 +5,8 @@
 // verifying signatures, extracting, smoke-testing, and installing.
 
 use std::fs;
-use std::io::Read as IoRead;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -17,7 +15,6 @@ const RUNTIME_BASENAME: &str = "hermes-agent-cn-runtime";
 const CURRENT_FILE: &str = "current.json";
 const MANIFEST_FILE: &str = "manifest.json";
 const DEFAULT_CHANNEL: &str = "stable";
-const SMOKE_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -120,13 +117,23 @@ fn current_arch() -> &'static str {
 }
 
 fn executable_extension() -> &'static str {
-    if cfg!(target_os = "windows") { ".exe" } else { "" }
+    if cfg!(target_os = "windows") {
+        ".exe"
+    } else {
+        ""
+    }
 }
 
 fn runtime_binary_names() -> Vec<String> {
     let ext = executable_extension();
     vec![
-        format!("{}-{}-{}{}", RUNTIME_BASENAME, current_platform(), current_arch(), ext),
+        format!(
+            "{}-{}-{}{}",
+            RUNTIME_BASENAME,
+            current_platform(),
+            current_arch(),
+            ext
+        ),
         format!("{}{}", RUNTIME_BASENAME, ext),
     ]
 }
@@ -229,10 +236,8 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
 // Forks rebuilding the desktop should set the compile-time env override
 // to point at their own release pipeline + key (or edit the constants
 // below).
-const BAKED_MANIFEST_BASE_URL: Option<&str> =
-    option_env!("HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT");
-const BAKED_MANIFEST_CHANNEL: Option<&str> =
-    option_env!("HERMES_RUNTIME_UPDATE_CHANNEL_DEFAULT");
+const BAKED_MANIFEST_BASE_URL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT");
+const BAKED_MANIFEST_CHANNEL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_CHANNEL_DEFAULT");
 const BAKED_PUBLIC_KEY_PEM: Option<&str> =
     option_env!("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT");
 
@@ -354,44 +359,44 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
     };
 
     match reqwest::get(&url).await {
-        Ok(res) if res.status().is_success() => {
-            match res.json::<RuntimeUpdateManifest>().await {
-                Ok(manifest) => {
-                    if manifest.platform != current_platform() || manifest.arch != current_arch() {
-                        return RuntimeUpdateCheckResult {
-                            ok: false,
-                            update_available: false,
-                            current_version: None,
-                            manifest: None,
-                            error: Some(format!(
-                                "Manifest is for {}-{}, not {}-{}",
-                                manifest.platform, manifest.arch,
-                                current_platform(), current_arch()
-                            )),
-                        };
-                    }
-                    let current = read_current_record();
-                    let update_available = current
-                        .as_ref()
-                        .map(|c| c.version != manifest.version)
-                        .unwrap_or(true);
-                    RuntimeUpdateCheckResult {
-                        ok: true,
-                        update_available,
-                        current_version: current.map(|c| c.version),
-                        manifest: Some(manifest),
-                        error: None,
-                    }
+        Ok(res) if res.status().is_success() => match res.json::<RuntimeUpdateManifest>().await {
+            Ok(manifest) => {
+                if manifest.platform != current_platform() || manifest.arch != current_arch() {
+                    return RuntimeUpdateCheckResult {
+                        ok: false,
+                        update_available: false,
+                        current_version: None,
+                        manifest: None,
+                        error: Some(format!(
+                            "Manifest is for {}-{}, not {}-{}",
+                            manifest.platform,
+                            manifest.arch,
+                            current_platform(),
+                            current_arch()
+                        )),
+                    };
                 }
-                Err(e) => RuntimeUpdateCheckResult {
-                    ok: false,
-                    update_available: false,
-                    current_version: None,
-                    manifest: None,
-                    error: Some(format!("Failed to parse manifest: {}", e)),
-                },
+                let current = read_current_record();
+                let update_available = current
+                    .as_ref()
+                    .map(|c| c.version != manifest.version)
+                    .unwrap_or(true);
+                RuntimeUpdateCheckResult {
+                    ok: true,
+                    update_available,
+                    current_version: current.map(|c| c.version),
+                    manifest: Some(manifest),
+                    error: None,
+                }
             }
-        }
+            Err(e) => RuntimeUpdateCheckResult {
+                ok: false,
+                update_available: false,
+                current_version: None,
+                manifest: None,
+                error: Some(format!("Failed to parse manifest: {}", e)),
+            },
+        },
         Ok(res) => RuntimeUpdateCheckResult {
             ok: false,
             update_available: false,
@@ -431,11 +436,17 @@ fn signature_payload(manifest: &RuntimeUpdateManifest) -> Vec<u8> {
 }
 
 fn verify_signature(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
-    use base64::Engine;
-    use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+    let public_key_pem =
+        configured_public_key().ok_or("Runtime update public key is not configured")?;
+    verify_signature_with_key(manifest, &public_key_pem)
+}
 
-    let public_key_pem = configured_public_key()
-        .ok_or("Runtime update public key is not configured")?;
+fn verify_signature_with_key(
+    manifest: &RuntimeUpdateManifest,
+    public_key_pem: &str,
+) -> Result<(), String> {
+    use base64::Engine;
+    use ed25519_dalek::{Signature, VerifyingKey};
 
     // Parse PEM to extract the 32-byte public key
     let pem_body: String = public_key_pem
@@ -451,15 +462,15 @@ fn verify_signature(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
     }
     let raw_key = &der[der.len() - 32..];
     let key_bytes: [u8; 32] = raw_key.try_into().map_err(|_| "Invalid key length")?;
-    let key = VerifyingKey::from_bytes(&key_bytes)
-        .map_err(|e| format!("Invalid public key: {}", e))?;
+    let key =
+        VerifyingKey::from_bytes(&key_bytes).map_err(|e| format!("Invalid public key: {}", e))?;
 
     let sig_bytes = base64::engine::general_purpose::STANDARD
         .decode(&manifest.signature)
         .map_err(|e| format!("Invalid signature base64: {}", e))?;
 
-    let signature = Signature::from_slice(&sig_bytes)
-        .map_err(|e| format!("Invalid signature: {}", e))?;
+    let signature =
+        Signature::from_slice(&sig_bytes).map_err(|e| format!("Invalid signature: {}", e))?;
 
     let payload = signature_payload(manifest);
     key.verify_strict(&payload, &signature)
@@ -473,10 +484,13 @@ fn safe_version_segment(version: &str) -> String {
         .take(120)
         .collect();
     if cleaned.is_empty() {
-        format!("{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis())
+        format!(
+            "{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        )
     } else {
         cleaned
     }
@@ -497,7 +511,10 @@ fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
     if output.status.success() {
         Ok(())
     } else {
-        Err(format!("Smoke check exited with code {:?}", output.status.code()))
+        Err(format!(
+            "Smoke check exited with code {:?}",
+            output.status.code()
+        ))
     }
 }
 
@@ -516,7 +533,11 @@ pub async fn install_runtime_update(
                         ok: false,
                         installed: None,
                         previous: None,
-                        error: Some(check.error.unwrap_or_else(|| "No manifest available".into())),
+                        error: Some(
+                            check
+                                .error
+                                .unwrap_or_else(|| "No manifest available".into()),
+                        ),
                     };
                 }
             }
@@ -699,10 +720,7 @@ pub async fn install_runtime_update(
         previous_version: previous.as_ref().map(|p| p.version.clone()),
     };
 
-    let _ = write_json_file(
-        &target.join(MANIFEST_FILE),
-        &resolved,
-    );
+    let _ = write_json_file(&target.join(MANIFEST_FILE), &resolved);
     let _ = write_json_file(&current_record_path(), &installed);
 
     RuntimeInstallUpdateResult {
@@ -747,7 +765,10 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
                 ok: false,
                 installed: None,
                 previous: None,
-                error: Some(format!("Previous executable not found: {}", prev_path.display())),
+                error: Some(format!(
+                    "Previous executable not found: {}",
+                    prev_path.display()
+                )),
             };
         }
     };
@@ -784,7 +805,11 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
 
     if archive.len() > MAX_ZIP_FILES {
-        return Err(format!("Zip contains {} files (limit {})", archive.len(), MAX_ZIP_FILES));
+        return Err(format!(
+            "Zip contains {} files (limit {})",
+            archive.len(),
+            MAX_ZIP_FILES
+        ));
     }
 
     let dest = dest.canonicalize().unwrap_or_else(|_| dest.to_path_buf());
@@ -796,7 +821,12 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
         // Prevent zip-slip: use enclosed_name() which rejects ".." and absolute paths
         let relative = match entry.enclosed_name() {
             Some(p) => p.to_path_buf(),
-            None => return Err(format!("Refusing path traversal in zip: {:?}", entry.name())),
+            None => {
+                return Err(format!(
+                    "Refusing path traversal in zip: {:?}",
+                    entry.name()
+                ))
+            }
         };
         let out_path = dest.join(&relative);
         if !out_path.starts_with(&dest) {
@@ -808,7 +838,10 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
         } else {
             total_bytes += entry.size();
             if total_bytes > MAX_ZIP_TOTAL_BYTES {
-                return Err(format!("Zip exceeds size limit ({} MB)", MAX_ZIP_TOTAL_BYTES / 1024 / 1024));
+                return Err(format!(
+                    "Zip exceeds size limit ({} MB)",
+                    MAX_ZIP_TOTAL_BYTES / 1024 / 1024
+                ));
             }
 
             if let Some(parent) = out_path.parent() {
@@ -850,4 +883,474 @@ fn chrono_now() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default();
     format!("{}Z", duration.as_secs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+    use ed25519_dalek::pkcs8::EncodePublicKey;
+    use ed25519_dalek::{Signer, SigningKey};
+    use pretty_assertions::assert_eq;
+    use serial_test::serial;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    // -------- Fixtures --------
+
+    fn test_keypair() -> (SigningKey, String) {
+        // Deterministic seed so signed test vectors are stable across runs.
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let pem = signing_key
+            .verifying_key()
+            .to_public_key_pem(ed25519_dalek::pkcs8::spki::der::pem::LineEnding::LF)
+            .unwrap();
+        (signing_key, pem)
+    }
+
+    fn fixture_manifest() -> RuntimeUpdateManifest {
+        RuntimeUpdateManifest {
+            channel: "stable".to_string(),
+            version: "1.2.3".to_string(),
+            platform: "linux".to_string(),
+            arch: "x64".to_string(),
+            artifact_url: "https://example.com/foo.zip".to_string(),
+            sha256: "deadbeef".to_string(),
+            signature: String::new(),
+            upstream_repo: "owner/repo".to_string(),
+            upstream_commit: "abc123".to_string(),
+            min_app_version: None,
+            created_at: None,
+        }
+    }
+
+    fn sign_manifest(key: &SigningKey, m: &mut RuntimeUpdateManifest) {
+        let payload = signature_payload(m);
+        let sig = key.sign(&payload);
+        m.signature = base64::engine::general_purpose::STANDARD.encode(sig.to_bytes());
+    }
+
+    // -------- sha256_hex --------
+
+    #[test]
+    fn sha256_empty_slice() {
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn sha256_known_vector_abc() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn sha256_changes_with_input() {
+        assert_ne!(sha256_hex(b"a"), sha256_hex(b"b"));
+    }
+
+    // -------- safe_version_segment --------
+
+    #[test]
+    fn safe_version_passes_normal_semver() {
+        assert_eq!(safe_version_segment("1.2.3"), "1.2.3");
+    }
+
+    #[test]
+    fn safe_version_keeps_prerelease_and_build_metadata() {
+        assert_eq!(
+            safe_version_segment("1.2.3-alpha+build.5"),
+            "1.2.3-alpha+build.5"
+        );
+    }
+
+    #[test]
+    fn safe_version_strips_path_traversal_attempt() {
+        assert_eq!(safe_version_segment("../etc/passwd"), "..etcpasswd");
+    }
+
+    #[test]
+    fn safe_version_truncates_to_120_chars() {
+        let huge = "a".repeat(200);
+        let out = safe_version_segment(&huge);
+        assert_eq!(out.len(), 120);
+        assert!(out.chars().all(|c| c == 'a'));
+    }
+
+    #[test]
+    fn safe_version_falls_back_to_timestamp_when_empty() {
+        let out = safe_version_segment("$$$///");
+        // After filtering, only nothing remains → timestamp fallback (digits, non-empty)
+        assert!(!out.is_empty());
+        assert!(out.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    // -------- signature_payload --------
+
+    #[test]
+    fn signature_payload_has_stable_field_order() {
+        let m = fixture_manifest();
+        let payload = String::from_utf8(signature_payload(&m)).unwrap();
+        let lines: Vec<&str> = payload.split('\n').collect();
+        assert_eq!(
+            lines,
+            vec![
+                "stable",                      // channel
+                "linux",                       // platform
+                "x64",                         // arch
+                "1.2.3",                       // version
+                "https://example.com/foo.zip", // artifact_url
+                "deadbeef",                    // sha256
+                "owner/repo",                  // upstream_repo
+                "abc123",                      // upstream_commit
+            ]
+        );
+    }
+
+    #[test]
+    fn signature_payload_differs_when_any_field_changes() {
+        let baseline = signature_payload(&fixture_manifest());
+        let mut m = fixture_manifest();
+        m.sha256 = "tampered".to_string();
+        assert_ne!(signature_payload(&m), baseline);
+        let mut m2 = fixture_manifest();
+        m2.artifact_url = "https://attacker.com/x.zip".to_string();
+        assert_ne!(signature_payload(&m2), baseline);
+    }
+
+    // -------- verify_signature_with_key --------
+
+    #[test]
+    fn verify_accepts_valid_signature() {
+        let (key, pem) = test_keypair();
+        let mut m = fixture_manifest();
+        sign_manifest(&key, &mut m);
+        verify_signature_with_key(&m, &pem).expect("should verify");
+    }
+
+    #[test]
+    fn verify_rejects_tampered_version() {
+        let (key, pem) = test_keypair();
+        let mut m = fixture_manifest();
+        sign_manifest(&key, &mut m);
+        m.version = "9.9.9".to_string();
+        let err = verify_signature_with_key(&m, &pem).unwrap_err();
+        assert!(err.contains("Signature verification failed"));
+    }
+
+    #[test]
+    fn verify_rejects_tampered_sha256() {
+        let (key, pem) = test_keypair();
+        let mut m = fixture_manifest();
+        sign_manifest(&key, &mut m);
+        m.sha256 = "0000".to_string();
+        assert!(verify_signature_with_key(&m, &pem).is_err());
+    }
+
+    #[test]
+    fn verify_rejects_tampered_artifact_url() {
+        let (key, pem) = test_keypair();
+        let mut m = fixture_manifest();
+        sign_manifest(&key, &mut m);
+        m.artifact_url = "https://attacker.example/x.zip".to_string();
+        assert!(verify_signature_with_key(&m, &pem).is_err());
+    }
+
+    #[test]
+    fn verify_rejects_invalid_signature_base64() {
+        let (_, pem) = test_keypair();
+        let mut m = fixture_manifest();
+        m.signature = "!!!not base64!!!".to_string();
+        let err = verify_signature_with_key(&m, &pem).unwrap_err();
+        assert!(err.contains("Invalid signature base64"));
+    }
+
+    #[test]
+    fn verify_rejects_signature_from_different_key() {
+        let (key_a, _) = test_keypair();
+        // Use a different key for verification
+        let key_b = SigningKey::from_bytes(&[42u8; 32]);
+        let pem_b = key_b
+            .verifying_key()
+            .to_public_key_pem(ed25519_dalek::pkcs8::spki::der::pem::LineEnding::LF)
+            .unwrap();
+        let mut m = fixture_manifest();
+        sign_manifest(&key_a, &mut m);
+        assert!(verify_signature_with_key(&m, &pem_b).is_err());
+    }
+
+    #[test]
+    fn verify_rejects_too_short_der() {
+        // PEM body must base64-decode to ≥ 32 bytes for raw key extraction.
+        let bad_pem = "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----\n";
+        let m = fixture_manifest();
+        let err = verify_signature_with_key(&m, bad_pem).unwrap_err();
+        assert!(err.contains("Public key DER too short"));
+    }
+
+    #[test]
+    fn verify_rejects_malformed_pem_base64() {
+        let bad_pem = "-----BEGIN PUBLIC KEY-----\n!!!\n-----END PUBLIC KEY-----\n";
+        let m = fixture_manifest();
+        let err = verify_signature_with_key(&m, bad_pem).unwrap_err();
+        assert!(err.contains("Invalid public key PEM"));
+    }
+
+    // -------- extract_zip --------
+
+    fn write_zip(out: &Path, entries: &[(&str, &[u8])]) {
+        let file = std::fs::File::create(out).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        for (name, content) in entries {
+            writer.start_file(*name, opts).unwrap();
+            writer.write_all(content).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+
+    #[test]
+    fn extract_zip_normal_files() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("ok.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        write_zip(&zip_path, &[("foo.txt", b"hello"), ("bin/x", b"binary")]);
+
+        extract_zip(&zip_path, &dest).unwrap();
+
+        assert_eq!(std::fs::read(dest.join("foo.txt")).unwrap(), b"hello");
+        assert_eq!(std::fs::read(dest.join("bin/x")).unwrap(), b"binary");
+    }
+
+    #[test]
+    fn extract_zip_rejects_path_traversal() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("evil.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        write_zip(&zip_path, &[("../escape.txt", b"hacked")]);
+
+        let err = extract_zip(&zip_path, &dest).unwrap_err();
+        assert!(
+            err.contains("path traversal") || err.contains("escapes destination"),
+            "unexpected error: {}",
+            err
+        );
+        assert!(!dir.path().join("escape.txt").exists());
+    }
+
+    #[test]
+    fn extract_zip_rejects_too_many_files() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("bomb.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        // MAX_ZIP_FILES = 5000 — push 5001 empty entries.
+        for i in 0..5001 {
+            writer.start_file(format!("f{}", i), opts).unwrap();
+        }
+        writer.finish().unwrap();
+
+        let err = extract_zip(&zip_path, &dest).unwrap_err();
+        assert!(err.contains("Zip contains"), "unexpected error: {}", err);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_zip_preserves_unix_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("perms.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default().unix_permissions(0o755);
+        writer.start_file("script.sh", opts).unwrap();
+        writer.write_all(b"#!/bin/sh\necho hi").unwrap();
+        writer.finish().unwrap();
+
+        extract_zip(&zip_path, &dest).unwrap();
+
+        let mode = std::fs::metadata(dest.join("script.sh"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o755);
+    }
+
+    // -------- copy_dir_all --------
+
+    #[test]
+    fn copy_dir_all_copies_nested_tree() {
+        let dir = TempDir::new().unwrap();
+        let src = dir.path().join("src");
+        let dst = dir.path().join("dst");
+        std::fs::create_dir_all(src.join("a/b")).unwrap();
+        std::fs::write(src.join("top.txt"), b"top").unwrap();
+        std::fs::write(src.join("a/mid.txt"), b"mid").unwrap();
+        std::fs::write(src.join("a/b/leaf.txt"), b"leaf").unwrap();
+
+        copy_dir_all(&src, &dst).unwrap();
+
+        assert_eq!(std::fs::read(dst.join("top.txt")).unwrap(), b"top");
+        assert_eq!(std::fs::read(dst.join("a/mid.txt")).unwrap(), b"mid");
+        assert_eq!(std::fs::read(dst.join("a/b/leaf.txt")).unwrap(), b"leaf");
+    }
+
+    #[test]
+    fn copy_dir_all_creates_empty_destination() {
+        let dir = TempDir::new().unwrap();
+        let src = dir.path().join("src");
+        let dst = dir.path().join("dst");
+        std::fs::create_dir_all(&src).unwrap();
+        copy_dir_all(&src, &dst).unwrap();
+        assert!(dst.is_dir());
+    }
+
+    // -------- find_executable_in --------
+
+    fn primary_runtime_name() -> String {
+        runtime_binary_names().into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn find_executable_direct_child() {
+        let dir = TempDir::new().unwrap();
+        let name = primary_runtime_name();
+        let target = dir.path().join(&name);
+        std::fs::write(&target, b"").unwrap();
+        let found = find_executable_in(dir.path(), 0).unwrap();
+        assert_eq!(found, target);
+    }
+
+    #[test]
+    fn find_executable_in_bin_subdir() {
+        let dir = TempDir::new().unwrap();
+        let name = primary_runtime_name();
+        let bin = dir.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let target = bin.join(&name);
+        std::fs::write(&target, b"").unwrap();
+        let found = find_executable_in(dir.path(), 0).unwrap();
+        assert_eq!(found, target);
+    }
+
+    #[test]
+    fn find_executable_nested_within_depth() {
+        let dir = TempDir::new().unwrap();
+        let name = primary_runtime_name();
+        let nested = dir.path().join("x").join("y");
+        std::fs::create_dir_all(&nested).unwrap();
+        let target = nested.join(&name);
+        std::fs::write(&target, b"").unwrap();
+        // Need depth ≥ 2 to walk dir → x → y
+        let found = find_executable_in(dir.path(), 2).unwrap();
+        assert_eq!(found, target);
+    }
+
+    #[test]
+    fn find_executable_too_deep_returns_none() {
+        let dir = TempDir::new().unwrap();
+        let name = primary_runtime_name();
+        let nested = dir.path().join("x").join("y");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join(&name), b"").unwrap();
+        // depth=1 cannot reach dir/x/y/name (it's 2 levels deep)
+        assert!(find_executable_in(dir.path(), 1).is_none());
+    }
+
+    #[test]
+    fn find_executable_returns_none_for_empty_dir() {
+        let dir = TempDir::new().unwrap();
+        assert!(find_executable_in(dir.path(), 3).is_none());
+    }
+
+    #[test]
+    fn find_executable_returns_none_for_missing_path() {
+        let dir = TempDir::new().unwrap();
+        let nope = dir.path().join("nope");
+        assert!(find_executable_in(&nope, 3).is_none());
+    }
+
+    // -------- configured_manifest_url / configured_public_key --------
+
+    fn clear_runtime_env() {
+        for var in [
+            "HERMES_RUNTIME_UPDATE_MANIFEST_URL",
+            "HERMES_RUNTIME_UPDATE_BASE_URL",
+            "HERMES_RUNTIME_UPDATE_CHANNEL",
+            "HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM",
+            "HERMES_RUNTIME_UPDATE_PUBLIC_KEY_FILE",
+        ] {
+            std::env::remove_var(var);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn manifest_url_uses_explicit_env_when_set() {
+        clear_runtime_env();
+        std::env::set_var(
+            "HERMES_RUNTIME_UPDATE_MANIFEST_URL",
+            "https://explicit.example/m.json",
+        );
+        assert_eq!(
+            configured_manifest_url(),
+            Some("https://explicit.example/m.json".to_string())
+        );
+        clear_runtime_env();
+    }
+
+    #[test]
+    #[serial]
+    fn manifest_url_builds_from_base_and_channel_env() {
+        clear_runtime_env();
+        std::env::set_var("HERMES_RUNTIME_UPDATE_BASE_URL", "https://base.example");
+        std::env::set_var("HERMES_RUNTIME_UPDATE_CHANNEL", "beta");
+        let url = configured_manifest_url().unwrap();
+        assert!(url.starts_with("https://base.example/beta-"));
+        assert!(url.ends_with(".json"));
+        clear_runtime_env();
+    }
+
+    #[test]
+    #[serial]
+    fn manifest_url_falls_back_when_env_unset() {
+        clear_runtime_env();
+        // No env, no compile-time bake (BAKED_* are option_env! and unset in
+        // dev/test builds), so we get FALLBACK_MANIFEST_BASE_URL + default channel.
+        let url = configured_manifest_url().unwrap();
+        assert!(url.contains("Eynzof/hermes-agent-cn"));
+        assert!(url.contains("stable-"));
+    }
+
+    #[test]
+    #[serial]
+    fn public_key_uses_explicit_env_when_set() {
+        clear_runtime_env();
+        let custom = "-----BEGIN PUBLIC KEY-----\nCUSTOM\n-----END PUBLIC KEY-----";
+        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", custom);
+        assert_eq!(configured_public_key().as_deref(), Some(custom));
+        clear_runtime_env();
+    }
+
+    #[test]
+    #[serial]
+    fn public_key_falls_back_to_hardcoded() {
+        clear_runtime_env();
+        let pem = configured_public_key().unwrap();
+        assert!(pem.contains("BEGIN PUBLIC KEY"));
+        assert!(pem.contains("END PUBLIC KEY"));
+    }
 }

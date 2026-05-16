@@ -3,7 +3,7 @@
 // Replaces hermes-cn-ui-v1/apps/desktop/src/main/hermes-process.ts.
 // Responsible for probing, spawning, and managing the hermes dashboard subprocess.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -30,7 +30,12 @@ pub async fn probe_dashboard(api_base_url: &str) -> bool {
         .build()
         .unwrap_or_default();
 
-    match client.get(&url).header("Accept", "application/json").send().await {
+    match client
+        .get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+    {
         Ok(res) => res.status().is_success() || res.status().as_u16() == 401,
         Err(_) => false,
     }
@@ -59,12 +64,15 @@ async fn has_openapi_path(api_base_url: &str, path: &str) -> bool {
         .build()
         .unwrap_or_default();
 
-    match client.get(&url).header("Accept", "application/json").send().await {
+    match client
+        .get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+    {
         Ok(res) if res.status().is_success() => {
             if let Ok(data) = res.json::<serde_json::Value>().await {
-                data.get("paths")
-                    .and_then(|p| p.get(path))
-                    .is_some()
+                data.get("paths").and_then(|p| p.get(path)).is_some()
             } else {
                 false
             }
@@ -81,7 +89,12 @@ async fn get_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
         .build()
         .unwrap_or_default();
 
-    let res = client.get(&url).header("Accept", "application/json").send().await.ok()?;
+    let res = client
+        .get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .ok()?;
     let data: serde_json::Value = res.json().await.ok()?;
     data.get("hermes_home")
         .and_then(|v| v.as_str())
@@ -93,7 +106,8 @@ async fn dashboard_matches_hermes_home(api_base_url: &str, hermes_home: &str) ->
     match get_dashboard_hermes_home(api_base_url).await {
         Some(current) if !current.is_empty() => {
             let left = std::fs::canonicalize(&current).unwrap_or_else(|_| PathBuf::from(&current));
-            let right = std::fs::canonicalize(hermes_home).unwrap_or_else(|_| PathBuf::from(hermes_home));
+            let right =
+                std::fs::canonicalize(hermes_home).unwrap_or_else(|_| PathBuf::from(hermes_home));
             left == right
         }
         _ => false,
@@ -109,7 +123,12 @@ pub async fn fetch_session_token(api_base_url: &str) -> Option<String> {
         .build()
         .unwrap_or_default();
 
-    let res = client.get(&url).header("Accept", "text/html").send().await.ok()?;
+    let res = client
+        .get(&url)
+        .header("Accept", "text/html")
+        .send()
+        .await
+        .ok()?;
     if !res.status().is_success() {
         return None;
     }
@@ -203,10 +222,7 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<std::process::Chi
 }
 
 /// Wait until the dashboard is ready (responds to /api/status) or timeout.
-async fn wait_for_dashboard(
-    api_base_url: &str,
-    child: &mut Option<std::process::Child>,
-) -> bool {
+async fn wait_for_dashboard(api_base_url: &str, child: &mut Option<std::process::Child>) -> bool {
     let start = Instant::now();
     while start.elapsed() < DASHBOARD_READY_TIMEOUT {
         if probe_dashboard(api_base_url).await {
@@ -286,7 +302,7 @@ pub async fn ensure_hermes_dashboard(
     }
 
     // Spawn a new dashboard
-    let mut child = spawn_dashboard(&spawn_options)?;
+    let child = spawn_dashboard(&spawn_options)?;
     let child_url = dashboard_base_url(&spawn_options.host, spawn_options.port);
 
     let mut child_opt = Some(child);
@@ -308,4 +324,54 @@ pub async fn ensure_hermes_dashboard(
         owns_process: true,
         child: child_opt,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn dashboard_base_url_standard() {
+        assert_eq!(
+            dashboard_base_url("127.0.0.1", 9119),
+            "http://127.0.0.1:9119"
+        );
+    }
+
+    #[test]
+    fn dashboard_base_url_alt_host_and_port() {
+        assert_eq!(dashboard_base_url("0.0.0.0", 8080), "http://0.0.0.0:8080");
+    }
+
+    #[test]
+    fn gateway_url_without_token() {
+        assert_eq!(
+            build_gateway_url("http://127.0.0.1:9119", None),
+            "ws://127.0.0.1:9119/api/ws"
+        );
+    }
+
+    #[test]
+    fn gateway_url_with_token_is_appended() {
+        assert_eq!(
+            build_gateway_url("http://127.0.0.1:9119", Some("abc123")),
+            "ws://127.0.0.1:9119/api/ws?token=abc123"
+        );
+    }
+
+    #[test]
+    fn gateway_url_promotes_https_to_wss() {
+        assert_eq!(
+            build_gateway_url("https://example.com:443", Some("tok")),
+            "wss://example.com:443/api/ws?token=tok"
+        );
+    }
+
+    #[test]
+    fn gateway_url_does_not_promote_other_schemes() {
+        // Only http/https are rewritten — anything else passes through.
+        let out = build_gateway_url("file:///local", None);
+        assert_eq!(out, "file:///local/api/ws");
+    }
 }

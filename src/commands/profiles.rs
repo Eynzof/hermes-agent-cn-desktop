@@ -25,7 +25,7 @@ pub struct SwitchProfileInput {
     pub name: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SwitchProfileResult {
     pub ok: bool,
@@ -71,20 +71,28 @@ pub fn read_active_profile_sticky(base: &str) -> String {
     match fs::read_to_string(&path) {
         Ok(content) => {
             let trimmed = content.trim().to_string();
-            if trimmed.is_empty() { "default".to_string() } else { trimmed }
+            if trimmed.is_empty() {
+                "default".to_string()
+            } else {
+                trimmed
+            }
         }
         Err(_) => "default".to_string(),
     }
 }
 
 fn host_and_port() -> (String, u16) {
-    let host = std::env::var("HERMES_DESKTOP_API_HOST")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let host = std::env::var("HERMES_DESKTOP_API_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = std::env::var("HERMES_DESKTOP_API_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(9119u16);
     (host, port)
+}
+
+fn is_valid_profile_name(name: &str) -> bool {
+    let re = Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$").unwrap();
+    re.is_match(name)
 }
 
 #[tauri::command]
@@ -94,9 +102,7 @@ pub async fn switch_profile(
 ) -> Result<SwitchProfileResult, AppError> {
     let name = input.name.trim().to_string();
 
-    // Validate name
-    let re = Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$").unwrap();
-    if !re.is_match(&name) {
+    if !is_valid_profile_name(&name) {
         return Ok(SwitchProfileResult {
             ok: false,
             error: Some(format!("Invalid profile name: {}", name)),
@@ -105,7 +111,7 @@ pub async fn switch_profile(
     }
 
     // Check preconditions
-    let (base, current_profile, owns_process, previous_home) = {
+    let (base, current_profile, _owns_process, previous_home) = {
         let inner = state.inner.lock()?;
 
         if !inner
@@ -197,11 +203,13 @@ async fn do_switch_profile(
     {
         let mut inner = match state.inner.lock() {
             Ok(i) => i,
-            Err(e) => return SwitchProfileResult {
-                ok: false,
-                error: Some(e.to_string()),
-                ..Default::default()
-            },
+            Err(e) => {
+                return SwitchProfileResult {
+                    ok: false,
+                    error: Some(e.to_string()),
+                    ..Default::default()
+                }
+            }
         };
         if let Some(ref mut handle) = inner.dashboard_handle {
             handle.stop();
@@ -223,14 +231,7 @@ async fn do_switch_profile(
         Err(e) => {
             // Recovery: try to respawn previous profile's dashboard
             log::error!("Failed to start dashboard for {}: {}", name, e);
-            match try_recover_previous(
-                state,
-                &host,
-                port,
-                previous_home,
-            )
-            .await
-            {
+            match try_recover_previous(state, &host, port, previous_home).await {
                 Ok(_) => {
                     return SwitchProfileResult {
                         ok: false,
@@ -265,11 +266,13 @@ async fn do_switch_profile(
     {
         let mut inner = match state.inner.lock() {
             Ok(i) => i,
-            Err(e) => return SwitchProfileResult {
-                ok: false,
-                error: Some(e.to_string()),
-                ..Default::default()
-            },
+            Err(e) => {
+                return SwitchProfileResult {
+                    ok: false,
+                    error: Some(e.to_string()),
+                    ..Default::default()
+                }
+            }
         };
         inner.api_base_url = handle.api_base_url.clone();
         inner.gateway_url = gateway_url.clone();
@@ -325,17 +328,110 @@ async fn try_recover_previous(
     Ok(())
 }
 
-impl Default for SwitchProfileResult {
-    fn default() -> Self {
-        Self {
-            ok: false,
-            profile_name: None,
-            api_base_url: None,
-            gateway_url: None,
-            session_token: None,
-            hermes_home: None,
-            error: None,
-            recovered_previous_profile: None,
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
+
+    // -------- profile_hermes_home --------
+
+    #[test]
+    fn profile_home_default_returns_base_unchanged() {
+        let p = profile_hermes_home("/tmp/base", "default");
+        assert_eq!(p, PathBuf::from("/tmp/base"));
+    }
+
+    #[test]
+    fn profile_home_non_default_nested_under_profiles() {
+        let p = profile_hermes_home("/tmp/base", "alpha");
+        assert_eq!(p, PathBuf::from("/tmp/base").join("profiles").join("alpha"));
+    }
+
+    // -------- is_valid_profile_name --------
+
+    #[test]
+    fn valid_profile_names_accepted() {
+        assert!(is_valid_profile_name("default"));
+        assert!(is_valid_profile_name("my-profile"));
+        assert!(is_valid_profile_name("test_2"));
+        assert!(is_valid_profile_name("A"));
+        assert!(is_valid_profile_name("z9"));
+    }
+
+    #[test]
+    fn invalid_profile_names_rejected() {
+        // Empty
+        assert!(!is_valid_profile_name(""));
+        // Path separators / traversal
+        assert!(!is_valid_profile_name("a/b"));
+        assert!(!is_valid_profile_name(".."));
+        assert!(!is_valid_profile_name("../etc"));
+        // Special chars
+        assert!(!is_valid_profile_name("a b"));
+        assert!(!is_valid_profile_name("a:b"));
+        assert!(!is_valid_profile_name("a.b"));
+        // Cannot start with hyphen / underscore
+        assert!(!is_valid_profile_name("-leading-hyphen"));
+        assert!(!is_valid_profile_name("_leading-underscore"));
+        // Too long (>32 chars)
+        assert!(!is_valid_profile_name(&"a".repeat(33)));
+    }
+
+    #[test]
+    fn profile_name_length_boundary() {
+        // 32 chars exactly is the max — regex is {0,31} after first char = 32 total
+        assert!(is_valid_profile_name(&"a".repeat(32)));
+        assert!(!is_valid_profile_name(&"a".repeat(33)));
+    }
+
+    // -------- read / write active_profile sticky --------
+
+    #[test]
+    fn read_active_profile_defaults_when_file_missing() {
+        let dir = TempDir::new().unwrap();
+        assert_eq!(
+            read_active_profile_sticky(dir.path().to_str().unwrap()),
+            "default"
+        );
+    }
+
+    #[test]
+    fn write_then_read_sticky_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let base = dir.path().to_str().unwrap();
+        write_active_profile_sticky(base, "myprofile");
+        assert_eq!(read_active_profile_sticky(base), "myprofile");
+    }
+
+    #[test]
+    fn write_default_removes_sticky_file() {
+        let dir = TempDir::new().unwrap();
+        let base = dir.path().to_str().unwrap();
+        write_active_profile_sticky(base, "alpha");
+        assert!(dir.path().join("active_profile").exists());
+        write_active_profile_sticky(base, "default");
+        assert!(!dir.path().join("active_profile").exists());
+        assert_eq!(read_active_profile_sticky(base), "default");
+    }
+
+    #[test]
+    fn read_trims_whitespace_in_sticky_file() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("active_profile"), "  beta\n").unwrap();
+        assert_eq!(
+            read_active_profile_sticky(dir.path().to_str().unwrap()),
+            "beta"
+        );
+    }
+
+    #[test]
+    fn read_returns_default_when_sticky_is_blank() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("active_profile"), "   ").unwrap();
+        assert_eq!(
+            read_active_profile_sticky(dir.path().to_str().unwrap()),
+            "default"
+        );
     }
 }

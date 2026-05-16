@@ -64,6 +64,66 @@ fn url_path(path: &str) -> String {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn url_path_strips_query_string() {
+        assert_eq!(url_path("/api/foo?bar=1&baz=2"), "/api/foo");
+    }
+
+    #[test]
+    fn url_path_passes_through_without_query() {
+        assert_eq!(url_path("/api/foo"), "/api/foo");
+    }
+
+    #[test]
+    fn url_path_handles_empty_path() {
+        assert_eq!(url_path(""), "/");
+    }
+
+    #[test]
+    fn url_path_handles_root() {
+        assert_eq!(url_path("/"), "/");
+    }
+
+    #[test]
+    fn json_result_2xx_is_ok() {
+        let r = json_result(200, "OK", serde_json::json!({"x": 1}));
+        assert!(r.ok);
+        assert_eq!(r.status, 200);
+        assert_eq!(r.status_text, "OK");
+        assert_eq!(
+            r.headers.get("content-type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(r.body, "{\"x\":1}");
+    }
+
+    #[test]
+    fn json_result_4xx_is_not_ok() {
+        let r = json_result(404, "Not Found", serde_json::json!({"message": "nope"}));
+        assert!(!r.ok);
+        assert_eq!(r.status, 404);
+    }
+
+    #[test]
+    fn json_result_5xx_is_not_ok() {
+        let r = json_result(503, "Down", serde_json::json!(null));
+        assert!(!r.ok);
+        assert_eq!(r.status, 503);
+    }
+
+    #[test]
+    fn json_result_boundary_300_is_not_ok() {
+        // 300..399 redirects are explicitly not "ok" by this convention.
+        let r = json_result(301, "Moved", serde_json::json!(null));
+        assert!(!r.ok);
+    }
+}
+
 /// The main API proxy command. Handles local route intercepts and proxies
 /// to the dashboard for everything else.
 #[tauri::command]
@@ -85,10 +145,8 @@ pub async fn api_request(
     };
 
     // 1. Session log intercept
-    if url_p.starts_with(SESSION_LOG_ROUTE_PREFIX) {
-        let session_id = urlencoding::decode(&url_p[SESSION_LOG_ROUTE_PREFIX.len()..])
-            .unwrap_or_default()
-            .to_string();
+    if let Some(rest) = url_p.strip_prefix(SESSION_LOG_ROUTE_PREFIX) {
+        let session_id = urlencoding::decode(rest).unwrap_or_default().to_string();
         let (status, body) = session_log::handle_session_log_request(&session_id, &hermes_home);
         let status_text = if status == 200 { "OK" } else { "Not Found" };
         return Ok(json_result(status, status_text, body));
@@ -106,7 +164,11 @@ pub async fn api_request(
     if url_p == "/api/hermes/update" && method.to_uppercase() == "POST" {
         let result = crate::process::runtime::install_runtime_update(None).await;
         let status = if result.ok { 200 } else { 503 };
-        let status_text = if result.ok { "OK" } else { "Runtime Update Failed" };
+        let status_text = if result.ok {
+            "OK"
+        } else {
+            "Runtime Update Failed"
+        };
         let body = serde_json::to_value(&result).unwrap_or_default();
         return Ok(json_result(status, status_text, body));
     }
@@ -117,7 +179,9 @@ pub async fn api_request(
         let base = url::Url::parse(&api_base_url)?;
         let target = url::Url::parse(path)?;
         if target.origin() != base.origin() {
-            return Err(AppError::OriginViolation(base.origin().ascii_serialization()));
+            return Err(AppError::OriginViolation(
+                base.origin().ascii_serialization(),
+            ));
         }
         path.to_string()
     } else {
@@ -131,10 +195,7 @@ pub async fn api_request(
     };
 
     let client = reqwest::Client::new();
-    let mut req = client.request(
-        method.parse().unwrap_or(reqwest::Method::GET),
-        &full_url,
-    );
+    let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
 
     // Inject auth headers
     if let Some(ref token) = session_token {
@@ -168,12 +229,8 @@ pub async fn api_request(
     let raw_body = res.text().await.unwrap_or_default();
 
     // 5. Post-process: filter archived sessions
-    let body = session_archive::filter_archived_from_response(
-        path,
-        method,
-        &hermes_home,
-        &raw_body,
-    );
+    let body =
+        session_archive::filter_archived_from_response(path, method, &hermes_home, &raw_body);
 
     Ok(ApiRequestResult {
         ok: (200..300).contains(&status),
@@ -191,13 +248,9 @@ pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult
 
     let client = reqwest::Client::builder()
         .timeout(EXTERNAL_TIMEOUT)
-        .build()
-        ?;
+        .build()?;
 
-    let mut req = client.request(
-        method.parse().unwrap_or(reqwest::Method::GET),
-        &input.path,
-    );
+    let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), &input.path);
 
     if let Some(ref headers) = input.headers {
         for (key, value) in headers {
@@ -273,8 +326,7 @@ pub async fn upload_file(
 
     let file_part = reqwest::multipart::Part::bytes(file_bytes)
         .file_name(input.name.clone())
-        .mime_str(mime_type)
-        ?;
+        .mime_str(mime_type)?;
 
     let form = reqwest::multipart::Form::new()
         .text("session_id", input.session_id)
