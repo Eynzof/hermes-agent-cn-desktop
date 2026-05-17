@@ -19,6 +19,10 @@ import type {
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
 
+export function isTauriDevMode(envDev = import.meta.env.DEV): boolean {
+  return envDev;
+}
+
 async function ensureInvoke() {
   if (!invoke) {
     const mod = await import("@tauri-apps/api/core");
@@ -235,10 +239,10 @@ export async function installTauriBridge(): Promise<void> {
   // go through Vite's proxy, just like web mode. This avoids cross-origin
   // issues with SSE EventSource and WebSocket (browser-native APIs that can't
   // go through the Tauri IPC bridge).
-  // Production: WebView loads from bundled assets (tauri:// protocol).
-  // Set apiBaseUrl so IPC bridge can proxy requests to the dashboard.
-  const isDevMode = window.location.protocol === "http:"
-    || window.location.protocol === "https:";
+  // Production Tauri v2 can also load bundled assets from an
+  // `http://*.localhost` origin on Windows, so URL protocol is not a
+  // reliable dev/prod signal. Use Vite's explicit build mode instead.
+  const isDevMode = isTauriDevMode();
 
   // First-run in prod: Rust spawned the install task and returned
   // immediately with empty state. Show the overlay and block here
