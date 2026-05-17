@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use regex::Regex;
@@ -15,6 +16,9 @@ use crate::state::DashboardHandle;
 const DASHBOARD_READY_TIMEOUT: Duration = Duration::from_secs(25);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(900);
 const DASHBOARD_PORT_FALLBACK_LIMIT: u16 = 20;
+static SESSION_TOKEN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"__HERMES_SESSION_TOKEN__="([^"]+)""#).expect("valid session token regex")
+});
 
 /// Build the base URL for a dashboard at the given host and port.
 pub fn dashboard_base_url(host: &str, port: u16) -> String {
@@ -144,8 +148,7 @@ pub async fn fetch_session_token(api_base_url: &str) -> Option<String> {
         return None;
     }
     let html = res.text().await.ok()?;
-    let re = Regex::new(r#"__HERMES_SESSION_TOKEN__="([^"]+)""#).ok()?;
-    re.captures(&html).map(|c| c[1].to_string())
+    SESSION_TOKEN_RE.captures(&html).map(|c| c[1].to_string())
 }
 
 /// Build a WebSocket gateway URL from the dashboard API base URL.

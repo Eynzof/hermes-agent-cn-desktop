@@ -8,8 +8,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 const SESSION_ARCHIVE_STATE_FILE: &str = "session-ui-state.json";
+static ARCHIVE_ROUTE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"^/api/sessions/([^/]+)/archive$").expect("valid archive route regex")
+});
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,13 +60,12 @@ pub fn write_archive_state(hermes_home: &str, ids: &HashSet<String>) -> Result<(
 
 /// Check if a path matches /api/sessions/{id}/archive and extract the session ID.
 pub fn extract_archive_session_id(path: &str) -> Option<String> {
-    let re = regex::Regex::new(r"^/api/sessions/([^/]+)/archive$").ok()?;
     let url_path = if let Ok(url) = url::Url::parse(&format!("http://x{}", path)) {
         url.path().to_string()
     } else {
         path.to_string()
     };
-    let caps = re.captures(&url_path)?;
+    let caps = ARCHIVE_ROUTE_RE.captures(&url_path)?;
     let raw = caps.get(1)?.as_str().to_string();
     let decoded = urlencoding::decode(&raw).ok()?.into_owned();
     let trimmed = decoded.trim().to_string();

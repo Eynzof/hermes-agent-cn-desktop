@@ -9,6 +9,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,10 @@ use crate::error::AppError;
 
 use crate::process::dashboard;
 use crate::state::AppState;
+
+static PROFILE_NAME_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$").expect("valid profile name regex")
+});
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -91,8 +96,7 @@ fn host_and_port() -> (String, u16) {
 }
 
 fn is_valid_profile_name(name: &str) -> bool {
-    let re = Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$").unwrap();
-    re.is_match(name)
+    PROFILE_NAME_RE.is_match(name)
 }
 
 #[tauri::command]
