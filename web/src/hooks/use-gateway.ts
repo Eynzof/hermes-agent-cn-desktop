@@ -56,6 +56,15 @@ function primarySubscriber(bridge: GatewaySubscriptionBridge): GatewaySubscriber
   return bridge.subscribers[0];
 }
 
+function forEachSubscriber(
+  bridge: GatewaySubscriptionBridge,
+  callback: (subscriber: GatewaySubscriber) => void,
+): void {
+  for (const subscriber of [...bridge.subscribers]) {
+    callback(subscriber);
+  }
+}
+
 function ensureGatewayBridge(): GatewaySubscriptionBridge {
   if (gatewayBridge) return gatewayBridge;
 
@@ -68,15 +77,13 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
   const client = getGatewayClient();
   client.enableAutoReconnect();
 
-  bridge.unsubscribeState = client.onState((state) => {
-    for (const sub of bridge.subscribers) sub.setConnectionState(state);
-  });
+  bridge.unsubscribeState = client.onState((state) =>
+    forEachSubscriber(bridge, (sub) => sub.setConnectionState(state)));
   bridge.unsubscribeAny = client.onAny((event) => {
     primarySubscriber(bridge)?.applyGatewayEvent(event);
   });
-  bridge.unsubscribeDisconnect = client.on("gateway.disconnected", () => {
-    primarySubscriber(bridge)?.terminateAllStreams();
-  });
+  bridge.unsubscribeDisconnect = client.on("gateway.disconnected", () =>
+    forEachSubscriber(bridge, (sub) => sub.terminateAllStreams()));
   gatewayBridge = bridge;
   return bridge;
 }
