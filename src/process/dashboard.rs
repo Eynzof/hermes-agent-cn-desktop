@@ -4,9 +4,13 @@
 // Responsible for probing, spawning, and managing the hermes dashboard subprocess.
 
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
+use std::{
+    io::{BufRead, BufReader, Read},
+    thread,
+};
 
 use regex::Regex;
 
@@ -204,7 +208,7 @@ fn resolve_hermes_command() -> (String, Vec<String>) {
 }
 
 /// Spawn the hermes dashboard subprocess.
-fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<std::process::Child, AppError> {
+fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<Child, AppError> {
     let (program, mut prefix_args) = resolve_hermes_command();
 
     let api_args = vec![
@@ -225,8 +229,8 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<std::process::Chi
             "HERMES_DASHBOARD_TUI",
             std::env::var("HERMES_DASHBOARD_TUI").unwrap_or_else(|_| "1".to_string()),
         )
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     // Windows: hide the console window for the child process
     #[cfg(target_os = "windows")]
@@ -235,8 +239,40 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<std::process::Chi
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    cmd.spawn()
-        .map_err(|e| AppError::DashboardStartup(e.to_string()))
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| AppError::DashboardStartup(e.to_string()))?;
+    drain_dashboard_output(&mut child);
+    Ok(child)
+}
+
+fn drain_dashboard_output(child: &mut Child) {
+    if let Some(stdout) = child.stdout.take() {
+        spawn_dashboard_log_reader("stdout", stdout);
+    }
+    if let Some(stderr) = child.stderr.take() {
+        spawn_dashboard_log_reader("stderr", stderr);
+    }
+}
+
+fn spawn_dashboard_log_reader<R>(stream: &'static str, reader: R)
+where
+    R: Read + Send + 'static,
+{
+    let _ = thread::Builder::new()
+        .name(format!("hermes-dashboard-{}", stream))
+        .spawn(move || {
+            let lines = BufReader::new(reader).lines();
+            for line in lines.map_while(Result::ok) {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                match stream {
+                    "stderr" => log::warn!("[dashboard stderr] {}", line),
+                    _ => log::info!("[dashboard stdout] {}", line),
+                }
+            }
+        });
 }
 
 /// Wait until the dashboard is ready (responds to /api/status) or timeout.
@@ -248,7 +284,8 @@ async fn wait_for_dashboard(api_base_url: &str, child: &mut Option<std::process:
         }
         // If the child has exited, bail early
         if let Some(ref mut c) = child {
-            if let Ok(Some(_)) = c.try_wait() {
+            if let Ok(Some(status)) = c.try_wait() {
+                log::error!("Dashboard process exited before ready: {}", status);
                 return false;
             }
         }
