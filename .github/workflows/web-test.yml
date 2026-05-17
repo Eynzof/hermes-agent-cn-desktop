@@ -1,0 +1,41 @@
+# Frontend test suite for hermes-cn-desktop-v2.
+#
+# Runs typecheck + vitest across the pnpm workspace (web + packages/*).
+# Separate from rust-test.yml so a Rust failure doesn't mask a frontend
+# regression and vice versa.
+
+name: web-test
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: typecheck
+        run: pnpm typecheck
+
+      - name: vitest
+        run: pnpm test:unit

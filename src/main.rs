@@ -258,8 +258,9 @@ fn main() {
                     Ok(h) => h,
                     Err(e) => {
                         log::error!("Failed to start dashboard: {}", e);
-                        return Err(Box::new(std::io::Error::other(e))
-                            as Box<dyn std::error::Error>);
+                        return Err(
+                            Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>
+                        );
                     }
                 }
             };

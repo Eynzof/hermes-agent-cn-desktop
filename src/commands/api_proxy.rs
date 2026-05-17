@@ -124,37 +124,29 @@ mod tests {
     }
 }
 
-/// The main API proxy command. Handles local route intercepts and proxies
-/// to the dashboard for everything else.
-#[tauri::command]
-pub async fn api_request(
+/// Core implementation of `api_request` with no Tauri State dependency.
+/// Exposed for integration tests; production callers go through the
+/// `#[tauri::command]` wrapper below.
+pub async fn api_request_impl(
     input: ApiRequestInput,
-    state: State<'_, AppState>,
+    api_base_url: &str,
+    session_token: Option<&str>,
+    hermes_home: &str,
 ) -> Result<ApiRequestResult, AppError> {
     let method = input.method.as_deref().unwrap_or("GET");
     let path = &input.path;
     let url_p = url_path(path);
 
-    let (api_base_url, session_token, hermes_home) = {
-        let inner = state.inner.lock()?;
-        (
-            inner.api_base_url.clone(),
-            inner.session_token.clone(),
-            inner.hermes_home.clone(),
-        )
-    };
-
     // 1. Session log intercept
     if let Some(rest) = url_p.strip_prefix(SESSION_LOG_ROUTE_PREFIX) {
         let session_id = urlencoding::decode(rest).unwrap_or_default().to_string();
-        let (status, body) = session_log::handle_session_log_request(&session_id, &hermes_home);
+        let (status, body) = session_log::handle_session_log_request(&session_id, hermes_home);
         let status_text = if status == 200 { "OK" } else { "Not Found" };
         return Ok(json_result(status, status_text, body));
     }
 
     // 2. Session archive intercept
-    if let Some((status, body)) =
-        session_archive::handle_archive_request(path, method, &hermes_home)
+    if let Some((status, body)) = session_archive::handle_archive_request(path, method, hermes_home)
     {
         let status_text = if status == 200 { "OK" } else { "Error" };
         return Ok(json_result(status, status_text, body));
@@ -176,7 +168,7 @@ pub async fn api_request(
     // 4. Proxy to dashboard
     let full_url = if path.starts_with("http://") || path.starts_with("https://") {
         // Validate same origin
-        let base = url::Url::parse(&api_base_url)?;
+        let base = url::Url::parse(api_base_url)?;
         let target = url::Url::parse(path)?;
         if target.origin() != base.origin() {
             return Err(AppError::OriginViolation(
@@ -198,10 +190,10 @@ pub async fn api_request(
     let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
 
     // Inject auth headers
-    if let Some(ref token) = session_token {
+    if let Some(token) = session_token {
         req = req
             .header("Authorization", format!("Bearer {}", token))
-            .header("X-Hermes-Session-Token", token.as_str());
+            .header("X-Hermes-Session-Token", token);
     }
 
     // Forward caller headers (don't override auth)
@@ -229,8 +221,7 @@ pub async fn api_request(
     let raw_body = res.text().await.unwrap_or_default();
 
     // 5. Post-process: filter archived sessions
-    let body =
-        session_archive::filter_archived_from_response(path, method, &hermes_home, &raw_body);
+    let body = session_archive::filter_archived_from_response(path, method, hermes_home, &raw_body);
 
     Ok(ApiRequestResult {
         ok: (200..300).contains(&status),
@@ -239,6 +230,24 @@ pub async fn api_request(
         headers: res_headers,
         body,
     })
+}
+
+/// The main API proxy command. Handles local route intercepts and proxies
+/// to the dashboard for everything else.
+#[tauri::command]
+pub async fn api_request(
+    input: ApiRequestInput,
+    state: State<'_, AppState>,
+) -> Result<ApiRequestResult, AppError> {
+    let (api_base_url, session_token, hermes_home) = {
+        let inner = state.inner.lock()?;
+        (
+            inner.api_base_url.clone(),
+            inner.session_token.clone(),
+            inner.hermes_home.clone(),
+        )
+    };
+    api_request_impl(input, &api_base_url, session_token.as_deref(), &hermes_home).await
 }
 
 /// Proxy an HTTP request to an arbitrary external URL (15s timeout).
@@ -301,19 +310,14 @@ pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult
     }
 }
 
-/// Upload a file to the dashboard's /api/upload endpoint.
-/// The file data arrives as a base64-encoded string from the frontend.
-#[tauri::command]
-pub async fn upload_file(
+/// Core implementation of `upload_file` with no Tauri State dependency.
+/// Exposed for integration tests.
+pub async fn upload_file_impl(
     input: UploadFileInput,
-    state: State<'_, AppState>,
+    api_base_url: &str,
+    session_token: Option<&str>,
 ) -> Result<ApiRequestResult, AppError> {
     use base64::Engine;
-
-    let (api_base_url, session_token) = {
-        let inner = state.inner.lock()?;
-        (inner.api_base_url.clone(), inner.session_token.clone())
-    };
 
     let file_bytes = base64::engine::general_purpose::STANDARD
         .decode(&input.data)
@@ -336,10 +340,10 @@ pub async fn upload_file(
     let client = reqwest::Client::new();
     let mut req = client.post(&url).multipart(form);
 
-    if let Some(ref token) = session_token {
+    if let Some(token) = session_token {
         req = req
             .header("Authorization", format!("Bearer {}", token))
-            .header("X-Hermes-Session-Token", token.as_str());
+            .header("X-Hermes-Session-Token", token);
     }
 
     let res = req.send().await?;
@@ -359,6 +363,20 @@ pub async fn upload_file(
         headers,
         body,
     })
+}
+
+/// Upload a file to the dashboard's /api/upload endpoint.
+/// The file data arrives as a base64-encoded string from the frontend.
+#[tauri::command]
+pub async fn upload_file(
+    input: UploadFileInput,
+    state: State<'_, AppState>,
+) -> Result<ApiRequestResult, AppError> {
+    let (api_base_url, session_token) = {
+        let inner = state.inner.lock()?;
+        (inner.api_base_url.clone(), inner.session_token.clone())
+    };
+    upload_file_impl(input, &api_base_url, session_token.as_deref()).await
 }
 
 #[derive(Debug, Deserialize)]

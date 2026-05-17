@@ -143,8 +143,12 @@ pub fn build_gateway_url(api_base_url: &str, token: Option<&str>) -> String {
         .replace("http://", "ws://")
         .replace("https://", "wss://");
     match token {
-        Some(t) => format!("{}/api/ws?token={}", ws_url, t),
-        None => format!("{}/api/ws", ws_url),
+        Some(t) => format!(
+            "{}/api/ws?token={}",
+            ws_url.trim_end_matches('/'),
+            urlencoding::encode(t)
+        ),
+        None => format!("{}/api/ws", ws_url.trim_end_matches('/')),
     }
 }
 
@@ -357,6 +361,14 @@ mod tests {
         assert_eq!(
             build_gateway_url("http://127.0.0.1:9119", Some("abc123")),
             "ws://127.0.0.1:9119/api/ws?token=abc123"
+        );
+    }
+
+    #[test]
+    fn gateway_url_encodes_token_query_value() {
+        assert_eq!(
+            build_gateway_url("http://127.0.0.1:9119", Some("token with space&x=y")),
+            "ws://127.0.0.1:9119/api/ws?token=token%20with%20space%26x%3Dy"
         );
     }
 

@@ -13,7 +13,7 @@
     "tauri:build:debug": "pnpm exec tauri build --debug",
     "tauri:run": "cargo run",
     "typecheck": "pnpm -r run typecheck",
-    "test:unit": "pnpm --filter @hermes/web test:unit"
+    "test:unit": "pnpm -r --workspace-concurrency=1 test:unit"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"
