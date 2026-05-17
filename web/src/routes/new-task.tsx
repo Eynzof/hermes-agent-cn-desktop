@@ -1,26 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom } from "jotai";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
+import { useCreateAndSendSession } from "@/hooks/use-create-and-send-session";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { recordModelUsage } from "@/lib/model-usage-log";
-import { rememberSessionModelOverride } from "@/lib/session-model-override";
 import { useStatus } from "@/hooks/use-status";
-import { buildComposerDisplayText, prepareComposerPrompt } from "@/lib/composer-prompt";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
-import { uploadAttachmentFile } from "@/lib/transport";
-import { titleFromPrompt, titleWithSessionSuffix } from "@/lib/session-title";
 import {
   normalizeWorkspacePath,
-  rememberSessionWorkspace,
   rememberWorkspaceProject,
   workspaceNameFromPath,
   writeWorkspacePath,
 } from "@/lib/workspaces";
 import { composerPrefillAtom } from "@/stores/panel";
-import { activeSessionIdAtom } from "@/stores/ui";
 import { TopBar } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
 import { QuickStart, RECIPES_NEW_TASK } from "@/components/panel/quick-start";
@@ -66,15 +61,9 @@ export function NewTaskRoute() {
     connect,
     createSession,
     closeSession,
-    beginPrompt,
-    failPrompt,
-    sendPrompt,
-    setSessionTitle,
     getModelOptions,
-    setSessionModel,
-    attachImage,
-    detectDroppedPath,
   } = useGateway();
+  const createAndSendSession = useCreateAndSendSession();
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
@@ -86,7 +75,6 @@ export function NewTaskRoute() {
   );
   const [prefilledText, setPrefilledText] = useState("");
   const [prefill, setPrefill] = useAtom(composerPrefillAtom);
-  const setActiveSessionId = useSetAtom(activeSessionIdAtom);
   const composerRef = useRef<HTMLDivElement>(null);
   const draftSessionRef = useRef<string | null>(null);
   const draftSessionPromiseRef = useRef<Promise<string> | null>(null);
@@ -213,84 +201,28 @@ export function NewTaskRoute() {
     if (sending) return;
     setSending(true);
     try {
-      const submittedAt = Date.now();
-      const selectedProvider = payload.modelSelection?.provider;
-      const canUseDraftSession =
-        !payload.modelSelection?.model ||
-        (
-          payload.modelSelection.model === modelInfo?.model &&
-          (!selectedProvider || selectedProvider === modelInfo?.provider)
-        );
-      const sessionId = canUseDraftSession
-        ? await ensureDraftSession()
-        : await createSession();
-      if (canUseDraftSession) {
-        draftConsumedRef.current = true;
-        draftSessionRef.current = null;
-        draftSessionPromiseRef.current = null;
-      } else {
-        discardDraftSession();
-      }
-      const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
-      const optimisticDisplayText = buildComposerDisplayText(payload);
-
-      if (payload.modelSelection?.model) {
-        rememberSessionModelOverride(sessionId, payload.modelSelection);
-      }
-      if (payload.workspacePath) {
-        rememberWorkspaceProject(payload.workspacePath);
-        rememberSessionWorkspace(sessionId, payload.workspacePath);
-      }
-
-      beginPrompt(sessionId, optimisticDisplayText, submittedAt);
-      // Atom-driven (#53): set the atom *before* navigating so detail
-      // route mounts with the correct sessionId already in atom state.
-      setActiveSessionId(sessionId);
-      navigate(`/tasks/${sessionId}`);
-
-      void (async () => {
-        try {
-          if (payload.modelSelection?.model) {
-            const selectedProvider = payload.modelSelection.provider;
-            const alreadyUsingModel =
+      await createAndSendSession(payload, controls, {
+        createSession: async () => {
+          const selectedProvider = payload.modelSelection?.provider;
+          const canUseDraftSession =
+            !payload.modelSelection?.model ||
+            (
               payload.modelSelection.model === modelInfo?.model &&
-              (!selectedProvider || selectedProvider === modelInfo?.provider);
-            if (!alreadyUsingModel) {
-              await setSessionModel(
-                sessionId,
-                payload.modelSelection.model,
-                payload.modelSelection.provider,
-              );
-            }
+              (!selectedProvider || selectedProvider === modelInfo?.provider)
+            );
+          const sessionId = canUseDraftSession
+            ? await ensureDraftSession()
+            : await createSession();
+          if (canUseDraftSession) {
+            draftConsumedRef.current = true;
+            draftSessionRef.current = null;
+            draftSessionPromiseRef.current = null;
+          } else {
+            discardDraftSession();
           }
-          const prepared = await prepareComposerPrompt(sessionId, payload, {
-            attachImage,
-            detectDroppedPath,
-            uploadFile: uploadAttachmentFile,
-            onAttachmentUpdate: controls.updateAttachment,
-          });
-          await sendPrompt(sessionId, prepared.promptText, {
-            displayText: prepared.displayText,
-            skipOptimisticStart: true,
-          });
-        } catch (err) {
-          console.error("Failed to submit session:", err);
-          failPrompt(sessionId, err);
-        }
-      })();
-
-      if (title) {
-        void setSessionTitle(sessionId, title).catch((titleError) => {
-          const fallbackTitle = titleWithSessionSuffix(title, sessionId);
-          if (!fallbackTitle || fallbackTitle === title) {
-            console.warn("Failed to set session title:", titleError);
-            return;
-          }
-          void setSessionTitle(sessionId, fallbackTitle).catch(() => {
-            console.warn("Failed to set fallback session title:", titleError);
-          });
-        });
-      }
+          return sessionId;
+        },
+      });
     } catch (err) {
       console.error("Failed to create session:", err);
       throw err;
@@ -302,15 +234,7 @@ export function NewTaskRoute() {
     createSession,
     discardDraftSession,
     ensureDraftSession,
-    beginPrompt,
-    failPrompt,
-    setSessionTitle,
-    setSessionModel,
-    attachImage,
-    detectDroppedPath,
-    navigate,
-    sendPrompt,
-    setActiveSessionId,
+    createAndSendSession,
     modelInfo?.model,
     modelInfo?.provider,
   ]);
