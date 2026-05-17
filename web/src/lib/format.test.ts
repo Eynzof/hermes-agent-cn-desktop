@@ -106,14 +106,14 @@ describe("formatCostUsd", () => {
 
 describe("formatCostCny", () => {
   it("renders zero", () => {
-    expect(formatCostCny(0)).toBe("¥0");
+    expect(formatCostCny(0)).toBe("≈¥0");
   });
-  it("applies *7 rate", () => {
-    expect(formatCostCny(1)).toBe("¥7.00");
-    expect(formatCostCny(0.5)).toBe("¥3.50");
+  it("applies the approximate USD/CNY rate", () => {
+    expect(formatCostCny(1)).toBe("≈¥6.80");
+    expect(formatCostCny(0.5)).toBe("≈¥3.40");
   });
   it("clamps tiny amounts", () => {
-    expect(formatCostCny(0.0001)).toBe("<¥0.01");
+    expect(formatCostCny(0.0001)).toBe("<≈¥0.01");
   });
   it("returns dash for null/NaN", () => {
     expect(formatCostCny(null)).toBe("—");

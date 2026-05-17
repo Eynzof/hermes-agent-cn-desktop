@@ -40,14 +40,14 @@ export function formatCostUsd(value: number | undefined | null): string {
   return `$${value.toFixed(2)}`;
 }
 
-const USD_TO_CNY_RATE = 7;
+const USD_TO_CNY_APPROXIMATE_RATE = 6.8;
 
 export function formatCostCny(usd: number | undefined | null): string {
   if (usd == null || !Number.isFinite(usd)) return "—";
-  const cny = Math.max(0, usd) * USD_TO_CNY_RATE;
-  if (cny === 0) return "¥0";
-  if (cny < 0.01) return `<¥0.01`;
-  return `¥${cny.toFixed(2)}`;
+  const cny = Math.max(0, usd) * USD_TO_CNY_APPROXIMATE_RATE;
+  if (cny === 0) return "≈¥0";
+  if (cny < 0.01) return `<≈¥0.01`;
+  return `≈¥${cny.toFixed(2)}`;
 }
 
 export function getGreeting(hour: number): string {
