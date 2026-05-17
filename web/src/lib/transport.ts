@@ -230,18 +230,3 @@ export function uploadAttachmentFile(
   });
 }
 
-export function createSSEStream(
-  url: string,
-  onEvent: (event: { type: string; data: any }) => void,
-  onError?: (err: Event) => void
-): () => void {
-  const es = new EventSource(url);
-  es.onmessage = (e) => {
-    try {
-      const parsed = JSON.parse(e.data);
-      onEvent({ type: parsed.type || "message", data: parsed });
-    } catch {}
-  };
-  es.onerror = (e) => onError?.(e);
-  return () => es.close();
-}

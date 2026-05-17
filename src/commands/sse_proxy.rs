@@ -15,14 +15,11 @@ pub struct ConnectGatewayInput {
     pub client_id: Option<String>,
 }
 
-/// Build the SSE endpoint URL with token / client_id query params.
+/// Build the SSE endpoint URL with client_id query params.
 /// Pure function so it can be unit tested without spinning up reqwest.
-pub fn build_sse_url(api_base_url: &str, token: Option<&str>, client_id: Option<&str>) -> String {
+pub fn build_sse_url(api_base_url: &str, _token: Option<&str>, client_id: Option<&str>) -> String {
     let mut url = format!("{}/api/v2/events", api_base_url.trim_end_matches('/'));
     let mut params: Vec<String> = vec![];
-    if let Some(t) = token {
-        params.push(format!("token={}", urlencoding::encode(t)));
-    }
     if let Some(cid) = client_id {
         params.push(format!("client_id={}", urlencoding::encode(cid)));
     }
@@ -66,8 +63,12 @@ pub async fn connect_gateway_sse(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
+    let stop = Arc::new(AtomicBool::new(false));
     let (api_base_url, session_token) = {
-        let inner = state.inner.lock()?;
+        let mut inner = state.inner.lock()?;
+        if let Some(previous) = inner.gateway_sse_stop.replace(stop.clone()) {
+            previous.store(true, Ordering::Relaxed);
+        }
         (inner.api_base_url.clone(), inner.session_token.clone())
     };
 
@@ -91,14 +92,14 @@ pub async fn connect_gateway_sse(
         return Err(AppError::SseConnect(format!("HTTP {}", response.status())));
     }
 
-    let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = stop.clone();
 
-    let _unlisten = app.listen("gateway-sse-disconnect", move |_| {
+    let unlisten_id = app.listen("gateway-sse-disconnect", move |_| {
         stop_clone.store(true, Ordering::Relaxed);
     });
 
     let app_clone = app.clone();
+    let app_unlisten = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut stream = response.bytes_stream();
         let mut buffer: Vec<u8> = Vec::new();
@@ -123,6 +124,7 @@ pub async fn connect_gateway_sse(
         }
 
         log::info!("SSE stream ended");
+        app_unlisten.unlisten(unlisten_id);
         let _ = app_clone.emit("gateway-sse-error", "SSE stream ended".to_string());
     });
 
@@ -151,7 +153,7 @@ mod tests {
     #[test]
     fn build_sse_url_with_token_only() {
         let url = build_sse_url("http://x", Some("tok"), None);
-        assert_eq!(url, "http://x/api/v2/events?token=tok");
+        assert_eq!(url, "http://x/api/v2/events");
     }
 
     #[test]
@@ -163,16 +165,13 @@ mod tests {
     #[test]
     fn build_sse_url_with_both_params() {
         let url = build_sse_url("http://x", Some("tok"), Some("cid-1"));
-        assert_eq!(url, "http://x/api/v2/events?token=tok&client_id=cid-1");
+        assert_eq!(url, "http://x/api/v2/events?client_id=cid-1");
     }
 
     #[test]
     fn build_sse_url_encodes_query_params() {
         let url = build_sse_url("http://x", Some("tok+with space&x=y"), Some("cid/1?x=2"));
-        assert_eq!(
-            url,
-            "http://x/api/v2/events?token=tok%2Bwith%20space%26x%3Dy&client_id=cid%2F1%3Fx%3D2"
-        );
+        assert_eq!(url, "http://x/api/v2/events?client_id=cid%2F1%3Fx%3D2");
     }
 
     // --- parse_sse_chunk --------------------------------------------------

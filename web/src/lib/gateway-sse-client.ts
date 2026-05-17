@@ -257,13 +257,28 @@ export class GatewaySseClient implements GatewayClientLike {
 
   private tearDownEventSource(): void {
     const es = this.eventSource;
+    const tauriUnlisten = this.tauriUnlisten;
+    const tauriErrorUnlisten = this.tauriErrorUnlisten;
     this.eventSource = null;
     this.clientId = null;
+    this.tauriUnlisten = null;
+    this.tauriErrorUnlisten = null;
     if (es) {
       try {
         es.close();
       } catch {}
     }
+    if (tauriUnlisten || tauriErrorUnlisten) {
+      import("@tauri-apps/api/event")
+        .then(({ emit }) => emit("gateway-sse-disconnect"))
+        .catch(() => {});
+    }
+    try {
+      tauriUnlisten?.();
+    } catch {}
+    try {
+      tauriErrorUnlisten?.();
+    } catch {}
   }
 
   // --- events ---
@@ -413,6 +428,7 @@ export class GatewaySseClient implements GatewayClientLike {
   // --- helpers ---
 
   private tauriUnlisten: (() => void) | null = null;
+  private tauriErrorUnlisten: (() => void) | null = null;
 
   private connectViaTauriProxy(
     timeoutMs: number,
@@ -474,6 +490,8 @@ export class GatewaySseClient implements GatewayClientLike {
             window.setTimeout(() => this.connect().catch(() => {}), 1000);
           }
         }
+      }).then((unlisten) => {
+        this.tauriErrorUnlisten = unlisten;
       });
 
       // Start the Rust SSE proxy (returns immediately, streams in background)

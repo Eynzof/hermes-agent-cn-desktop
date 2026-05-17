@@ -7,6 +7,8 @@
 // come from a single renderer and are mostly sequential.
 
 use std::process::Child;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::sync::Mutex;
 
 /// Handle to a running hermes dashboard subprocess.
@@ -46,6 +48,7 @@ pub struct AppStateInner {
     pub session_token: Option<String>,
     pub current_profile: String,
     pub dashboard_handle: Option<DashboardHandle>,
+    pub gateway_sse_stop: Option<Arc<AtomicBool>>,
     pub switch_profile_in_flight: bool,
     pub last_runtime_error: Option<String>,
 }
@@ -66,6 +69,7 @@ impl AppState {
                 session_token: None,
                 current_profile: "default".to_string(),
                 dashboard_handle: None,
+                gateway_sse_stop: None,
                 switch_profile_in_flight: false,
                 last_runtime_error: None,
             }),
