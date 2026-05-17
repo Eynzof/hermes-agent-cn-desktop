@@ -23,6 +23,19 @@ export function isTauriDevMode(envDev = import.meta.env.DEV): boolean {
   return envDev;
 }
 
+const BASE64_CHUNK_SIZE = 0x8000;
+
+export function arrayBufferToBase64(data: ArrayBuffer): string {
+  const bytes = new Uint8Array(data);
+  const chunks: string[] = [];
+
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
+    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + BASE64_CHUNK_SIZE)));
+  }
+
+  return btoa(chunks.join(""));
+}
+
 async function ensureInvoke() {
   if (!invoke) {
     const mod = await import("@tauri-apps/api/core");
@@ -46,12 +59,7 @@ const tauriBridge = {
 
   async uploadFile(input: FileUploadInput): Promise<ApiRequestResult> {
     const inv = await ensureInvoke();
-    const bytes = new Uint8Array(input.data);
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
+    const base64 = arrayBufferToBase64(input.data);
     return inv("upload_file", {
       input: {
         sessionId: input.sessionId,
