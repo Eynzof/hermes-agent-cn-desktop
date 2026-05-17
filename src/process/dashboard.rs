@@ -21,6 +21,17 @@ pub fn dashboard_base_url(host: &str, port: u16) -> String {
     format!("http://{}:{}", host, port)
 }
 
+fn fallback_ports(start: u16) -> Vec<u16> {
+    let mut ports = Vec::new();
+    for offset in 1..=DASHBOARD_PORT_FALLBACK_LIMIT {
+        let Some(port) = start.checked_add(offset) else {
+            break;
+        };
+        ports.push(port);
+    }
+    ports
+}
+
 /// Check if a dashboard is reachable at the given base URL.
 /// Returns true if /api/status responds with 2xx or 401.
 pub async fn probe_dashboard(api_base_url: &str) -> bool {
@@ -277,8 +288,7 @@ pub async fn ensure_hermes_dashboard(
             api_base_url
         );
         let mut found = false;
-        for offset in 1..=DASHBOARD_PORT_FALLBACK_LIMIT {
-            let candidate_port = options.port + offset;
+        for candidate_port in fallback_ports(options.port) {
             let candidate_url = dashboard_base_url(&options.host, candidate_port);
             if probe_dashboard(&candidate_url).await {
                 if dashboard_supports_uploads(&candidate_url).await
@@ -300,7 +310,7 @@ pub async fn ensure_hermes_dashboard(
             return Err(AppError::DashboardStartup(format!(
                 "No available port from {} to {}",
                 options.port,
-                options.port + DASHBOARD_PORT_FALLBACK_LIMIT
+                options.port.saturating_add(DASHBOARD_PORT_FALLBACK_LIMIT)
             )));
         }
     }
@@ -346,6 +356,12 @@ mod tests {
     #[test]
     fn dashboard_base_url_alt_host_and_port() {
         assert_eq!(dashboard_base_url("0.0.0.0", 8080), "http://0.0.0.0:8080");
+    }
+
+    #[test]
+    fn fallback_ports_stop_at_u16_max() {
+        assert_eq!(fallback_ports(u16::MAX - 2), vec![u16::MAX - 1, u16::MAX]);
+        assert!(fallback_ports(u16::MAX).is_empty());
     }
 
     #[test]
