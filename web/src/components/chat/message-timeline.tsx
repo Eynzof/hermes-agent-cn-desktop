@@ -88,7 +88,7 @@ function localizeProgressLabel(text?: string): string {
       return base.slice(0, base.length - en.length) + zh;
     }
   }
-  return base;
+  return normalized;
 }
 
 const LONG_THINKING_THRESHOLD_S = 120;

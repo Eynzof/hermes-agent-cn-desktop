@@ -59,7 +59,7 @@ function attachmentDisplayName(attachment: ComposerAttachment): string {
   return attachment.uploadedName || attachment.name || fileNameFromPath(attachment.path ?? "");
 }
 
-function buildDisplayText(payload: ComposerSubmitPayload): string {
+export function buildComposerDisplayText(payload: ComposerSubmitPayload): string {
   const text = payload.text.trim();
   const attachments = payload.attachments.map(attachmentDisplayName);
   if (attachments.length === 0) return text;
@@ -163,6 +163,6 @@ export async function prepareComposerPrompt(
   const promptText = parts.join("\n\n").trim();
   return {
     promptText,
-    displayText: buildDisplayText(payload),
+    displayText: buildComposerDisplayText(payload),
   };
 }

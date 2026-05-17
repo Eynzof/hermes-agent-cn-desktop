@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { useNavigate } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
@@ -8,7 +8,7 @@ import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import { rememberSessionModelOverride } from "@/lib/session-model-override";
-import { prepareComposerPrompt } from "@/lib/composer-prompt";
+import { buildComposerDisplayText, prepareComposerPrompt } from "@/lib/composer-prompt";
 import { uploadAttachmentFile } from "@/lib/transport";
 import { titleFromPrompt, titleWithSessionSuffix } from "@/lib/session-title";
 import {
@@ -16,6 +16,7 @@ import {
   rememberWorkspaceProject,
 } from "@/lib/workspaces";
 import { composerPrefillAtom } from "@/stores/panel";
+import { activeSessionIdAtom } from "@/stores/ui";
 import { GooseComposer } from "@/components/chat/goose-composer";
 import type {
   ComposerModelSelection,
@@ -26,7 +27,10 @@ import type {
 export function PanelComposer() {
   const navigate = useNavigate();
   const {
+    connect,
     createSession,
+    beginPrompt,
+    failPrompt,
     sendPrompt,
     setSessionTitle,
     getModelOptions,
@@ -44,6 +48,7 @@ export function PanelComposer() {
   );
   const [prefilledText, setPrefilledText] = useState("");
   const [prefill, setPrefill] = useAtom(composerPrefillAtom);
+  const setActiveSessionId = useSetAtom(activeSessionIdAtom);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +58,10 @@ export function PanelComposer() {
     // Consume the signal so re-renders don't replay it.
     setPrefill(null);
   }, [prefill, setPrefill]);
+
+  useEffect(() => {
+    void connect().catch(() => {});
+  }, [connect]);
 
   const contextSelection = useMemo(() => {
     const model = selectedModel?.model ?? modelInfo?.model;
@@ -109,44 +118,66 @@ export function PanelComposer() {
     if (sending) return;
     setSending(true);
     try {
+      const submittedAt = Date.now();
       const sessionId = await createSession();
       const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
-      if (title) {
-        try {
-          await setSessionTitle(sessionId, title);
-        } catch (titleError) {
-          const fallbackTitle = titleWithSessionSuffix(title, sessionId);
-          if (fallbackTitle && fallbackTitle !== title) {
-            try {
-              await setSessionTitle(sessionId, fallbackTitle);
-            } catch {
-              console.warn("Failed to set fallback session title:", titleError);
-            }
-          }
-        }
-      }
+      const optimisticDisplayText = buildComposerDisplayText(payload);
+
       if (payload.modelSelection?.model) {
-        await setSessionModel(
-          sessionId,
-          payload.modelSelection.model,
-          payload.modelSelection.provider,
-        );
         rememberSessionModelOverride(sessionId, payload.modelSelection);
       }
       if (payload.workspacePath) {
         rememberWorkspaceProject(payload.workspacePath);
         rememberSessionWorkspace(sessionId, payload.workspacePath);
       }
-      const prepared = await prepareComposerPrompt(sessionId, payload, {
-        attachImage,
-        detectDroppedPath,
-        uploadFile: uploadAttachmentFile,
-        onAttachmentUpdate: controls.updateAttachment,
-      });
+
+      beginPrompt(sessionId, optimisticDisplayText, submittedAt);
+      setActiveSessionId(sessionId);
       navigate(`/tasks/${sessionId}`);
-      await sendPrompt(sessionId, prepared.promptText, {
-        displayText: prepared.displayText,
-      });
+
+      void (async () => {
+        try {
+          if (payload.modelSelection?.model) {
+            const selectedProvider = payload.modelSelection.provider;
+            const alreadyUsingModel =
+              payload.modelSelection.model === modelInfo?.model &&
+              (!selectedProvider || selectedProvider === modelInfo?.provider);
+            if (!alreadyUsingModel) {
+              await setSessionModel(
+                sessionId,
+                payload.modelSelection.model,
+                payload.modelSelection.provider,
+              );
+            }
+          }
+          const prepared = await prepareComposerPrompt(sessionId, payload, {
+            attachImage,
+            detectDroppedPath,
+            uploadFile: uploadAttachmentFile,
+            onAttachmentUpdate: controls.updateAttachment,
+          });
+          await sendPrompt(sessionId, prepared.promptText, {
+            displayText: prepared.displayText,
+            skipOptimisticStart: true,
+          });
+        } catch (err) {
+          console.error("Failed to submit session:", err);
+          failPrompt(sessionId, err);
+        }
+      })();
+
+      if (title) {
+        void setSessionTitle(sessionId, title).catch((titleError) => {
+          const fallbackTitle = titleWithSessionSuffix(title, sessionId);
+          if (!fallbackTitle || fallbackTitle === title) {
+            console.warn("Failed to set session title:", titleError);
+            return;
+          }
+          void setSessionTitle(sessionId, fallbackTitle).catch(() => {
+            console.warn("Failed to set fallback session title:", titleError);
+          });
+        });
+      }
     } catch (err) {
       console.error("Failed to create session:", err);
       setSending(false);
@@ -155,12 +186,17 @@ export function PanelComposer() {
   }, [
     sending,
     createSession,
+    beginPrompt,
+    failPrompt,
     setSessionTitle,
     setSessionModel,
     attachImage,
     detectDroppedPath,
     navigate,
     sendPrompt,
+    setActiveSessionId,
+    modelInfo?.model,
+    modelInfo?.provider,
   ]);
 
   return (

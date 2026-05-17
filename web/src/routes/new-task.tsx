@@ -7,7 +7,7 @@ import { useModelOptions } from "@/hooks/use-model-options";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import { rememberSessionModelOverride } from "@/lib/session-model-override";
 import { useStatus } from "@/hooks/use-status";
-import { prepareComposerPrompt } from "@/lib/composer-prompt";
+import { buildComposerDisplayText, prepareComposerPrompt } from "@/lib/composer-prompt";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { uploadAttachmentFile } from "@/lib/transport";
@@ -63,7 +63,10 @@ export function NewTaskRoute() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const {
+    connect,
     createSession,
+    beginPrompt,
+    failPrompt,
     sendPrompt,
     setSessionTitle,
     getModelOptions,
@@ -91,6 +94,10 @@ export function NewTaskRoute() {
     writeWorkspacePath(initialWorkspacePath);
     rememberWorkspaceProject(initialWorkspacePath);
   }, [initialWorkspacePath]);
+
+  useEffect(() => {
+    void connect().catch(() => {});
+  }, [connect]);
 
   useEffect(() => {
     if (!prefill) return;
@@ -156,51 +163,68 @@ export function NewTaskRoute() {
     if (sending) return;
     setSending(true);
     try {
+      const submittedAt = Date.now();
       const sessionId = await createSession();
       const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
-      if (title) {
-        try {
-          await setSessionTitle(sessionId, title);
-        } catch (titleError) {
-          const fallbackTitle = titleWithSessionSuffix(title, sessionId);
-          if (fallbackTitle && fallbackTitle !== title) {
-            try {
-              await setSessionTitle(sessionId, fallbackTitle);
-            } catch {
-              console.warn("Failed to set fallback session title:", titleError);
-            }
-          }
-        }
-      }
+      const optimisticDisplayText = buildComposerDisplayText(payload);
+
       if (payload.modelSelection?.model) {
-        await setSessionModel(
-          sessionId,
-          payload.modelSelection.model,
-          payload.modelSelection.provider,
-        );
-        // The detail route mounts before /api/sessions/<id> reflects this
-        // setSessionModel write, so without this override the composer chip
-        // briefly shows the global default model (modelInfo). sessionStorage
-        // is consumed on detail mount and forgotten.
         rememberSessionModelOverride(sessionId, payload.modelSelection);
       }
       if (payload.workspacePath) {
         rememberWorkspaceProject(payload.workspacePath);
         rememberSessionWorkspace(sessionId, payload.workspacePath);
       }
-      const prepared = await prepareComposerPrompt(sessionId, payload, {
-        attachImage,
-        detectDroppedPath,
-        uploadFile: uploadAttachmentFile,
-        onAttachmentUpdate: controls.updateAttachment,
-      });
+
+      beginPrompt(sessionId, optimisticDisplayText, submittedAt);
       // Atom-driven (#53): set the atom *before* navigating so detail
       // route mounts with the correct sessionId already in atom state.
       setActiveSessionId(sessionId);
       navigate(`/tasks/${sessionId}`);
-      await sendPrompt(sessionId, prepared.promptText, {
-        displayText: prepared.displayText,
-      });
+
+      void (async () => {
+        try {
+          if (payload.modelSelection?.model) {
+            const selectedProvider = payload.modelSelection.provider;
+            const alreadyUsingModel =
+              payload.modelSelection.model === modelInfo?.model &&
+              (!selectedProvider || selectedProvider === modelInfo?.provider);
+            if (!alreadyUsingModel) {
+              await setSessionModel(
+                sessionId,
+                payload.modelSelection.model,
+                payload.modelSelection.provider,
+              );
+            }
+          }
+          const prepared = await prepareComposerPrompt(sessionId, payload, {
+            attachImage,
+            detectDroppedPath,
+            uploadFile: uploadAttachmentFile,
+            onAttachmentUpdate: controls.updateAttachment,
+          });
+          await sendPrompt(sessionId, prepared.promptText, {
+            displayText: prepared.displayText,
+            skipOptimisticStart: true,
+          });
+        } catch (err) {
+          console.error("Failed to submit session:", err);
+          failPrompt(sessionId, err);
+        }
+      })();
+
+      if (title) {
+        void setSessionTitle(sessionId, title).catch((titleError) => {
+          const fallbackTitle = titleWithSessionSuffix(title, sessionId);
+          if (!fallbackTitle || fallbackTitle === title) {
+            console.warn("Failed to set session title:", titleError);
+            return;
+          }
+          void setSessionTitle(sessionId, fallbackTitle).catch(() => {
+            console.warn("Failed to set fallback session title:", titleError);
+          });
+        });
+      }
     } catch (err) {
       console.error("Failed to create session:", err);
       setSending(false);
@@ -209,6 +233,8 @@ export function NewTaskRoute() {
   }, [
     sending,
     createSession,
+    beginPrompt,
+    failPrompt,
     setSessionTitle,
     setSessionModel,
     attachImage,
@@ -216,6 +242,8 @@ export function NewTaskRoute() {
     navigate,
     sendPrompt,
     setActiveSessionId,
+    modelInfo?.model,
+    modelInfo?.provider,
   ]);
 
   // gateway_running 是 PTY daemon 字段（P-009 之后 v2 transport

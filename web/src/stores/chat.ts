@@ -63,6 +63,7 @@ export const chatRuntimeBySessionAtom = atom<ChatRuntimeBySession>({});
 const GENERIC_TURN_FAILURE_TEXT =
   "模型服务调用未成功。常见原因：API Key 失效或不在模型权限范围、网络/服务不可达。请到 设置 → 模型 检查后重试。";
 const PROVIDER_STATUS_KINDS = new Set(["provider_wait", "provider_retry", "provider_stalled"]);
+const OPTIMISTIC_ASSISTANT_PROGRESS = "正在启动Hermes Agent内核...";
 
 export function createEmptyChatRuntime(now = Date.now()): ChatSessionRuntime {
   return {
@@ -709,7 +710,14 @@ export function reduceGatewayEvent(
 
     case "error": {
       const text = pickErrorText(payload, "发生错误");
-      const next = appendNoticeMessage(runtime, sessionId, now, text, "error");
+      const erroredActive = runtime.activeAssistantId
+        ? updateMessage(runtime, runtime.activeAssistantId, (message) => ({
+            ...message,
+            status: "error",
+            parts: withoutProgressParts(message.parts),
+          }))
+        : runtime;
+      const next = appendNoticeMessage(erroredActive, sessionId, now, text, "error");
       return {
         ...next,
         streamStatus: "error",
@@ -782,6 +790,7 @@ export const startPromptAtom = atom(
   null,
   (_get, set, params: { sessionId: string; text: string; now?: number }) => {
     const now = params.now ?? Date.now();
+    const assistantId = assistantClientId(now);
     set(gwSessionIdAtom, params.sessionId);
     set(chatRuntimeBySessionAtom, (state) =>
       updateSessionRuntime(state, params.sessionId, (runtime) => ({
@@ -796,12 +805,20 @@ export const startPromptAtom = atom(
             status: "complete",
             parts: [{ type: "text", text: params.text }],
           },
+          {
+            id: assistantId,
+            sessionId: params.sessionId,
+            role: "assistant",
+            createdAt: now,
+            status: "streaming",
+            parts: [{ type: "progress", text: OPTIMISTIC_ASSISTANT_PROGRESS }],
+          },
         ],
         streamStatus: "streaming",
         pendingApprovals: [],
         turnStartedAt: now,
         turnFirstTokenAt: undefined,
-        activeAssistantId: assistantClientId(now),
+        activeAssistantId: assistantId,
       })),
     );
   },
@@ -821,14 +838,26 @@ export const setSessionErrorAtom = atom(
   (_get, set, params: { sessionId: string; message: string }) => {
     const now = Date.now();
     set(chatRuntimeBySessionAtom, (state) =>
-      updateSessionRuntime(state, params.sessionId, (runtime) => ({
-        ...runtime,
-        streamStatus: "error",
-        statusMessage: params.message,
-        statusKind: "error",
-        statusUpdatedAt: now,
-        updatedAt: now,
-      })),
+      updateSessionRuntime(state, params.sessionId, (runtime) => {
+        const erroredActive = runtime.activeAssistantId
+          ? updateMessage(runtime, runtime.activeAssistantId, (message) => ({
+              ...message,
+              status: "error",
+              parts: withoutProgressParts(message.parts),
+            }))
+          : runtime;
+        return {
+          ...erroredActive,
+          streamStatus: "error",
+          statusMessage: params.message,
+          statusKind: "error",
+          statusUpdatedAt: now,
+          activeAssistantId: undefined,
+          turnStartedAt: undefined,
+          turnFirstTokenAt: undefined,
+          updatedAt: now,
+        };
+      }),
     );
   },
 );

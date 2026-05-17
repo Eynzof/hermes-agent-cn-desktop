@@ -645,7 +645,7 @@ describe("full conversation lifecycle", () => {
 });
 
 describe("startPromptAtom", () => {
-  it("adds an optimistic user message and reserves an assistant id", () => {
+  it("adds optimistic user and assistant messages", () => {
     const store = createStore();
 
     store.set(startPromptAtom, { sessionId: "s1", text: "hello", now: 5 });
@@ -656,6 +656,12 @@ describe("startPromptAtom", () => {
         id: "live-user-5",
         role: "user",
         parts: [{ type: "text", text: "hello" }],
+      }),
+      expect.objectContaining({
+        id: "live-assistant-5",
+        role: "assistant",
+        status: "streaming",
+        parts: [{ type: "progress", text: "正在启动Hermes Agent内核..." }],
       }),
     ]);
     expect(runtime.activeAssistantId).toBe("live-assistant-5");

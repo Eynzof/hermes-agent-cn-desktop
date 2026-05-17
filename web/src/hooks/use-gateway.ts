@@ -114,6 +114,10 @@ function isSessionBusyError(error: unknown): boolean {
   return error instanceof Error && error.message.toLowerCase().includes("session busy");
 }
 
+function errorMessageFromUnknown(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || "发生错误");
+}
+
 async function rememberPersistentSessionKey(gatewaySessionId: string) {
   try {
     const result = SessionTitleResult.parse(
@@ -169,6 +173,22 @@ export function useGateway() {
     return result.session_id;
   }, [ensureSubscribed, resetChatSession, setGwSessionId]);
 
+  const beginPrompt = useCallback(
+    (sessionId: string, text: string, now?: number) => {
+      ensureSubscribed();
+      ensureChatSession(sessionId);
+      startPrompt({ sessionId, text, now });
+    },
+    [ensureChatSession, ensureSubscribed, startPrompt],
+  );
+
+  const failPrompt = useCallback(
+    (sessionId: string, error: unknown) => {
+      setSessionError({ sessionId, message: errorMessageFromUnknown(error) });
+    },
+    [setSessionError],
+  );
+
   const resumeSession = useCallback(async (persistentSessionId: string): Promise<string> => {
     ensureSubscribed();
     const result = SessionResumeResult.parse(
@@ -186,11 +206,13 @@ export function useGateway() {
     async (
       sessionId: string,
       text: string,
-      options?: { displayText?: string; images?: string[] },
+      options?: { displayText?: string; images?: string[]; skipOptimisticStart?: boolean },
     ) => {
       ensureSubscribed();
       ensureChatSession(sessionId);
-      startPrompt({ sessionId, text: options?.displayText ?? text });
+      if (!options?.skipOptimisticStart) {
+        startPrompt({ sessionId, text: options?.displayText ?? text });
+      }
 
       try {
         const params = PromptSubmitParams.parse({
@@ -375,6 +397,8 @@ export function useGateway() {
     streamStatus,
     connect,
     createSession,
+    beginPrompt,
+    failPrompt,
     resumeSession,
     sendPrompt,
     getSessionUsage,
