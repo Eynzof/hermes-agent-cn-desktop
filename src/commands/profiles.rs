@@ -262,6 +262,7 @@ async fn do_switch_profile(
         None => dashboard::fetch_session_token(&handle.api_base_url).await,
     };
     let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, token.as_deref());
+    let api_base_url = handle.api_base_url.clone();
 
     {
         let mut inner = match state.inner.lock() {
@@ -288,10 +289,7 @@ async fn do_switch_profile(
     SwitchProfileResult {
         ok: true,
         profile_name: Some(name.to_string()),
-        api_base_url: Some({
-            let inner = state.inner.lock().unwrap();
-            inner.api_base_url.clone()
-        }),
+        api_base_url: Some(api_base_url),
         gateway_url: Some(gateway_url),
         session_token: token,
         hermes_home: Some(new_home.to_string()),
