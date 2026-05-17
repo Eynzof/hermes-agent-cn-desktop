@@ -6,6 +6,7 @@ import { useCreateAndSendSession } from "@/hooks/use-create-and-send-session";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { recordModelUsage } from "@/lib/model-usage-log";
+import { canUsePrewarmedDraftSession } from "@/lib/new-task-draft-session";
 import { useStatus } from "@/hooks/use-status";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
@@ -97,7 +98,7 @@ export function NewTaskRoute() {
     if (draftSessionPromiseRef.current) return draftSessionPromiseRef.current;
 
     const requestId = draftRequestIdRef.current;
-    const promise = createSession().then((sessionId) => {
+    const promise = createSession({ activate: false }).then((sessionId) => {
       if (draftRequestIdRef.current !== requestId || draftConsumedRef.current) {
         void closeSession(sessionId).catch(() => {});
         return sessionId;
@@ -166,6 +167,7 @@ export function NewTaskRoute() {
   );
 
   const onModelSelect = useCallback((selection: ComposerModelSelection) => {
+    discardDraftSession();
     const enriched: ComposerModelSelection = {
       ...selection,
       contextWindow: resolveModelContextWindow(config, selection),
@@ -173,7 +175,7 @@ export function NewTaskRoute() {
     setSelectedModel(enriched);
     rememberLastUsedModel(enriched);
     recordModelUsage(enriched);
-  }, [config]);
+  }, [config, discardDraftSession]);
 
   const onConfigureProvider = useCallback((providerId: string) => {
     navigate(`/models#provider-${providerId}`);
@@ -203,23 +205,18 @@ export function NewTaskRoute() {
     try {
       await createAndSendSession(payload, controls, {
         createSession: async () => {
-          const selectedProvider = payload.modelSelection?.provider;
-          const canUseDraftSession =
-            !payload.modelSelection?.model ||
-            (
-              payload.modelSelection.model === modelInfo?.model &&
-              (!selectedProvider || selectedProvider === modelInfo?.provider)
-            );
-          const sessionId = canUseDraftSession
-            ? await ensureDraftSession()
-            : await createSession();
-          if (canUseDraftSession) {
-            draftConsumedRef.current = true;
-            draftSessionRef.current = null;
-            draftSessionPromiseRef.current = null;
-          } else {
+          const canUseDraftSession = canUsePrewarmedDraftSession(
+            payload.modelSelection,
+            modelInfo,
+          );
+          if (!canUseDraftSession) {
             discardDraftSession();
+            return await createSession();
           }
+          const sessionId = await ensureDraftSession();
+          draftConsumedRef.current = true;
+          draftSessionRef.current = null;
+          draftSessionPromiseRef.current = null;
           return sessionId;
         },
       });

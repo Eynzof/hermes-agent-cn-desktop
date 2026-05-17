@@ -121,6 +121,7 @@ export function GooseComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentsRef = useRef<ComposerAttachment[]>([]);
   const modelLoadPromiseRef = useRef<Promise<ModelOptionsResult> | null>(null);
+  const selectedModelRef = useRef<ComposerModelSelection | null>(modelPicker?.selected ?? null);
   const dragDepthRef = useRef(0);
   const hasProcessingAttachment = attachments.some(isAttachmentBusy);
   const contextRisk = contextUsageRisk(contextUsage);
@@ -171,6 +172,10 @@ export function GooseComposer({
   useEffect(() => {
     attachmentsRef.current = attachments;
   }, [attachments]);
+
+  useEffect(() => {
+    selectedModelRef.current = modelPicker?.selected ?? null;
+  }, [modelPicker?.selected]);
 
   useEffect(() => {
     return () => {
@@ -327,7 +332,7 @@ export function GooseComposer({
       text,
       attachments,
       workspacePath: workspacePath.trim() || undefined,
-      modelSelection: modelPicker?.selected ?? undefined,
+      modelSelection: selectedModelRef.current ?? undefined,
     };
 
     setSubmitError("");
@@ -444,12 +449,14 @@ export function GooseComposer({
 
   const selectModel = async (selection: ComposerModelSelection) => {
     if (!modelPicker?.onSelect) return;
+    selectedModelRef.current = selection;
     setSwitchingModel(true);
     setModelError("");
     try {
       await modelPicker.onSelect(selection);
       setModelOpen(false);
     } catch (error) {
+      selectedModelRef.current = modelPicker.selected ?? null;
       setModelError(messageFromError(error));
     } finally {
       setSwitchingModel(false);
@@ -665,9 +672,12 @@ export function GooseComposer({
           onSelectAndSetDefault={
             modelPicker?.onSelectAndSetDefault
               ? (selection) => {
+                  selectedModelRef.current = selection;
                   void Promise.resolve(modelPicker.onSelectAndSetDefault?.(selection))
                     .then(() => setModelOpen(false))
-                    .catch(() => {});
+                    .catch(() => {
+                      selectedModelRef.current = modelPicker.selected ?? null;
+                    });
                 }
               : undefined
           }

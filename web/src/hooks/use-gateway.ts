@@ -138,6 +138,10 @@ async function rememberPersistentSessionKey(gatewaySessionId: string) {
   } catch {}
 }
 
+interface CreateSessionOptions {
+  activate?: boolean;
+}
+
 export function useGateway() {
   const queryClient = useQueryClient();
   const connectionState = useAtomValue(gwConnectionAtom);
@@ -169,14 +173,16 @@ export function useGateway() {
     await getGatewayClient().connect();
   }, [ensureSubscribed]);
 
-  const createSession = useCallback(async (): Promise<string> => {
+  const createSession = useCallback(async (options?: CreateSessionOptions): Promise<string> => {
     ensureSubscribed();
     const result = SessionCreateResult.parse(
       await getGatewayClient().request("session.create", {}),
     );
-    setGwSessionId(result.session_id);
-    resetChatSession(result.session_id);
-    void rememberPersistentSessionKey(result.session_id);
+    if (options?.activate !== false) {
+      setGwSessionId(result.session_id);
+      resetChatSession(result.session_id);
+      void rememberPersistentSessionKey(result.session_id);
+    }
     return result.session_id;
   }, [ensureSubscribed, resetChatSession, setGwSessionId]);
 
