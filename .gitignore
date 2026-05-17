@@ -23,6 +23,9 @@ Thumbs.db
 static/dashboard/
 static/runtime/
 
+# Local logs
+.codex-logs/
+
 # Runtime release signing private key (gh secret RUNTIME_SIGN_PRIVATE_KEY_PEM)
 .runtime-keys/
 
