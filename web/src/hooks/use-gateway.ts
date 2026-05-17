@@ -173,6 +173,13 @@ export function useGateway() {
     return result.session_id;
   }, [ensureSubscribed, resetChatSession, setGwSessionId]);
 
+  const closeSession = useCallback(async (sessionId: string) => {
+    if (!sessionId) return;
+    ensureSubscribed();
+    await getGatewayClient().request("session.close", { session_id: sessionId });
+    setGwSessionId((current) => current === sessionId ? null : current);
+  }, [ensureSubscribed, setGwSessionId]);
+
   const beginPrompt = useCallback(
     (sessionId: string, text: string, now?: number) => {
       ensureSubscribed();
@@ -397,6 +404,7 @@ export function useGateway() {
     streamStatus,
     connect,
     createSession,
+    closeSession,
     beginPrompt,
     failPrompt,
     resumeSession,

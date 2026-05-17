@@ -65,6 +65,7 @@ export function NewTaskRoute() {
   const {
     connect,
     createSession,
+    closeSession,
     beginPrompt,
     failPrompt,
     sendPrompt,
@@ -87,7 +88,43 @@ export function NewTaskRoute() {
   const [prefill, setPrefill] = useAtom(composerPrefillAtom);
   const setActiveSessionId = useSetAtom(activeSessionIdAtom);
   const composerRef = useRef<HTMLDivElement>(null);
+  const draftSessionRef = useRef<string | null>(null);
+  const draftSessionPromiseRef = useRef<Promise<string> | null>(null);
+  const draftConsumedRef = useRef(false);
+  const draftRequestIdRef = useRef(0);
   const initialWorkspacePath = normalizeWorkspacePath(searchParams.get("workspace"));
+
+  const discardDraftSession = useCallback(() => {
+    draftRequestIdRef.current += 1;
+    const sessionId = draftSessionRef.current;
+    draftSessionRef.current = null;
+    draftSessionPromiseRef.current = null;
+    if (sessionId && !draftConsumedRef.current) {
+      void closeSession(sessionId).catch(() => {});
+    }
+  }, [closeSession]);
+
+  const ensureDraftSession = useCallback(async () => {
+    if (draftSessionRef.current) return draftSessionRef.current;
+    if (draftSessionPromiseRef.current) return draftSessionPromiseRef.current;
+
+    const requestId = draftRequestIdRef.current;
+    const promise = createSession().then((sessionId) => {
+      if (draftRequestIdRef.current !== requestId || draftConsumedRef.current) {
+        void closeSession(sessionId).catch(() => {});
+        return sessionId;
+      }
+      draftSessionRef.current = sessionId;
+      return sessionId;
+    }).catch((error) => {
+      if (draftSessionPromiseRef.current === promise) {
+        draftSessionPromiseRef.current = null;
+      }
+      throw error;
+    });
+    draftSessionPromiseRef.current = promise;
+    return promise;
+  }, [closeSession, createSession]);
 
   useEffect(() => {
     if (!initialWorkspacePath) return;
@@ -96,8 +133,21 @@ export function NewTaskRoute() {
   }, [initialWorkspacePath]);
 
   useEffect(() => {
-    void connect().catch(() => {});
-  }, [connect]);
+    let cancelled = false;
+    void connect()
+      .then(() => ensureDraftSession())
+      .then((sessionId) => {
+        if (cancelled && !draftConsumedRef.current) {
+          discardDraftSession();
+          void closeSession(sessionId).catch(() => {});
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      discardDraftSession();
+    };
+  }, [closeSession, connect, discardDraftSession, ensureDraftSession]);
 
   useEffect(() => {
     if (!prefill) return;
@@ -164,7 +214,23 @@ export function NewTaskRoute() {
     setSending(true);
     try {
       const submittedAt = Date.now();
-      const sessionId = await createSession();
+      const selectedProvider = payload.modelSelection?.provider;
+      const canUseDraftSession =
+        !payload.modelSelection?.model ||
+        (
+          payload.modelSelection.model === modelInfo?.model &&
+          (!selectedProvider || selectedProvider === modelInfo?.provider)
+        );
+      const sessionId = canUseDraftSession
+        ? await ensureDraftSession()
+        : await createSession();
+      if (canUseDraftSession) {
+        draftConsumedRef.current = true;
+        draftSessionRef.current = null;
+        draftSessionPromiseRef.current = null;
+      } else {
+        discardDraftSession();
+      }
       const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
       const optimisticDisplayText = buildComposerDisplayText(payload);
 
@@ -233,6 +299,8 @@ export function NewTaskRoute() {
   }, [
     sending,
     createSession,
+    discardDraftSession,
+    ensureDraftSession,
     beginPrompt,
     failPrompt,
     setSessionTitle,
