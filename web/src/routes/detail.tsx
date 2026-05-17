@@ -1,28 +1,22 @@
 import { useEffect, useMemo, useCallback, useRef, useState } from "react";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useQueryClient } from "@tanstack/react-query";
+import { useAtom, useSetAtom } from "jotai";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Copy } from "lucide-react";
-import { SessionUsageResult } from "@hermes/protocol";
 import { activeSessionIdAtom } from "@/stores/ui";
-import {
-  chatRuntimeBySessionAtom,
-  createEmptyChatRuntime,
-  gwSessionIdAtom,
-  removeApprovalAtom,
-} from "@/stores/chat";
+import { removeApprovalAtom } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
+import { useComposerTimer } from "@/hooks/use-composer-timer";
+import { useSessionResolution } from "@/hooks/use-session-resolution";
+import { useSessionUsagePolling } from "@/hooks/use-session-usage-polling";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import { readSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
 import { resolveModelContextWindow } from "@/lib/model-context";
-import { resolveGatewaySessionId, resolvePersistentSessionId } from "@/lib/session-map";
-import { isRuntimeRunning } from "@/lib/session-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
   readSessionTitleOverrides,
@@ -45,8 +39,6 @@ import {
 } from "@/components/chat/message-adapter";
 import s from "./detail.module.css";
 
-const ACTIVE_USAGE_POLL_INTERVAL_MS = 5_000;
-
 export function DetailRoute() {
   // URL drives the *initial* selection (deep links, browser back/forward),
   // but `activeSessionIdAtom` is the runtime source of truth. This lets
@@ -55,12 +47,8 @@ export function DetailRoute() {
   // See issue #53.
   const { taskId: urlTaskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [activeSessionId, setActiveId] = useAtom(activeSessionIdAtom);
   const taskId = activeSessionId ?? urlTaskId;
-
-  const gwSessionId = useAtomValue(gwSessionIdAtom);
-  const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
 
   const {
     resumeSession,
@@ -75,24 +63,26 @@ export function DetailRoute() {
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
-  const [sessionUsage, setSessionUsage] = useState<SessionUsageResult | null>(null);
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(null);
   const [sessionIdCopyState, setSessionIdCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [sessionTitleOverrides, setSessionTitleOverrides] = useState(readSessionTitleOverrides);
   const sessionIdCopyTimer = useRef<number | null>(null);
 
-  const restSessionId = resolvePersistentSessionId(taskId);
-  const mappedGatewaySessionId = resolveGatewaySessionId(taskId);
-  const activeMappedGatewaySessionId =
-    mappedGatewaySessionId &&
-    (gwSessionId === mappedGatewaySessionId || runtimeBySession[mappedGatewaySessionId])
-      ? mappedGatewaySessionId
-      : undefined;
-  const runtimeSessionId =
-    taskId && runtimeBySession[taskId] ? taskId : activeMappedGatewaySessionId;
-  const runtime = taskId
-    ? runtimeBySession[runtimeSessionId ?? taskId] ?? createEmptyChatRuntime()
-    : createEmptyChatRuntime();
+  const {
+    restSessionId,
+    activeMappedGatewaySessionId,
+    runtimeSessionId,
+    usageGatewaySessionId,
+    runtime,
+    runtimeIsBusy,
+    isLiveSession,
+  } = useSessionResolution(taskId);
+  const [sessionUsage, setSessionUsage] = useSessionUsagePolling({
+    gatewaySessionId: usageGatewaySessionId,
+    restSessionId,
+    runtimeIsBusy,
+    getSessionUsage,
+  });
   const { data: session } = useSession(restSessionId);
   const messagesQuery = useSessionMessages(restSessionId);
   const { data: messagesData, isLoading } = messagesQuery;
@@ -102,22 +92,6 @@ export function DetailRoute() {
     (item) => item.id === restSessionId || item.id === taskId,
   );
   const copyableSessionId = sessionData?.id ?? sessionSummary?.id ?? restSessionId ?? taskId ?? "";
-  const runtimeIsBusy = isRuntimeRunning(runtime);
-  const isGatewayLinked = Boolean(
-    taskId &&
-    (gwSessionId === taskId ||
-      gwSessionId === activeMappedGatewaySessionId ||
-      resolvePersistentSessionId(gwSessionId ?? undefined) === restSessionId),
-  );
-  // Stay in live mode whenever runtime messages have unsynced content, regardless
-  // of streamStatus. Live messages carry richer metadata (TTFT, duration, cost)
-  // than REST stored messages, so we keep them around and rely on
-  // mergeHermesUIMessages() to deduplicate against stored data.
-  const isLiveSession =
-    isGatewayLinked ||
-    runtimeIsBusy ||
-    runtime.pendingApprovals.length > 0 ||
-    runtime.messages.length > 0;
 
   // Sync URL → atom on mount and whenever URL changes (browser back/forward
   // or a deep-link entry). Sidebar / history clicks already update the atom
@@ -146,7 +120,7 @@ export function DetailRoute() {
     const override = taskId ? readSessionModelOverride(taskId) : null;
     setSelectedModel(override);
     setSessionUsage(null);
-  }, [taskId]);
+  }, [setSessionUsage, taskId]);
 
   useEffect(() => {
     return subscribeSessionUiStateChanges(() => {
@@ -197,75 +171,6 @@ export function DetailRoute() {
     }
     return activeMappedGatewaySessionId ?? taskId;
   }, [activeMappedGatewaySessionId, restSessionId, resumeSession, taskId]);
-
-  const usageGatewaySessionId = runtimeSessionId ?? activeMappedGatewaySessionId;
-
-  useEffect(() => {
-    if (!usageGatewaySessionId) return;
-    let cancelled = false;
-    getSessionUsage(usageGatewaySessionId)
-      .then((usage) => {
-        if (!cancelled) setSessionUsage(usage);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [getSessionUsage, usageGatewaySessionId]);
-
-  useEffect(() => {
-    if (!usageGatewaySessionId) return;
-    return getGatewayClient().on("message.complete", (event) => {
-      if (event.session_id !== usageGatewaySessionId) return;
-      const payload = event.payload && typeof event.payload === "object"
-        ? event.payload as Record<string, unknown>
-        : {};
-      const parsed = SessionUsageResult.safeParse(payload.usage);
-      if (parsed.success) {
-        setSessionUsage(parsed.data);
-      } else {
-        void getSessionUsage(usageGatewaySessionId)
-          .then(setSessionUsage)
-          .catch(() => {});
-      }
-
-      setTimeout(() => {
-        void queryClient.invalidateQueries({
-          queryKey: ["session-messages"],
-          predicate: (q) => q.queryKey.includes(restSessionId),
-        });
-        void queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      }, 500);
-    });
-  }, [getSessionUsage, queryClient, restSessionId, usageGatewaySessionId]);
-
-  useEffect(() => {
-    if (!usageGatewaySessionId || !runtimeIsBusy) return;
-
-    let cancelled = false;
-    let inFlight = false;
-
-    const refreshUsage = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        const usage = await getSessionUsage(usageGatewaySessionId);
-        if (!cancelled) setSessionUsage(usage);
-      } catch {
-        // Keep the composer responsive; the next poll or completion event can recover.
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    void refreshUsage();
-    const timer = window.setInterval(refreshUsage, ACTIVE_USAGE_POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [getSessionUsage, runtimeIsBusy, usageGatewaySessionId]);
 
   const chatMessages = useMemo(() => {
     const stored = messagesResponseToHermesUIMessages(messagesData);
@@ -326,7 +231,7 @@ export function DetailRoute() {
     await getSessionUsage(gatewaySessionId)
       .then(setSessionUsage)
       .catch(() => {});
-  }, [config, ensureGatewaySession, getSessionUsage, setSessionModel]);
+  }, [config, ensureGatewaySession, getSessionUsage, setSessionModel, setSessionUsage]);
 
   const onConfigureProvider = useCallback((providerId: string) => {
     navigate(`/models#provider-${providerId}`);
@@ -365,18 +270,7 @@ export function DetailRoute() {
   );
   const pendingApproval = runtime.pendingApprovals[0] ?? null;
 
-  const [composerTick, setComposerTick] = useState(0);
-  useEffect(() => {
-    if (!runtimeIsBusy || !runtime.turnStartedAt) {
-      setComposerTick(0);
-      return;
-    }
-    setComposerTick(Date.now() - runtime.turnStartedAt);
-    const timer = window.setInterval(() => {
-      setComposerTick(Date.now() - (runtime.turnStartedAt ?? Date.now()));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [runtimeIsBusy, runtime.turnStartedAt]);
+  const composerTick = useComposerTimer(runtimeIsBusy, runtime.turnStartedAt);
 
   const composerLoadingPlaceholder = runtimeIsBusy && runtime.turnStartedAt
     ? `Hermes 思考中 · ${formatElapsedTimer(composerTick)}`
