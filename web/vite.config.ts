@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { dirname, join, resolve } from "path";
 import type { Plugin } from "vite";
-import { sessionLogToMessages } from "./src/lib/session-log";
+import { sessionLogToMessages } from "../packages/protocol/src/session-log.ts";
 
 function hermesTokenPlugin(): Plugin {
   return {
