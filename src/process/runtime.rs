@@ -6,15 +6,18 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use tokio::process::Command;
 
 const RUNTIME_BASENAME: &str = "hermes-agent-cn-runtime";
 const CURRENT_FILE: &str = "current.json";
 const MANIFEST_FILE: &str = "manifest.json";
 const DEFAULT_CHANNEL: &str = "stable";
+const SMOKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -496,7 +499,25 @@ fn safe_version_segment(version: &str) -> String {
     }
 }
 
-fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
+async fn wait_for_smoke_child(
+    mut child: tokio::process::Child,
+    timeout: Duration,
+) -> Result<(), String> {
+    match tokio::time::timeout(timeout, child.wait()).await {
+        Ok(Ok(status)) if status.success() => Ok(()),
+        Ok(Ok(status)) => Err(format!("Smoke check exited with code {:?}", status.code())),
+        Ok(Err(e)) => Err(format!("Smoke check wait failed: {}", e)),
+        Err(_) => {
+            let _ = child.kill().await;
+            Err(format!(
+                "Smoke check timed out after {}s",
+                timeout.as_secs()
+            ))
+        }
+    }
+}
+
+async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
     let child = Command::new(executable_path)
         .args(["dashboard", "--help"])
         .stdout(Stdio::null())
@@ -504,18 +525,7 @@ fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("Smoke check spawn failed: {}", e))?;
 
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("Smoke check wait failed: {}", e))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "Smoke check exited with code {:?}",
-            output.status.code()
-        ))
-    }
+    wait_for_smoke_child(child, SMOKE_TIMEOUT).await
 }
 
 /// Download, verify, and install a runtime update.
@@ -669,7 +679,7 @@ pub async fn install_runtime_update(
     };
 
     // Smoke test
-    if let Err(e) = smoke_check_runtime(&executable) {
+    if let Err(e) = smoke_check_runtime(&executable).await {
         return RuntimeInstallUpdateResult {
             ok: false,
             installed: None,
@@ -987,6 +997,29 @@ mod tests {
         // After filtering, only nothing remains → timestamp fallback (digits, non-empty)
         assert!(!out.is_empty());
         assert!(out.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    fn long_running_command() -> Command {
+        let mut cmd = if cfg!(target_os = "windows") {
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/C", "ping -n 6 127.0.0.1"]);
+            cmd
+        } else {
+            let mut cmd = Command::new("sh");
+            cmd.args(["-c", "sleep 5"]);
+            cmd
+        };
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        cmd
+    }
+
+    #[tokio::test]
+    async fn smoke_child_timeout_kills_hung_process() {
+        let child = long_running_command().spawn().expect("spawn sleep command");
+        let err = wait_for_smoke_child(child, Duration::from_millis(50))
+            .await
+            .expect_err("hung smoke child should time out");
+        assert!(err.contains("timed out"), "unexpected error: {err}");
     }
 
     // -------- signature_payload --------
