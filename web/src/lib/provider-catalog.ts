@@ -1,3 +1,5 @@
+import { fetchExternalJSON } from "./transport";
+
 export type ProviderTransport = "openai_chat" | "anthropic_messages" | "codex_responses";
 export type ProviderApiMode = "chat_completions" | "anthropic_messages" | "codex_responses";
 
@@ -424,9 +426,9 @@ function normalizeRemoteProvider(provider: Partial<ProviderPreset> | undefined):
 }
 
 export async function fetchRemoteProviderCatalog(url: string): Promise<ProviderCatalog> {
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`Provider catalog refresh failed: ${res.status}`);
-  const data = await res.json() as Partial<ProviderCatalog>;
+  const data = await fetchExternalJSON<Partial<ProviderCatalog>>(url, {
+    headers: { Accept: "application/json" },
+  });
   if (!data || !Array.isArray(data.providers)) {
     throw new Error("Provider catalog response is invalid.");
   }

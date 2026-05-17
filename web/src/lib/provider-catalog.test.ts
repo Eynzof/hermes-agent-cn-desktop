@@ -1,13 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fetchExternalJSON } from "./transport";
 import {
   BUILTIN_PROVIDER_CATALOG,
   buildProviderConfigUpdate,
+  fetchRemoteProviderCatalog,
   getProviderEntry,
   providerHasSavedCredentials,
   sortProvidersForCnEdition,
   TOP5_PROVIDER_IDS,
   type ProviderPreset,
 } from "./provider-catalog";
+
+vi.mock("./transport", () => ({
+  fetchExternalJSON: vi.fn(),
+}));
+
+const mockedFetchExternalJSON = vi.mocked(fetchExternalJSON);
+
+beforeEach(() => {
+  mockedFetchExternalJSON.mockReset();
+});
 
 describe("provider catalog config updates", () => {
   it("writes catalog providers as canonical providers instead of custom slugs", () => {
@@ -104,5 +116,41 @@ describe("provider catalog config updates", () => {
 
     expect(getProviderEntry(config, preset.id).api_key).toBe("existing-key");
     expect(providerHasSavedCredentials(config, preset.id)).toBe(true);
+  });
+
+  it("loads remote catalog through fetchExternalJSON timeout path", async () => {
+    mockedFetchExternalJSON.mockResolvedValue({
+      version: "remote-v1",
+      providers: [
+        {
+          id: "remote-provider",
+          name: "Remote Provider",
+          vendor: "Remote",
+          region: "global",
+          baseUrl: "https://api.example.com/v1",
+          apiMode: "chat_completions",
+          transport: "openai_chat",
+          apiKeyLabel: "REMOTE_API_KEY",
+          defaultModel: "remote-model",
+          models: [{ id: "remote-model" }],
+        },
+      ],
+    });
+
+    const catalog = await fetchRemoteProviderCatalog("https://cdn.example.com/catalog.json");
+
+    expect(mockedFetchExternalJSON).toHaveBeenCalledWith(
+      "https://cdn.example.com/catalog.json",
+      { headers: { Accept: "application/json" } },
+    );
+    expect(catalog).toMatchObject({
+      version: "remote-v1",
+      providers: [
+        {
+          id: "remote-provider",
+          defaultModel: "remote-model",
+        },
+      ],
+    });
   });
 });
