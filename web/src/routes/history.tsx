@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useNavigate } from "react-router-dom";
+import { Dialog, Popover } from "@hermes/shared-ui";
 import {
   Archive,
   ChevronDown,
@@ -88,37 +89,36 @@ interface RowMenuProps {
   onRename: () => void;
   onArchive: () => void;
   onDelete: () => void;
-  onClose: () => void;
 }
 
-function RowMenu({ onRename, onArchive, onDelete, onClose }: RowMenuProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onMouseDown = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) onClose();
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("mousedown", onMouseDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onMouseDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
+function RowMenu({ onRename, onArchive, onDelete }: RowMenuProps) {
   return (
-    <div ref={ref} className={s.rowMenu} role="menu">
-      <button type="button" onClick={onRename} role="menuitem">
-        <Edit3 size={13} /> 重命名
-      </button>
-      <button type="button" onClick={onArchive} role="menuitem">
-        <Archive size={13} /> 归档
-      </button>
-      <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
-        <Trash2 size={13} /> 删除
-      </button>
-    </div>
+    <Popover.Portal>
+      <Popover.Content
+        className={s.rowMenu}
+        align="end"
+        side="bottom"
+        sideOffset={4}
+        role="menu"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Popover.Close asChild>
+          <button type="button" onClick={onRename} role="menuitem">
+            <Edit3 size={13} /> 重命名
+          </button>
+        </Popover.Close>
+        <Popover.Close asChild>
+          <button type="button" onClick={onArchive} role="menuitem">
+            <Archive size={13} /> 归档
+          </button>
+        </Popover.Close>
+        <Popover.Close asChild>
+          <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
+            <Trash2 size={13} /> 删除
+          </button>
+        </Popover.Close>
+      </Popover.Content>
+    </Popover.Portal>
   );
 }
 
@@ -132,52 +132,68 @@ interface RenameModalProps {
 }
 
 function RenameModal({ value, saving, error, onChange, onClose, onSubmit }: RenameModalProps) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !saving) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, saving]);
   return (
-    <div className={s.modalBackdrop} onMouseDown={() => !saving && onClose()}>
-      <form
-        className={s.renameModal}
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit();
-        }}
-      >
-        <h2>重命名会话</h2>
-        <input
-          className={s.renameInput}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          autoFocus
-          maxLength={80}
-        />
-        {error ? <div className={s.renameError}>{error}</div> : null}
-        <div className={s.renameActions}>
-          <button
-            type="button"
-            className={s.renameCancel}
-            onClick={onClose}
-            disabled={saving}
+    <Dialog.Root
+      open
+      onOpenChange={(open) => {
+        if (!open && !saving) onClose();
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className={s.modalBackdrop} />
+        <Dialog.Content
+          className={s.renameModal}
+          aria-describedby={error ? "history-rename-error" : undefined}
+          onEscapeKeyDown={(event) => {
+            if (saving) event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            if (saving) event.preventDefault();
+          }}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSubmit();
+            }}
           >
-            取消
-          </button>
-          <button type="submit" className={s.renameSubmit} disabled={saving}>
-            {saving ? "保存中…" : "保存"}
-          </button>
-        </div>
-      </form>
-    </div>
+            <Dialog.Title asChild>
+              <h2>重命名会话</h2>
+            </Dialog.Title>
+            <input
+              className={s.renameInput}
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              autoFocus
+              maxLength={80}
+            />
+            {error ? (
+              <div id="history-rename-error" className={s.renameError}>
+                {error}
+              </div>
+            ) : null}
+            <div className={s.renameActions}>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className={s.renameCancel}
+                  disabled={saving}
+                >
+                  取消
+                </button>
+              </Dialog.Close>
+              <button type="submit" className={s.renameSubmit} disabled={saving}>
+                {saving ? "保存中…" : "保存"}
+              </button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
 interface SourcePopoverProps {
-  open: boolean;
   selected: string | null;
   pinned: Set<string>;
   counts: Map<string, number>;
@@ -187,7 +203,6 @@ interface SourcePopoverProps {
 }
 
 function SourcePopover({
-  open,
   selected,
   pinned,
   counts,
@@ -196,22 +211,6 @@ function SourcePopover({
   onClose,
 }: SourcePopoverProps) {
   const [query, setQuery] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onMouseDown = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) onClose();
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("mousedown", onMouseDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onMouseDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
 
   const groups = useMemo(() => {
     const sources = Array.from(counts.entries()).map(([key, count]) => ({ key, count }));
@@ -232,81 +231,88 @@ function SourcePopover({
       .filter((g) => g.items.length > 0);
   }, [groups, query]);
 
-  if (!open) return null;
   return (
-    <div ref={ref} className={s.popover} role="dialog">
-      <div className={s.popHead}>
-        <Search size={13} />
-        <input
-          className={s.popSearch}
-          placeholder="搜索来源…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          autoFocus
-        />
-      </div>
-      <div className={s.popBody}>
-        {filteredGroups.length === 0 ? (
-          <div className={s.popEmpty}>未找到来源</div>
-        ) : (
-          filteredGroups.map((group) => (
-            <div key={group.group} className={s.popGroup}>
-              <div className={s.popGroupLabel}>
-                {group.label} · {group.items.length}
-              </div>
-              {group.items.map((item) => {
-                const isSelected = selected === item.key;
-                const pinnedHere = pinned.has(item.key);
-                return (
-                  <div
-                    key={item.key}
-                    className={s.popRow}
-                    data-checked={isSelected ? "true" : undefined}
-                    role="option"
-                    aria-selected={isSelected}
-                    onClick={() => {
-                      onSelect(item.key);
-                      onClose();
-                    }}
-                  >
-                    <span className={s.popName}>{item.label}</span>
-                    <button
-                      type="button"
-                      className={s.popPin}
-                      data-pinned={pinnedHere ? "true" : undefined}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onTogglePin(item.key);
+    <Popover.Portal>
+      <Popover.Content
+        className={s.popover}
+        align="start"
+        side="bottom"
+        role="dialog"
+        aria-label="来源筛选"
+      >
+        <div className={s.popHead}>
+          <Search size={13} />
+          <input
+            className={s.popSearch}
+            placeholder="搜索来源…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            autoFocus
+          />
+        </div>
+        <div className={s.popBody}>
+          {filteredGroups.length === 0 ? (
+            <div className={s.popEmpty}>未找到来源</div>
+          ) : (
+            filteredGroups.map((group) => (
+              <div key={group.group} className={s.popGroup}>
+                <div className={s.popGroupLabel}>
+                  {group.label} · {group.items.length}
+                </div>
+                {group.items.map((item) => {
+                  const isSelected = selected === item.key;
+                  const pinnedHere = pinned.has(item.key);
+                  return (
+                    <div
+                      key={item.key}
+                      className={s.popRow}
+                      data-checked={isSelected ? "true" : undefined}
+                      role="option"
+                      aria-selected={isSelected}
+                      onClick={() => {
+                        onSelect(item.key);
+                        onClose();
                       }}
-                      aria-label={pinnedHere ? "取消置顶" : "置顶"}
-                      title={pinnedHere ? "取消置顶" : "置顶"}
                     >
-                      {pinnedHere ? <Pin size={11} /> : <PinOff size={11} />}
-                    </button>
-                    <span className={s.popCount}>{counts.get(item.key) ?? 0}</span>
-                  </div>
-                );
-              })}
-            </div>
-          ))
-        )}
-      </div>
-      <div className={s.popFoot}>
-        <button
-          type="button"
-          className={s.popLink}
-          onClick={() => {
-            onSelect(null);
-            onClose();
-          }}
-        >
-          全部来源
-        </button>
-        <span className={s.popFootMeta}>
-          {selected ? getSourceMeta(selected).label : "未选择"}
-        </span>
-      </div>
-    </div>
+                      <span className={s.popName}>{item.label}</span>
+                      <button
+                        type="button"
+                        className={s.popPin}
+                        data-pinned={pinnedHere ? "true" : undefined}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onTogglePin(item.key);
+                        }}
+                        aria-label={pinnedHere ? "取消置顶" : "置顶"}
+                        title={pinnedHere ? "取消置顶" : "置顶"}
+                      >
+                        {pinnedHere ? <Pin size={11} /> : <PinOff size={11} />}
+                      </button>
+                      <span className={s.popCount}>{counts.get(item.key) ?? 0}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+        <div className={s.popFoot}>
+          <button
+            type="button"
+            className={s.popLink}
+            onClick={() => {
+              onSelect(null);
+              onClose();
+            }}
+          >
+            全部来源
+          </button>
+          <span className={s.popFootMeta}>
+            {selected ? getSourceMeta(selected).label : "未选择"}
+          </span>
+        </div>
+      </Popover.Content>
+    </Popover.Portal>
   );
 }
 
@@ -595,27 +601,29 @@ export function HistoryRoute() {
               );
             })}
             {overflowCount > 0 ? (
-              <button
-                type="button"
-                className={s.segItem}
-                data-active={popoverOpen ? "true" : undefined}
-                onClick={() => setPopoverOpen((prev) => !prev)}
-              >
-                更多
-                <span className={s.segBadge}>+{overflowCount}</span>
-                <ChevronDown size={12} className={popoverOpen ? s.chevOpen : undefined} />
-              </button>
+              <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
+                <Popover.Trigger asChild>
+                  <button
+                    type="button"
+                    className={s.segItem}
+                    data-active={popoverOpen ? "true" : undefined}
+                  >
+                    更多
+                    <span className={s.segBadge}>+{overflowCount}</span>
+                    <ChevronDown size={12} className={popoverOpen ? s.chevOpen : undefined} />
+                  </button>
+                </Popover.Trigger>
+                <SourcePopover
+                  selected={selectedSource}
+                  pinned={pinnedSources}
+                  counts={sourceCounts}
+                  onSelect={setSelectedSource}
+                  onTogglePin={onTogglePinSource}
+                  onClose={() => setPopoverOpen(false)}
+                />
+              </Popover.Root>
             ) : null}
           </div>
-          <SourcePopover
-            open={popoverOpen}
-            selected={selectedSource}
-            pinned={pinnedSources}
-            counts={sourceCounts}
-            onSelect={setSelectedSource}
-            onTogglePin={onTogglePinSource}
-            onClose={() => setPopoverOpen(false)}
-          />
         </div>
 
         <div className={s.searchBox}>
@@ -712,23 +720,26 @@ export function HistoryRoute() {
                       <span className={`${s.cellMono} ${s.alignRight}`}>
                         {formatCostCny(session.estimated_cost_usd)}
                       </span>
-                      <span
-                        className={s.cellMore}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setOpenMenuId((prev) => (prev === session.id ? null : session.id));
-                        }}
+                      <Popover.Root
+                        open={openMenuId === session.id}
+                        onOpenChange={(open) => setOpenMenuId(open ? session.id : null)}
                       >
-                        <MoreHorizontal size={14} />
-                        {openMenuId === session.id ? (
-                          <RowMenu
-                            onRename={() => startRename(session)}
-                            onArchive={() => handleArchive(session)}
-                            onDelete={() => handleDelete(session)}
-                            onClose={() => setOpenMenuId(null)}
-                          />
-                        ) : null}
-                      </span>
+                        <Popover.Trigger asChild>
+                          <button
+                            type="button"
+                            className={s.cellMore}
+                            aria-label="会话操作"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <MoreHorizontal size={14} />
+                          </button>
+                        </Popover.Trigger>
+                        <RowMenu
+                          onRename={() => startRename(session)}
+                          onArchive={() => handleArchive(session)}
+                          onDelete={() => handleDelete(session)}
+                        />
+                      </Popover.Root>
                     </div>
                   );
                 })}

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Popover } from "@hermes/shared-ui";
 import {
   ExternalLink,
   FolderPlus,
@@ -76,36 +77,33 @@ interface RowMenuProps {
   desktopAvailable: boolean;
   onOpenInFinder: () => void;
   onDelete: () => void;
-  onClose: () => void;
 }
 
-function RowMenu({ desktopAvailable, onOpenInFinder, onDelete, onClose }: RowMenuProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onMouseDown = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) onClose();
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("mousedown", onMouseDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onMouseDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
+function RowMenu({ desktopAvailable, onOpenInFinder, onDelete }: RowMenuProps) {
   return (
-    <div ref={ref} className={s.rowMenu} role="menu">
-      {desktopAvailable ? (
-        <button type="button" onClick={onOpenInFinder} role="menuitem">
-          <ExternalLink size={13} /> 在 Finder 打开
-        </button>
-      ) : null}
-      <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
-        <Trash2 size={13} /> 删除项目
-      </button>
-    </div>
+    <Popover.Portal>
+      <Popover.Content
+        className={s.rowMenu}
+        align="end"
+        side="bottom"
+        sideOffset={4}
+        role="menu"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {desktopAvailable ? (
+          <Popover.Close asChild>
+            <button type="button" onClick={onOpenInFinder} role="menuitem">
+              <ExternalLink size={13} /> 在 Finder 打开
+            </button>
+          </Popover.Close>
+        ) : null}
+        <Popover.Close asChild>
+          <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
+            <Trash2 size={13} /> 删除项目
+          </button>
+        </Popover.Close>
+      </Popover.Content>
+    </Popover.Portal>
   );
 }
 
@@ -309,24 +307,28 @@ export function ProjectsRoute() {
                       <td className={`${s.mono} ${s.numeric}`}>
                         {formatCostCny(item.totalCostUsd)}
                       </td>
-                      <td
-                        className={s.menuCell}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setOpenMenuPath((prev) =>
-                            prev === project.path ? null : project.path,
-                          );
-                        }}
-                      >
-                        <MoreHorizontal size={14} />
-                        {openMenuPath === project.path ? (
+                      <td className={s.menuCell} onClick={(event) => event.stopPropagation()}>
+                        <Popover.Root
+                          open={openMenuPath === project.path}
+                          onOpenChange={(open) =>
+                            setOpenMenuPath(open ? project.path : null)
+                          }
+                        >
+                          <Popover.Trigger asChild>
+                            <button
+                              type="button"
+                              className={s.menuTrigger}
+                              aria-label="项目操作"
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                          </Popover.Trigger>
                           <RowMenu
                             desktopAvailable={desktopAvailable}
                             onOpenInFinder={() => handleOpenInFinder(project)}
                             onDelete={() => handleDelete(project)}
-                            onClose={() => setOpenMenuPath(null)}
                           />
-                        ) : null}
+                        </Popover.Root>
                       </td>
                     </tr>
                   );

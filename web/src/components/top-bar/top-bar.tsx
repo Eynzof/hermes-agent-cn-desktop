@@ -1,4 +1,4 @@
-import { type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import s from "./top-bar.module.css";
 
 interface TopBarProps {
@@ -20,19 +20,19 @@ export function TopBar({ title, sub, right }: TopBarProps) {
   );
 }
 
-export function TopBarActionButton({
-  className,
-  type = "button",
-  ...props
-}: TopBarActionButtonProps) {
+export const TopBarActionButton = forwardRef<
+  HTMLButtonElement,
+  TopBarActionButtonProps
+>(function TopBarActionButton({ className, type = "button", ...props }, ref) {
   return (
     <button
       {...props}
+      ref={ref}
       type={type}
       className={className ? `${s.chip} ${className}` : s.chip}
     />
   );
-}
+});
 
 export function TopBarActions() {
   return null;

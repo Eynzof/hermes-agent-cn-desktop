@@ -142,9 +142,7 @@
 }
 
 .menuCell {
-  position: relative;
   text-align: center;
-  cursor: pointer;
   color: var(--h-text-3);
 }
 
@@ -152,17 +150,28 @@
   color: var(--h-text);
 }
 
+.menuTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.menuTrigger:hover {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
 .rowMenu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 8px;
   min-width: 160px;
   padding: 4px;
-  background: var(--h-bg-pane);
-  border: 1px solid var(--h-line);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgb(20 18 14 / 18%), 0 2px 6px rgb(20 18 14 / 8%);
-  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 1px;

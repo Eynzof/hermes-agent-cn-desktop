@@ -125,19 +125,11 @@
 
 /* popover */
 .popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
   width: 320px;
   max-height: 460px;
-  background: var(--h-bg-pane);
-  border: 1px solid var(--h-line);
   border-radius: 8px;
-  box-shadow: 0 12px 32px rgb(20 18 14 / 16%), 0 2px 8px rgb(20 18 14 / 8%);
-  z-index: 20;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .popHead {
@@ -445,14 +437,15 @@
 }
 
 .cellMore {
-  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
   color: var(--h-text-3);
+  border: none;
   border-radius: 4px;
+  background: transparent;
   cursor: pointer;
 }
 
@@ -462,16 +455,9 @@
 }
 
 .rowMenu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
   min-width: 140px;
   padding: 4px;
-  background: var(--h-bg-pane);
-  border: 1px solid var(--h-line);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgb(20 18 14 / 18%), 0 2px 6px rgb(20 18 14 / 8%);
-  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -603,13 +589,6 @@
 
 /* rename modal */
 .modalBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
   background: rgb(0 0 0 / 18%);
 }
 

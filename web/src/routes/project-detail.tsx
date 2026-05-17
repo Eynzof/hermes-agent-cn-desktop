@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Popover } from "@hermes/shared-ui";
 import {
   ChevronLeft,
   ExternalLink,
@@ -56,36 +57,33 @@ interface MenuProps {
   desktopAvailable: boolean;
   onOpenInFinder: () => void;
   onDelete: () => void;
-  onClose: () => void;
 }
 
-function ProjectMenu({ desktopAvailable, onOpenInFinder, onDelete, onClose }: MenuProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onMouseDown = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) onClose();
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("mousedown", onMouseDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onMouseDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
+function ProjectMenu({ desktopAvailable, onOpenInFinder, onDelete }: MenuProps) {
   return (
-    <div ref={ref} className={s.menu} role="menu">
-      {desktopAvailable ? (
-        <button type="button" onClick={onOpenInFinder} role="menuitem">
-          <ExternalLink size={13} /> 在 Finder 打开
-        </button>
-      ) : null}
-      <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
-        <Trash2 size={13} /> 删除项目
-      </button>
-    </div>
+    <Popover.Portal>
+      <Popover.Content
+        className={s.menu}
+        align="end"
+        side="bottom"
+        sideOffset={4}
+        role="menu"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {desktopAvailable ? (
+          <Popover.Close asChild>
+            <button type="button" onClick={onOpenInFinder} role="menuitem">
+              <ExternalLink size={13} /> 在 Finder 打开
+            </button>
+          </Popover.Close>
+        ) : null}
+        <Popover.Close asChild>
+          <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
+            <Trash2 size={13} /> 删除项目
+          </button>
+        </Popover.Close>
+      </Popover.Content>
+    </Popover.Portal>
   );
 }
 
@@ -239,25 +237,18 @@ export function ProjectDetailRoute() {
               <Plus size={13} />
               新对话
             </TopBarActionButton>
-            <span
-              className={s.menuAnchor}
-              onClick={(event) => {
-                event.stopPropagation();
-                setMenuOpen((prev) => !prev);
-              }}
-            >
-              <TopBarActionButton aria-label="项目操作">
-                <MoreHorizontal size={14} />
-              </TopBarActionButton>
-              {menuOpen ? (
-                <ProjectMenu
-                  desktopAvailable={desktopAvailable}
-                  onOpenInFinder={handleOpenInFinder}
-                  onDelete={handleDelete}
-                  onClose={() => setMenuOpen(false)}
-                />
-              ) : null}
-            </span>
+            <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
+              <Popover.Trigger asChild>
+                <TopBarActionButton aria-label="项目操作">
+                  <MoreHorizontal size={14} />
+                </TopBarActionButton>
+              </Popover.Trigger>
+              <ProjectMenu
+                desktopAvailable={desktopAvailable}
+                onOpenInFinder={handleOpenInFinder}
+                onDelete={handleDelete}
+              />
+            </Popover.Root>
           </>
         }
       />
