@@ -205,29 +205,51 @@ function showBootstrapOverlay(initialMessage: string): {
   };
 }
 
-async function waitForBootstrap(initialMessage: string): Promise<{ failed: boolean; message: string }> {
+async function waitForBootstrap(
+  initialMessage: string,
+  readConfig: () => Promise<{ apiBaseUrl?: string }>,
+): Promise<{ failed: boolean; message: string }> {
   const overlay = showBootstrapOverlay(initialMessage);
   const { listen } = await import("@tauri-apps/api/event");
 
   return new Promise((resolve) => {
     let unlisten: (() => void) | null = null;
+    let interval: number | null = null;
+    let settled = false;
+
+    const finish = (result: { failed: boolean; message: string }) => {
+      if (settled) return;
+      settled = true;
+      unlisten?.();
+      if (interval !== null) window.clearInterval(interval);
+      if (!result.failed) overlay.dismiss();
+      resolve(result);
+    };
+
+    const checkReady = () => {
+      void readConfig()
+        .then((cfg) => {
+          if (cfg.apiBaseUrl) finish({ failed: false, message: "" });
+        })
+        .catch(() => {});
+    };
+
     listen<{ phase: string; message: string }>("runtime-status", (event) => {
       const { phase, message } = event.payload;
       overlay.update(phase, message);
       if (phase === "ready") {
-        unlisten?.();
-        overlay.dismiss();
-        resolve({ failed: false, message: "" });
+        finish({ failed: false, message: "" });
       } else if (phase === "error") {
         // Leave the overlay up so the user sees the error message; the
         // process keeps running so they can read it. They'll need to
         // close + relaunch (or fix the env / hit a "retry" button we
         // add later).
-        unlisten?.();
-        resolve({ failed: true, message });
+        finish({ failed: true, message });
       }
     }).then((fn) => {
       unlisten = fn;
+      checkReady();
+      interval = window.setInterval(checkReady, 500);
     });
   });
 }
@@ -257,7 +279,7 @@ export async function installTauriBridge(): Promise<void> {
   // until the `runtime-status` event reports `ready`, then refetch
   // the config so we get the populated apiBaseUrl/sessionToken.
   if (!isDevMode && !config.apiBaseUrl) {
-    const result = await waitForBootstrap("正在下载 hermes-agent-cn runtime...");
+    const result = await waitForBootstrap("正在启动Hermes Agent内核...", () => inv("get_runtime_config"));
     if (result.failed) {
       // Leave the overlay up — the user needs to see the message
       // and decide what to do (close and reopen, fix env vars, etc).
