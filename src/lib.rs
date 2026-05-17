@@ -1,6 +1,5 @@
 pub mod commands;
 pub mod error;
-pub mod http_client;
 pub mod prevent_sleep;
 pub mod process;
 pub mod session_archive;

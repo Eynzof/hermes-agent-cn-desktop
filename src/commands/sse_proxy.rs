@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use futures_util::StreamExt;
 use serde::Deserialize;
@@ -7,6 +7,8 @@ use tauri::{Emitter, Listener, State};
 
 use crate::error::AppError;
 use crate::state::AppState;
+
+static SSE_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,8 +80,9 @@ pub async fn connect_gateway_sse(
         input.client_id.as_deref(),
     );
 
-    let client = reqwest::Client::new();
-    let mut req = client.get(&url).header("Accept", "text/event-stream");
+    let mut req = SSE_HTTP_CLIENT
+        .get(&url)
+        .header("Accept", "text/event-stream");
     if let Some(ref token) = session_token {
         req = req.header("Authorization", format!("Bearer {}", token));
     }

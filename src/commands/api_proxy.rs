@@ -9,6 +9,7 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -25,6 +26,25 @@ const DASHBOARD_PROXY_TIMEOUT: Duration = Duration::from_secs(30);
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_UPLOAD_BYTES: usize = 100 * 1024 * 1024;
 const MAX_UPLOAD_BASE64_LEN: usize = ((MAX_UPLOAD_BYTES + 2) / 3) * 4;
+static DASHBOARD_PROXY_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(DASHBOARD_PROXY_TIMEOUT)
+        .build()
+        .expect("valid dashboard proxy HTTP client")
+});
+static UPLOAD_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(UPLOAD_TIMEOUT)
+        .build()
+        .expect("valid upload HTTP client")
+});
+static EXTERNAL_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(EXTERNAL_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("valid external HTTP client")
+});
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,10 +87,6 @@ fn url_path(path: &str) -> String {
     } else {
         path.split('?').next().unwrap_or(path).to_string()
     }
-}
-
-fn dashboard_proxy_client(timeout: Duration) -> Result<reqwest::Client, AppError> {
-    Ok(reqwest::Client::builder().timeout(timeout).build()?)
 }
 
 fn upload_limit_error() -> AppError {
@@ -355,8 +371,8 @@ pub async fn api_request_impl(
         format!("{}{}", base, p)
     };
 
-    let client = dashboard_proxy_client(DASHBOARD_PROXY_TIMEOUT)?;
-    let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
+    let mut req = DASHBOARD_PROXY_HTTP_CLIENT
+        .request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
 
     // Inject auth headers
     if let Some(token) = session_token {
@@ -425,12 +441,8 @@ pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult
     let method = input.method.as_deref().unwrap_or("GET");
     let target_url = validate_external_url(&input.path).await?;
 
-    let client = reqwest::Client::builder()
-        .timeout(EXTERNAL_TIMEOUT)
-        .redirect(reqwest::redirect::Policy::none())
-        .build()?;
-
-    let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
+    let mut req =
+        EXTERNAL_HTTP_CLIENT.request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
 
     if let Some(ref headers) = input.headers {
         for (key, value) in headers {
@@ -510,8 +522,7 @@ pub async fn upload_file_impl(
         .part("file", file_part);
 
     let url = format!("{}/api/upload", api_base_url.trim_end_matches('/'));
-    let client = dashboard_proxy_client(UPLOAD_TIMEOUT)?;
-    let mut req = client.post(&url).multipart(form);
+    let mut req = UPLOAD_HTTP_CLIENT.post(&url).multipart(form);
 
     if let Some(token) = session_token {
         req = req

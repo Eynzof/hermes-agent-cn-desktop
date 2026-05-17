@@ -19,9 +19,22 @@ use crate::state::DashboardHandle;
 
 const DASHBOARD_READY_TIMEOUT: Duration = Duration::from_secs(25);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(900);
+const SESSION_TOKEN_TIMEOUT: Duration = Duration::from_millis(1200);
 const DASHBOARD_PORT_FALLBACK_LIMIT: u16 = 20;
 static SESSION_TOKEN_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"__HERMES_SESSION_TOKEN__="([^"]+)""#).expect("valid session token regex")
+});
+static PROBE_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(PROBE_TIMEOUT)
+        .build()
+        .expect("valid dashboard probe HTTP client")
+});
+static SESSION_TOKEN_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(SESSION_TOKEN_TIMEOUT)
+        .build()
+        .expect("valid dashboard session token HTTP client")
 });
 
 /// Build the base URL for a dashboard at the given host and port.
@@ -44,12 +57,8 @@ fn fallback_ports(start: u16) -> Vec<u16> {
 /// Returns true if /api/status responds with 2xx or 401.
 pub async fn probe_dashboard(api_base_url: &str) -> bool {
     let url = format!("{}/api/status", api_base_url);
-    let client = reqwest::Client::builder()
-        .timeout(PROBE_TIMEOUT)
-        .build()
-        .unwrap_or_default();
 
-    match client
+    match PROBE_HTTP_CLIENT
         .get(&url)
         .header("Accept", "application/json")
         .send()
@@ -78,12 +87,8 @@ pub async fn dashboard_supports_sse(api_base_url: &str) -> bool {
 
 async fn has_openapi_path(api_base_url: &str, path: &str) -> bool {
     let url = format!("{}/openapi.json", api_base_url);
-    let client = reqwest::Client::builder()
-        .timeout(PROBE_TIMEOUT)
-        .build()
-        .unwrap_or_default();
 
-    match client
+    match PROBE_HTTP_CLIENT
         .get(&url)
         .header("Accept", "application/json")
         .send()
@@ -103,12 +108,8 @@ async fn has_openapi_path(api_base_url: &str, path: &str) -> bool {
 /// Get the HERMES_HOME value from a running dashboard.
 async fn get_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
     let url = format!("{}/api/status", api_base_url);
-    let client = reqwest::Client::builder()
-        .timeout(PROBE_TIMEOUT)
-        .build()
-        .unwrap_or_default();
 
-    let res = client
+    let res = PROBE_HTTP_CLIENT
         .get(&url)
         .header("Accept", "application/json")
         .send()
@@ -137,12 +138,8 @@ async fn dashboard_matches_hermes_home(api_base_url: &str, hermes_home: &str) ->
 /// The token is embedded as `__HERMES_SESSION_TOKEN__="<token>"`.
 pub async fn fetch_session_token(api_base_url: &str) -> Option<String> {
     let url = format!("{}/", api_base_url);
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_millis(1200))
-        .build()
-        .unwrap_or_default();
 
-    let res = client
+    let res = SESSION_TOKEN_HTTP_CLIENT
         .get(&url)
         .header("Accept", "text/html")
         .send()

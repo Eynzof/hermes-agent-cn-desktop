@@ -7,6 +7,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,7 @@ const CURRENT_FILE: &str = "current.json";
 const MANIFEST_FILE: &str = "manifest.json";
 const DEFAULT_CHANNEL: &str = "stable";
 const SMOKE_TIMEOUT: Duration = Duration::from_secs(10);
+static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -361,7 +363,7 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
         }
     };
 
-    match reqwest::get(&url).await {
+    match RUNTIME_HTTP_CLIENT.get(&url).send().await {
         Ok(res) if res.status().is_success() => match res.json::<RuntimeUpdateManifest>().await {
             Ok(manifest) => {
                 if manifest.platform != current_platform() || manifest.arch != current_arch() {
@@ -585,7 +587,7 @@ pub async fn install_runtime_update(
         }
     }
 
-    let artifact = match reqwest::get(&resolved.artifact_url).await {
+    let artifact = match RUNTIME_HTTP_CLIENT.get(&resolved.artifact_url).send().await {
         Ok(res) if res.status().is_success() => match res.bytes().await {
             Ok(b) => b.to_vec(),
             Err(e) => {
