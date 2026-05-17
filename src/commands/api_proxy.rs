@@ -21,6 +21,10 @@ use crate::state::AppState;
 
 const SESSION_LOG_ROUTE_PREFIX: &str = "/__hermes_session_log/";
 const EXTERNAL_TIMEOUT: Duration = Duration::from_secs(15);
+const DASHBOARD_PROXY_TIMEOUT: Duration = Duration::from_secs(30);
+const UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+const MAX_UPLOAD_BYTES: usize = 100 * 1024 * 1024;
+const MAX_UPLOAD_BASE64_LEN: usize = ((MAX_UPLOAD_BYTES + 2) / 3) * 4;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +67,31 @@ fn url_path(path: &str) -> String {
     } else {
         path.split('?').next().unwrap_or(path).to_string()
     }
+}
+
+fn dashboard_proxy_client(timeout: Duration) -> Result<reqwest::Client, AppError> {
+    Ok(reqwest::Client::builder().timeout(timeout).build()?)
+}
+
+fn upload_limit_error() -> AppError {
+    AppError::InvalidRequest(format!(
+        "upload_file exceeds {} MiB limit",
+        MAX_UPLOAD_BYTES / 1024 / 1024
+    ))
+}
+
+fn ensure_upload_base64_size(encoded_len: usize) -> Result<(), AppError> {
+    if encoded_len > MAX_UPLOAD_BASE64_LEN {
+        return Err(upload_limit_error());
+    }
+    Ok(())
+}
+
+fn ensure_upload_decoded_size(decoded_len: usize) -> Result<(), AppError> {
+    if decoded_len > MAX_UPLOAD_BYTES {
+        return Err(upload_limit_error());
+    }
+    Ok(())
 }
 
 fn is_blocked_external_ip(ip: IpAddr) -> bool {
@@ -210,6 +239,20 @@ mod tests {
     }
 
     #[test]
+    fn upload_base64_limit_is_checked_before_decode() {
+        assert!(ensure_upload_base64_size(MAX_UPLOAD_BASE64_LEN).is_ok());
+        let err = ensure_upload_base64_size(MAX_UPLOAD_BASE64_LEN + 1).unwrap_err();
+        assert!(matches!(err, AppError::InvalidRequest(msg) if msg.contains("100 MiB")));
+    }
+
+    #[test]
+    fn upload_decoded_limit_is_checked_after_decode() {
+        assert!(ensure_upload_decoded_size(MAX_UPLOAD_BYTES).is_ok());
+        let err = ensure_upload_decoded_size(MAX_UPLOAD_BYTES + 1).unwrap_err();
+        assert!(matches!(err, AppError::InvalidRequest(msg) if msg.contains("100 MiB")));
+    }
+
+    #[test]
     fn external_url_shape_requires_https() {
         let err = validate_external_url_shape("http://api.example.com/models").unwrap_err();
         assert!(err.to_string().contains("only allows https"));
@@ -312,7 +355,7 @@ pub async fn api_request_impl(
         format!("{}{}", base, p)
     };
 
-    let client = reqwest::Client::new();
+    let client = dashboard_proxy_client(DASHBOARD_PROXY_TIMEOUT)?;
     let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
 
     // Inject auth headers
@@ -447,9 +490,11 @@ pub async fn upload_file_impl(
 ) -> Result<ApiRequestResult, AppError> {
     use base64::Engine;
 
+    ensure_upload_base64_size(input.data.len())?;
     let file_bytes = base64::engine::general_purpose::STANDARD
         .decode(&input.data)
         .map_err(|e| AppError::InvalidRequest(format!("Invalid base64: {}", e)))?;
+    ensure_upload_decoded_size(file_bytes.len())?;
 
     let mime_type = input
         .r#type
@@ -465,7 +510,7 @@ pub async fn upload_file_impl(
         .part("file", file_part);
 
     let url = format!("{}/api/upload", api_base_url.trim_end_matches('/'));
-    let client = reqwest::Client::new();
+    let client = dashboard_proxy_client(UPLOAD_TIMEOUT)?;
     let mut req = client.post(&url).multipart(form);
 
     if let Some(token) = session_token {
