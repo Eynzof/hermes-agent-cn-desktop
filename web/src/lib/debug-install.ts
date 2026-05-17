@@ -5,6 +5,7 @@ import { fetchJSON } from "./transport";
 
 let installed = false;
 let logTailInstalled = false;
+let stopBackendLogTail: (() => void) | null = null;
 
 const LOG_TAIL_FILES = ["errors", "agent", "gateway"] as const;
 const LOG_TAIL_INTERVAL_MS = 3000;
@@ -53,17 +54,36 @@ async function pollBackendLogFile(file: string): Promise<void> {
   }
 }
 
-function startBackendLogTail(): void {
-  if (logTailInstalled) return;
+function startBackendLogTail(): () => void {
+  if (logTailInstalled) return stopBackendLogTail ?? (() => {});
   logTailInstalled = true;
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
 
   const tick = async () => {
+    if (stopped) return;
     if (typeof document !== "undefined" && document.hidden) return;
     await Promise.all(LOG_TAIL_FILES.map(pollBackendLogFile));
   };
 
-  setTimeout(() => void tick(), 1500);
-  setInterval(() => void tick(), LOG_TAIL_INTERVAL_MS);
+  const schedule = (delay: number) => {
+    if (stopped) return;
+    timer = setTimeout(() => {
+      timer = null;
+      void tick().finally(() => schedule(LOG_TAIL_INTERVAL_MS));
+    }, delay);
+  };
+
+  stopBackendLogTail = () => {
+    stopped = true;
+    logTailInstalled = false;
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+    stopBackendLogTail = null;
+  };
+
+  schedule(1500);
+  return stopBackendLogTail;
 }
 
 function summarizeArgs(args: unknown[]): string {
@@ -167,5 +187,8 @@ export function installDebugCapture(): void {
   }
 
   // 4. Backend log tail (~/.hermes/logs/{errors,agent,gateway}.log)
-  startBackendLogTail();
+  const stopLogTail = startBackendLogTail();
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", stopLogTail, { once: true });
+  }
 }
