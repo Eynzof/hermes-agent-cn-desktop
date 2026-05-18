@@ -271,16 +271,24 @@ export function ProjectsRoute() {
         ) : (
           <div className={s.tableWrap}>
             <table className={s.table}>
+              <colgroup>
+                <col className={s.dotCol} />
+                <col className={s.projectCol} />
+                <col className={s.sessionsCol} />
+                <col className={s.activityCol} />
+                <col className={s.modelCol} />
+                <col className={s.costCol} />
+                <col className={s.actionsCol} />
+              </colgroup>
               <thead>
                 <tr>
-                  <th style={{ width: 16 }} />
-                  <th>名称</th>
-                  <th>路径</th>
-                  <th style={{ width: 80 }} className={s.numeric}>会话</th>
-                  <th style={{ width: 110 }}>最近活动</th>
-                  <th style={{ width: 140 }}>常用模型</th>
-                  <th style={{ width: 90 }} className={s.numeric}>累计花费</th>
-                  <th style={{ width: 32 }} />
+                  <th aria-label="状态" />
+                  <th>项目</th>
+                  <th>会话</th>
+                  <th>最近活动</th>
+                  <th>常用模型</th>
+                  <th>累计花费</th>
+                  <th aria-label="操作" />
                 </tr>
               </thead>
               <tbody>
@@ -295,16 +303,16 @@ export function ProjectsRoute() {
                       <td>
                         <span className={s.colorDot} aria-hidden />
                       </td>
-                      <td className={s.nameCell}>{project.name}</td>
-                      <td className={s.mono} title={project.path}>
-                        {shortenPath(project.path)}
+                      <td className={s.projectCell} title={`${project.name}\n${project.path}`}>
+                        <span className={s.nameCell}>{project.name}</span>
+                        <span className={s.pathCell}>{shortenPath(project.path)}</span>
                       </td>
-                      <td className={s.numeric}>{item.sessions.length}</td>
+                      <td className={s.metricCell}>{item.sessions.length}</td>
                       <td className={s.activityCell}>
                         {item.sessions.length === 0 ? "—" : relativeTime(item.lastActivity)}
                       </td>
                       <td className={s.mono}>{item.topModel ?? "—"}</td>
-                      <td className={`${s.mono} ${s.numeric}`}>
+                      <td className={`${s.mono} ${s.metricCell}`}>
                         {formatCostCny(item.totalCostUsd)}
                       </td>
                       <td className={s.menuCell} onClick={(event) => event.stopPropagation()}>
