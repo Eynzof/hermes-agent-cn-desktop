@@ -117,9 +117,9 @@ describe("provider catalog config updates", () => {
     });
   });
 
-  it.each(TOP5_PROVIDER_IDS)("ships Top 5 provider %s with intact required fields", (id) => {
+  it.each(TOP5_PROVIDER_IDS)("ships featured CN provider %s with intact required fields", (id) => {
     const preset = BUILTIN_PROVIDER_CATALOG.providers.find((p) => p.id === id);
-    expect(preset, `Top 5 provider "${id}" must exist in BUILTIN_PROVIDER_CATALOG`).toBeTruthy();
+    expect(preset, `Featured CN provider "${id}" must exist in BUILTIN_PROVIDER_CATALOG`).toBeTruthy();
     expect(preset!.name).toBeTruthy();
     expect(preset!.baseUrl).toMatch(/^https?:\/\//);
     expect(preset!.docsUrl, `${id} should expose a docs URL for the CN edition`).toMatch(/^https?:\/\//);
@@ -131,7 +131,7 @@ describe("provider catalog config updates", () => {
     ).toBe(true);
   });
 
-  it("orders Top 5 first, then other CN, then global", () => {
+  it("orders featured CN providers first, then other CN, then global", () => {
     const sorted = sortProvidersForCnEdition(BUILTIN_PROVIDER_CATALOG.providers);
     const sortedIds = sorted.map((p) => p.id);
     expect(sortedIds.slice(0, TOP5_PROVIDER_IDS.length)).toEqual([...TOP5_PROVIDER_IDS]);
@@ -143,7 +143,7 @@ describe("provider catalog config updates", () => {
     }
   });
 
-  it("places injected custom providers among the catalog without disturbing Top 5 order", () => {
+  it("places injected custom providers among the catalog without disturbing featured provider order", () => {
     const custom: ProviderPreset = {
       id: "custom:hunyuan-cloud-tencent-com",
       name: "腾讯混元（自定义）",

@@ -35,15 +35,14 @@ export interface ProviderCatalog {
 }
 
 /**
- * Five providers we feature first in the Chinese community edition. Any change
- * to this list reorders the Models tab list and the onboarding picker.
+ * Providers we feature first in the Chinese community edition. Any change to
+ * this list reorders the Models tab list and the onboarding picker.
  */
 export const TOP5_PROVIDER_IDS = [
-  "alibaba",
   "deepseek",
-  "zai",
+  "minimax-cn",
   "kimi-for-coding",
-  "volcengine-ark",
+  "alibaba",
 ] as const;
 
 export type Top5ProviderId = (typeof TOP5_PROVIDER_IDS)[number];
@@ -53,8 +52,8 @@ const TOP5_INDEX: Record<string, number> = Object.fromEntries(
 );
 
 /**
- * Three-tier ordering for the CN community edition: Top 5 first (in fixed
- * order), then other CN providers (alphabetical), then everything else. Pure
+ * Three-tier ordering for the CN community edition: featured providers first
+ * (in fixed order), then other CN providers (alphabetical), then everything else. Pure
  * function so it's safe to call in render and trivial to unit-test.
  */
 export function sortProvidersForCnEdition(providers: ProviderPreset[]): ProviderPreset[] {
