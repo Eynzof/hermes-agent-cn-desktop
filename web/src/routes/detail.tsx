@@ -353,6 +353,7 @@ export function DetailRoute() {
         }
         turnStartedAt={runtimeIsBusy ? runtime.turnStartedAt : undefined}
         sessionUsage={runtimeIsBusy ? sessionUsage : undefined}
+        progressModel={runtimeIsBusy ? model || undefined : undefined}
       />
       <div className={s.composerArea}>
         <GooseComposer

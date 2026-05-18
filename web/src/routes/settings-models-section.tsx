@@ -7,7 +7,9 @@ import { useProviderModels } from "@/hooks/use-provider-models";
 import type { ProviderProbeResult } from "@hermes/protocol";
 import {
   BUILTIN_PROVIDER_CATALOG,
+  buildCurrentModelConfigUpdate,
   buildProviderConfigUpdate,
+  buildProviderSettingsUpdate,
   getProviderEntry,
   providerHasSavedCredentials,
   sortProvidersForCnEdition,
@@ -43,6 +45,12 @@ const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
   { prefix: "COMPSHARE_", name: "优云智算 (Compshare)", priority: 14 },
 ];
 
+const PROVIDER_ACTION_LOADING_MIN_MS = 450;
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function getProviderGroup(key: string): string {
   for (const g of PROVIDER_GROUPS) {
     if (key.startsWith(g.prefix)) return g.name;
@@ -62,7 +70,7 @@ export function ModelsSection() {
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
   const revealEnv = useRevealEnv();
-  const { probeProvider } = useGateway();
+  const { probeProvider, setRuntimeModel } = useGateway();
   const { catalog, message: catalogMessage, refresh: refreshCatalog } = useProviderCatalog();
   const [probeState, setProbeState] = useState<{
     providerId: string;
@@ -88,6 +96,9 @@ export function ModelsSection() {
     providerId: string;
   } | null>(null);
   const [savedFlashFor, setSavedFlashFor] = useState<string | null>(null);
+  const [providerSavePending, setProviderSavePending] = useState(false);
+  const [providerSetCurrentPending, setProviderSetCurrentPending] = useState(false);
+  const [providerSaveError, setProviderSaveError] = useState("");
   const [editKey, setEditKey] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
   const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
@@ -254,6 +265,7 @@ export function ModelsSection() {
   useEffect(() => {
     setSavedFlashFor(null);
     setProbeState(null);
+    setProviderSaveError("");
   }, [selectedProvider?.id]);
 
   const handleProbe = useCallback(async () => {
@@ -299,6 +311,15 @@ export function ModelsSection() {
       providerForm.model !== (savedSnapshot?.model ?? ""))
   );
   const showSavedFlash = !isFormDirty && savedFlashFor === selectedProvider?.id;
+  const selectedProviderModel = selectedProvider
+    ? (providerForm.model.trim() || selectedProvider.defaultModel)
+    : "";
+  const selectedProviderIsCurrent = Boolean(
+    selectedProvider &&
+    selectedProviderModel &&
+    currentProviderId === selectedProvider.id &&
+    modelInfo?.model === selectedProviderModel,
+  );
 
   // Deep-link from the picker's "去设置" CTA: /models#provider-<slug> selects
   // and scrolls to that provider so the user lands on the right key field.
@@ -347,8 +368,9 @@ export function ModelsSection() {
     void refreshCatalog();
   };
 
-  const handleProviderSave = () => {
+  const handleProviderSave = async () => {
     if (!config || !selectedProvider) return;
+    const pendingStartedAt = performance.now();
     const newApiKey = providerForm.apiKey.trim();
     const isCustomProvider = selectedProvider.id.startsWith("custom:");
     // Built-in providers (alibaba, deepseek, zai, kimi, ...): hermes-agent
@@ -356,34 +378,69 @@ export function ModelsSection() {
     // never from config.yaml's providers.<id>.api_key. Mirror the key into
     // the named env var so chat requests actually find credentials. Custom
     // providers are read inline from config.yaml, so they don't need this.
-    if (newApiKey && !isCustomProvider && selectedProvider.apiKeyLabel) {
-      setEnv.mutate({ key: selectedProvider.apiKeyLabel, value: newApiKey });
+    const savedBaseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
+    const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
+    const providerId = selectedProvider.id;
+    setProviderSavePending(true);
+    setProviderSaveError("");
+    try {
+      if (newApiKey && !isCustomProvider && selectedProvider.apiKeyLabel) {
+        await setEnv.mutateAsync({ key: selectedProvider.apiKeyLabel, value: newApiKey });
+      }
+      await saveConfig.mutateAsync(
+        buildProviderSettingsUpdate(config, selectedProvider, providerForm),
+      );
+      setProviderForm((prev) => ({ ...prev, apiKey: "" }));
+      setSavedSnapshot({
+        baseUrl: savedBaseUrl,
+        model: savedModel,
+        providerId,
+      });
+      setSavedFlashFor(providerId);
+    } catch (error) {
+      setProviderSaveError(error instanceof Error ? error.message : String(error || "保存失败"));
+    } finally {
+      const elapsed = performance.now() - pendingStartedAt;
+      if (elapsed < PROVIDER_ACTION_LOADING_MIN_MS) {
+        await wait(PROVIDER_ACTION_LOADING_MIN_MS - elapsed);
+      }
+      setProviderSavePending(false);
     }
-    const savedBaseUrl = providerForm.baseUrl;
-    const savedModel = providerForm.model;
-    saveConfig.mutate(
-      buildProviderConfigUpdate(config, selectedProvider, providerForm),
-      {
-        onSuccess: () => {
-          setProviderForm((prev) => ({ ...prev, apiKey: "" }));
-          setSavedSnapshot({
-            baseUrl: savedBaseUrl,
-            model: savedModel,
-            providerId: selectedProvider.id,
-          });
-          setSavedFlashFor(selectedProvider.id);
-          // PanelComposer / NewTaskRoute seed their model picker from
-          // localStorage on mount. Without this, "保存并设为当前模型" updates
-          // config.yaml but the workbench keeps showing the previously-used
-          // model until the user manually picks one again.
-          rememberLastUsedModel({
-            model: savedModel,
-            provider: selectedProvider.id,
-            providerName: selectedProvider.name,
-          });
-        },
-      },
-    );
+  };
+
+  const handleSetCurrentModel = async () => {
+    if (!config || !selectedProvider) return;
+    const pendingStartedAt = performance.now();
+    const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
+    const providerId = selectedProvider.id;
+    const providerName = selectedProvider.name;
+    setProviderSetCurrentPending(true);
+    setProviderSaveError("");
+    try {
+      // Same hot-switch path as the composer model picker: update the live
+      // gateway runtime explicitly instead of only editing provider metadata.
+      await setRuntimeModel(savedModel, providerId);
+      await saveConfig.mutateAsync(
+        buildCurrentModelConfigUpdate(config, selectedProvider, providerForm),
+      );
+      // PanelComposer / NewTaskRoute seed their model picker from localStorage.
+      // This mirrors picking a model from the workbench composer, so the next
+      // new session carries this explicit choice even before /api/model/info
+      // finishes refetching.
+      rememberLastUsedModel({
+        model: savedModel,
+        provider: providerId,
+        providerName,
+      });
+    } catch (error) {
+      setProviderSaveError(error instanceof Error ? error.message : String(error || "设置失败"));
+    } finally {
+      const elapsed = performance.now() - pendingStartedAt;
+      if (elapsed < PROVIDER_ACTION_LOADING_MIN_MS) {
+        await wait(PROVIDER_ACTION_LOADING_MIN_MS - elapsed);
+      }
+      setProviderSetCurrentPending(false);
+    }
   };
 
   const handleAddCustom = () => {
@@ -582,17 +639,52 @@ export function ModelsSection() {
               <button
                 className={s.btnPrimary}
                 disabled={
-                  saveConfig.isPending ||
+                  providerSavePending ||
+                  providerSetCurrentPending ||
                   !isFormDirty ||
                   (!selectedHasCredentials && !providerForm.apiKey.trim())
                 }
-                onClick={handleProviderSave}
+                onClick={() => void handleProviderSave()}
               >
-                {saveConfig.isPending
-                  ? "保存中…"
+                {providerSavePending
+                  ? (
+                    <>
+                      <span className={s.buttonSpinner} aria-hidden="true" />
+                      保存中…
+                    </>
+                  )
                   : showSavedFlash
                     ? "✓ 已保存"
-                    : "保存并设为当前模型"}
+                    : "保存配置"}
+              </button>
+              <button
+                className={isFormDirty || selectedProviderIsCurrent ? s.btn : s.btnPrimary}
+                disabled={
+                  selectedProviderIsCurrent ||
+                  providerSavePending ||
+                  providerSetCurrentPending ||
+                  !selectedProviderModel ||
+                  !selectedHasCredentials
+                }
+                onClick={() => void handleSetCurrentModel()}
+                title={
+                  selectedProviderIsCurrent
+                    ? "当前已在使用这个模型"
+                    : selectedHasCredentials
+                      ? "切换当前运行模型；如刚修改了 Base URL / API Key，请先保存配置"
+                      : "请先保存 API Key / provider 配置"
+                }
+              >
+                {providerSetCurrentPending
+                  ? (
+                    <>
+                      <span className={s.buttonSpinner} aria-hidden="true" />
+                      切换中…
+                    </>
+                  )
+                  : selectedProviderIsCurrent
+                    ? "已是当前模型"
+                    : "设为当前模型"}
               </button>
               <button
                 className={s.btn}
@@ -608,6 +700,11 @@ export function ModelsSection() {
             </div>
             {probeForSelected && probeForSelected.status !== "pending" && (
               <ProbeResultRow probe={probeForSelected} />
+            )}
+            {providerSaveError && (
+              <div className={s.modelPickerError} style={{ marginTop: 8 }}>
+                操作失败：{providerSaveError}
+              </div>
             )}
           </div>
         )}

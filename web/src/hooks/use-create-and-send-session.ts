@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { useSetAtom } from "jotai";
 import { useNavigate } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
-import { useModelInfo } from "@/hooks/use-config";
 import type {
   ComposerSubmitControls,
   ComposerSubmitPayload,
@@ -33,7 +32,6 @@ export function useCreateAndSendSession() {
     attachImage,
     detectDroppedPath,
   } = useGateway();
-  const { data: modelInfo } = useModelInfo();
   const setActiveSessionId = useSetAtom(activeSessionIdAtom);
 
   return useCallback(async (
@@ -61,17 +59,16 @@ export function useCreateAndSendSession() {
     void (async () => {
       try {
         if (payload.modelSelection?.model) {
-          const selectedProvider = payload.modelSelection.provider;
-          const alreadyUsingModel =
-            payload.modelSelection.model === modelInfo?.model &&
-            (!selectedProvider || selectedProvider === modelInfo?.provider);
-          if (!alreadyUsingModel) {
-            await setSessionModel(
-              sessionId,
-              payload.modelSelection.model,
-              payload.modelSelection.provider,
-            );
-          }
+          // Composer selection is the user's explicit source of truth.  Do not
+          // skip this just because /api/model/info already reports the same
+          // model: that REST value comes from config.yaml, while the live
+          // gateway process may still carry an older HERMES_MODEL or a
+          // prewarmed draft session built before the config save.
+          await setSessionModel(
+            sessionId,
+            payload.modelSelection.model,
+            payload.modelSelection.provider,
+          );
         }
         const prepared = await prepareComposerPrompt(sessionId, payload, {
           attachImage,
@@ -109,8 +106,6 @@ export function useCreateAndSendSession() {
     createSession,
     detectDroppedPath,
     failPrompt,
-    modelInfo?.model,
-    modelInfo?.provider,
     navigate,
     sendPrompt,
     setActiveSessionId,

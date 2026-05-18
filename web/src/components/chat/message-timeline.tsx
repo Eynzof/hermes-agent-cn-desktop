@@ -25,6 +25,7 @@ interface MessageTimelineProps {
   pendingApproval?: ReactNode;
   turnStartedAt?: number;
   sessionUsage?: SessionUsageResult | null;
+  progressModel?: string;
 }
 
 function formatDay(timestamp: number): string {
@@ -96,10 +97,11 @@ const LONG_THINKING_THRESHOLD_S = 120;
 interface ProgressBlockProps {
   turnStartedAt?: number;
   sessionUsage?: SessionUsageResult | null;
+  progressModel?: string;
   progressText?: string;
 }
 
-function ProgressBlock({ turnStartedAt, sessionUsage, progressText }: ProgressBlockProps) {
+function ProgressBlock({ turnStartedAt, sessionUsage, progressModel, progressText }: ProgressBlockProps) {
   const [elapsed, setElapsed] = useState(0);
   const peakTokensRef = useRef(0);
 
@@ -123,7 +125,7 @@ function ProgressBlock({ turnStartedAt, sessionUsage, progressText }: ProgressBl
     peakTokensRef.current = rawTotal;
   }
   const tokenValue = peakTokensRef.current > 0 ? peakTokensRef.current : undefined;
-  const model = sessionUsage?.model;
+  const model = progressModel || sessionUsage?.model;
 
   return (
     <div className={s.progressBlock} role="status" aria-live="polite">
@@ -335,9 +337,10 @@ interface MessageBlocksProps {
   streaming: boolean;
   turnStartedAt?: number;
   sessionUsage?: SessionUsageResult | null;
+  progressModel?: string;
 }
 
-function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage }: MessageBlocksProps) {
+function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progressModel }: MessageBlocksProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
   const blocks = message.blocks ?? [];
   const items: ReactNode[] = [];
@@ -390,6 +393,7 @@ function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage }: Mess
         key="tail-progress"
         turnStartedAt={turnStartedAt}
         sessionUsage={sessionUsage}
+        progressModel={progressModel}
         progressText={progressPart?.type === "progress" ? progressPart.text : undefined}
       />,
     );
@@ -529,9 +533,10 @@ interface MessageBubbleProps {
   message: ChatMessage;
   turnStartedAt?: number;
   sessionUsage?: SessionUsageResult | null;
+  progressModel?: string;
 }
 
-function MessageBubble({ message, turnStartedAt, sessionUsage }: MessageBubbleProps) {
+function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel }: MessageBubbleProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
   const isUser = message.role === "user";
   const isToolOnly = message.role === "tool";
@@ -580,7 +585,13 @@ function MessageBubble({ message, turnStartedAt, sessionUsage }: MessageBubblePr
         {!isUser ? <div className={s.assistantName}>Hermes</div> : null}
         <div className={s.bubble} data-role={isUser ? "user" : "assistant"}>
           {hasBlocks ? (
-            <MessageBlocks message={message} streaming={streaming} turnStartedAt={turnStartedAt} sessionUsage={sessionUsage} />
+            <MessageBlocks
+              message={message}
+              streaming={streaming}
+              turnStartedAt={turnStartedAt}
+              sessionUsage={sessionUsage}
+              progressModel={progressModel}
+            />
           ) : (
             <>
               {message.text ? <MessageText text={message.text} streaming={streaming} /> : null}
@@ -588,7 +599,7 @@ function MessageBubble({ message, turnStartedAt, sessionUsage }: MessageBubblePr
                 <ReasoningBlock text={message.reasoning} streaming={streaming && !message.text} />
               ) : null}
               {message.tools?.length ? <ToolChain tools={message.tools} /> : null}
-              {streaming ? <ProgressBlock /> : null}
+              {streaming ? <ProgressBlock progressModel={progressModel} /> : null}
             </>
           )}
         </div>
@@ -615,6 +626,7 @@ export function MessageTimeline({
   pendingApproval,
   turnStartedAt,
   sessionUsage,
+  progressModel,
 }: MessageTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
@@ -677,6 +689,7 @@ export function MessageTimeline({
                 message={message}
                 turnStartedAt={isLast ? turnStartedAt : undefined}
                 sessionUsage={isLast ? sessionUsage : undefined}
+                progressModel={isLast ? progressModel : undefined}
               />
             </div>
           );

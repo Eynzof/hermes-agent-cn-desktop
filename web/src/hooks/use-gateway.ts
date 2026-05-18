@@ -20,7 +20,7 @@ import {
   getCachedModelOptions,
   invalidateModelOptionsCache,
 } from "@/lib/model-options-cache";
-import { normalizeProviderIdForGateway } from "@/lib/provider-id";
+import { buildGatewayModelConfigValue } from "@/lib/provider-id";
 import { rememberSessionMapping, resolveGatewaySessionId } from "@/lib/session-map";
 import {
   applyGatewayEventAtom,
@@ -317,8 +317,7 @@ export function useGateway() {
       provider?: string,
     ): Promise<ConfigSetResult> => {
       ensureSubscribed();
-      const normalizedProvider = normalizeProviderIdForGateway(provider);
-      const value = normalizedProvider ? `${model} --provider ${normalizedProvider}` : model;
+      const value = buildGatewayModelConfigValue(model, provider);
       const result = ConfigSetResult.parse(
         await getGatewayClient().request("config.set", {
           session_id: sessionId,
@@ -327,6 +326,29 @@ export function useGateway() {
         }),
       );
       invalidateModelOptionsCache(sessionId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+        queryClient.invalidateQueries({ queryKey: ["session"] }),
+        queryClient.invalidateQueries({ queryKey: ["model-info"] }),
+      ]);
+      return result;
+    },
+    [ensureSubscribed, queryClient],
+  );
+
+  const setRuntimeModel = useCallback(
+    async (
+      model: string,
+      provider?: string,
+    ): Promise<ConfigSetResult> => {
+      ensureSubscribed();
+      const result = ConfigSetResult.parse(
+        await getGatewayClient().request("config.set", {
+          key: "model",
+          value: buildGatewayModelConfigValue(model, provider),
+        }),
+      );
+      invalidateModelOptionsCache();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["sessions"] }),
         queryClient.invalidateQueries({ queryKey: ["session"] }),
@@ -426,6 +448,7 @@ export function useGateway() {
     getModelOptions,
     probeProvider,
     setSessionModel,
+    setRuntimeModel,
     attachImage,
     detectDroppedPath,
     interruptSession,

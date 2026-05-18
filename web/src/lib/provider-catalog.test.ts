@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchExternalJSON } from "./transport";
 import {
   BUILTIN_PROVIDER_CATALOG,
+  buildCurrentModelConfigUpdate,
   buildProviderConfigUpdate,
+  buildProviderSettingsUpdate,
   fetchRemoteProviderCatalog,
   getProviderEntry,
   providerHasSavedCredentials,
@@ -48,6 +50,71 @@ describe("provider catalog config updates", () => {
       model: "glm-5.1",
     });
     expect(config.model.provider).not.toMatch(/^custom:/);
+  });
+
+  it("can save provider settings without changing the current model", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "kimi-for-coding");
+    expect(preset).toBeTruthy();
+
+    const config = buildProviderSettingsUpdate(
+      {
+        model: {
+          provider: "deepseek",
+          default: "deepseek-v4-flash",
+        },
+      },
+      preset!,
+      {
+        apiKey: "kimi-key",
+        baseUrl: "https://api.moonshot.cn/v1",
+        model: "kimi-k2.6",
+      },
+    );
+
+    expect(config.providers["kimi-for-coding"]).toMatchObject({
+      api_key: "kimi-key",
+      model: "kimi-k2.6",
+      base_url: "https://api.moonshot.cn/v1",
+    });
+    expect(config.model).toEqual({
+      provider: "deepseek",
+      default: "deepseek-v4-flash",
+    });
+  });
+
+  it("can set the current model without rewriting provider metadata", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "kimi-for-coding");
+    expect(preset).toBeTruthy();
+
+    const config = buildCurrentModelConfigUpdate(
+      {
+        providers: {
+          "kimi-for-coding": {
+            api_key: "saved-key",
+            base_url: "https://api.moonshot.cn/v1",
+            model: "kimi-k2.6",
+          },
+        },
+      },
+      preset!,
+      {
+        apiKey: "",
+        baseUrl: "",
+        model: "kimi-k2.6",
+      },
+    );
+
+    expect(config.providers["kimi-for-coding"]).toEqual({
+      api_key: "saved-key",
+      base_url: "https://api.moonshot.cn/v1",
+      model: "kimi-k2.6",
+    });
+    expect(config.model).toMatchObject({
+      provider: "kimi-for-coding",
+      default: "kimi-k2.6",
+      base_url: "https://api.moonshot.cn/v1",
+      api_mode: "chat_completions",
+    });
   });
 
   it.each(TOP5_PROVIDER_IDS)("ships Top 5 provider %s with intact required fields", (id) => {

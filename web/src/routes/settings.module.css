@@ -361,6 +361,10 @@
 }
 
 .btn, .btnPrimary, .btnDanger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 6px 14px;
   border-radius: 6px;
   font-size: 12px;
@@ -372,9 +376,6 @@
   border: 1px solid var(--h-line);
   background: transparent;
   color: var(--h-text);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .btnPrimary {
@@ -397,6 +398,19 @@
 .btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.buttonSpinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: hermesButtonSpin 650ms linear infinite;
+}
+
+@keyframes hermesButtonSpin {
+  to { transform: rotate(360deg); }
 }
 
 .sectionTitleRow {

@@ -346,6 +346,15 @@ export function buildProviderConfigUpdate(
   preset: ProviderPreset,
   input: ProviderConfigInput,
 ): Record<string, any> {
+  const configWithProvider = buildProviderSettingsUpdate(config, preset, input);
+  return buildCurrentModelConfigUpdate(configWithProvider, preset, input);
+}
+
+export function buildProviderSettingsUpdate(
+  config: Record<string, any>,
+  preset: ProviderPreset,
+  input: ProviderConfigInput,
+): Record<string, any> {
   const providers = asRecord(config.providers);
   const existingProvider = asRecord(providers[preset.id]);
   const existingModel = asRecord(config.model);
@@ -373,6 +382,25 @@ export function buildProviderConfigUpdate(
       ...providers,
       [preset.id]: providerEntry,
     },
+  };
+}
+
+export function buildCurrentModelConfigUpdate(
+  config: Record<string, any>,
+  preset: ProviderPreset,
+  input: ProviderConfigInput,
+): Record<string, any> {
+  const providers = asRecord(config.providers);
+  const existingProvider = asRecord(providers[preset.id]);
+  const existingModel = asRecord(config.model);
+  const nextApiKey =
+    input.apiKey.trim() ||
+    String(existingProvider.api_key || existingModel.api_key || "");
+  const baseUrl = input.baseUrl.trim() || String(existingProvider.base_url || preset.baseUrl);
+  const model = input.model.trim() || String(existingProvider.model || preset.defaultModel);
+
+  return {
+    ...config,
     model: {
       ...existingModel,
       provider: preset.id,

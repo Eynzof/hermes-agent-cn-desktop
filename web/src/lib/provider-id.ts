@@ -10,3 +10,8 @@ export function normalizeProviderIdForGateway(provider?: string): string | undef
 
   return provider;
 }
+
+export function buildGatewayModelConfigValue(model: string, provider?: string): string {
+  const normalizedProvider = normalizeProviderIdForGateway(provider);
+  return normalizedProvider ? `${model} --provider ${normalizedProvider}` : model;
+}
