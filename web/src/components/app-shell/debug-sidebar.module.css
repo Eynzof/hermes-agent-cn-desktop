@@ -1,4 +1,4 @@
-/* Debug sidebar — flat nav to every route, scoped to the 07 T tab.
+/* Section sidebar — compact nav shared by project/config/automation/observability tabs.
    Visually shares the workbench-sidebar look (mono labels, ink-100 bg). */
 
 .sidebar {

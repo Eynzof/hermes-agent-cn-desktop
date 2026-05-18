@@ -16,12 +16,12 @@ export function DebugRoute() {
       <div className={s.pageContent}>
         <div className={s.hero}>
           <div className={s.num}>
-            <span className={s.numTop}>№ 007</span>
+            <span className={s.numTop}>№ 005</span>
             <span>调试</span>
           </div>
           <div>
             <h1 className={s.title}>调试入口</h1>
-            <div className={s.lead}>左侧栏列出所有路由 + 系统页；点击直达。</div>
+            <div className={s.lead}>调试入口已并入可观测；左侧栏保留常用诊断页面。</div>
           </div>
         </div>
 

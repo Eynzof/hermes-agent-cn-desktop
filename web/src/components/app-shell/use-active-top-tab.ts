@@ -5,9 +5,7 @@ export type TopTab =
   | "projects"
   | "skills"
   | "automation"
-  | "observability"
-  | "models"
-  | "debug";
+  | "observability";
 
 export interface TopTabDef {
   id: TopTab;
@@ -39,12 +37,13 @@ export const TOP_TABS: readonly TopTabDef[] = [
   {
     id: "skills",
     num: "03",
-    label: "能力",
+    label: "配置",
     href: "/skills",
     matches: (path) =>
       path.startsWith("/skills") ||
       path.startsWith("/mcp") ||
-      path.startsWith("/profiles"),
+      path.startsWith("/profiles") ||
+      path.startsWith("/models"),
   },
   {
     id: "automation",
@@ -58,21 +57,12 @@ export const TOP_TABS: readonly TopTabDef[] = [
     num: "05",
     label: "可观测",
     href: "/health",
-    matches: (path) => path.startsWith("/health") || path.startsWith("/logs"),
-  },
-  {
-    id: "models",
-    num: "06",
-    label: "模型",
-    href: "/models",
-    matches: (path) => path.startsWith("/models"),
-  },
-  {
-    id: "debug",
-    num: "07",
-    label: "T",
-    href: "/debug",
-    matches: (path) => path.startsWith("/debug"),
+    matches: (path) =>
+      path.startsWith("/health") ||
+      path.startsWith("/logs") ||
+      path.startsWith("/debug") ||
+      path.startsWith("/settings") ||
+      path.startsWith("/dev/primitives"),
   },
 ];
 
