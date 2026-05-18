@@ -93,7 +93,7 @@ export function SkillsRoute() {
 
   return (
     <main className={s.page}>
-      <div className={s.paneTop} data-window-drag>
+      <div className={s.paneTop} data-window-drag data-tauri-drag-region="deep">
         <span className={s.paneTopTitle}>技能</span>
         <span className={s.paneTopMeta}>
           {skills

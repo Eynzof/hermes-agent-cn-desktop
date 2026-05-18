@@ -41,7 +41,7 @@ export function SettingsRoute() {
 
   return (
     <div className={s.page}>
-      <div className={s.settingsTopBar} data-window-drag>
+      <div className={s.settingsTopBar} data-window-drag data-tauri-drag-region="deep">
         <button
           className={s.settingsBackIconButton}
           aria-label="返回对话"

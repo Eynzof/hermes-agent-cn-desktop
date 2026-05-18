@@ -138,6 +138,7 @@ export function Sidebar() {
       <div
         className={s.trafficLights}
         data-window-drag
+        data-tauri-drag-region="deep"
         data-native={platform === "electron" ? "true" : undefined}
       >
         {platform === "web" && (

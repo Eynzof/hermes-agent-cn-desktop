@@ -9,7 +9,7 @@ export function AppTopBar() {
   const location = useLocation();
 
   return (
-    <header className={s.topbar} data-window-drag>
+    <header className={s.topbar} data-window-drag data-tauri-drag-region="deep">
       <div className={s.brand}>
         <span className={s.glyph}>H</span>
         <span>Hermes</span>
