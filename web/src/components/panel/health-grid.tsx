@@ -19,6 +19,7 @@ interface CellData {
   sub?: string;
   mono?: boolean;
   title?: string;
+  wide?: boolean;
 }
 
 function formatContextLength(n: number | undefined | null): string {
@@ -46,9 +47,10 @@ function Cell({ cell }: { cell: CellData }) {
   return (
     <div
       className={s.cell}
+      data-size={cell.wide ? "wide" : undefined}
       data-warn={cell.tone === "warn" ? "true" : undefined}
       data-err={cell.tone === "err" ? "true" : undefined}
-      title={cell.title}
+      title={cell.title ?? [cell.value, cell.sub].filter(Boolean).join(" · ")}
     >
       <div className={s.label}>
         <Dot tone={cell.tone} />
@@ -133,7 +135,24 @@ export function HealthGrid() {
             : "就绪 · in-process"
           : "未响应",
         mono: true,
+        wide: true,
         title: `dashboardReachable=${dashboardReachable}; gateway_state=${gatewayState}. P-009 后 SSE+POST 走进程内 dispatch，gateway_state=stopped 是预期值。`,
+      },
+      {
+        label: "Hermes Home",
+        tone: "ok",
+        value: hermesHome || "—",
+        sub: hermesHome ? "可读" : undefined,
+        mono: true,
+        wide: true,
+      },
+      {
+        label: "模型",
+        tone: modelName !== "—" ? "ok" : "warn",
+        value: modelName,
+        sub: ctxLabel,
+        mono: true,
+        wide: true,
       },
       {
         label: "Token",
@@ -142,20 +161,6 @@ export function HealthGrid() {
         sub: anyTokenSet
           ? setTokens.join(" · ").toLowerCase().replace(/_api_key/g, "")
           : "前往设置",
-      },
-      {
-        label: "Hermes Home",
-        tone: "ok",
-        value: hermesHome || "—",
-        sub: hermesHome ? "可读" : undefined,
-        mono: true,
-      },
-      {
-        label: "模型",
-        tone: modelName !== "—" ? "ok" : "warn",
-        value: modelName,
-        sub: ctxLabel,
-        mono: true,
       },
       {
         label: "Skills",
