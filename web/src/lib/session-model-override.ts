@@ -1,6 +1,6 @@
 import type { ComposerModelSelection } from "@/components/chat/composer-types";
 
-// Carries the picker selection across the new-task → detail navigation.
+// Carries the picker selection across the panel composer → detail navigation.
 // Without this, detail's selectedModel/sessionUsage/sessionData are all
 // empty on first mount and the displayed model falls back to modelInfo
 // (the global default), which is almost never what the user just picked.

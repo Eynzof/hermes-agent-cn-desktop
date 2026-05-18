@@ -37,7 +37,7 @@ export function SettingsRoute() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
-  const returnTarget = from && !from.startsWith("/settings") ? from : "/new";
+  const returnTarget = from && !from.startsWith("/settings") ? from : "/";
 
   return (
     <div className={s.page}>

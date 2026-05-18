@@ -111,7 +111,7 @@ export function DetailRoute() {
   // this session's own model.
   //
   // Prefer a session-model override from sessionStorage when present: that's
-  // the path new-task / panel-composer use to hand off the just-picked
+  // the path panel-composer uses to hand off the just-picked
   // model so detail doesn't briefly show the global default before the
   // backend round-trips back with the real session model.
   //

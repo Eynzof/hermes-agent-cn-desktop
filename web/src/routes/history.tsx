@@ -544,7 +544,7 @@ export function HistoryRoute() {
             <span className={s.headerStat}>
               今日 <span className={s.headerStatValue}>{formatCostCny(todayCostUsd)}</span>
             </span>
-            <TopBarActionButton onClick={() => navigate("/new")}>
+            <TopBarActionButton onClick={() => navigate("/")}>
               <Plus size={13} />
               新对话
             </TopBarActionButton>

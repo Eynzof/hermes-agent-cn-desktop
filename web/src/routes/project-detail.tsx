@@ -150,7 +150,7 @@ export function ProjectDetailRoute() {
 
   const goNewTask = useCallback(() => {
     if (!workspacePath) return;
-    navigate(`/new?workspace=${encodeURIComponent(workspacePath)}`);
+    navigate(`/?workspace=${encodeURIComponent(workspacePath)}`);
   }, [navigate, workspacePath]);
 
   const handleOpenInFinder = useCallback(async () => {

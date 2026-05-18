@@ -91,7 +91,7 @@ export function Sidebar() {
   const matchPath = (target: string) =>
     target === "/" ? path === "/" : path === target || path.startsWith(target + "/");
 
-  const goNew = () => navigate("/new");
+  const goNew = () => navigate("/");
   const goSearch = () => navigate("/history");
 
   // CSS 在 sidebar.module.css 里把 data-state="stopped" / "offline"
@@ -156,7 +156,7 @@ export function Sidebar() {
         <button
           type="button"
           className={s.topBtn}
-          data-active={matchPath("/new") ? "true" : undefined}
+          data-active={matchPath("/") ? "true" : undefined}
           onClick={goNew}
         >
           <Edit3 size={15} className={s.navIcon} /> 新对话

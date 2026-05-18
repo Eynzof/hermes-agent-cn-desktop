@@ -1,11 +1,10 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { usePlatform } from "@hermes/shared-ui";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PanelRoute } from "@/routes/panel";
-import { NewTaskRoute } from "@/routes/new-task";
 import { DetailRoute } from "@/routes/detail";
 import { HistoryRoute } from "@/routes/history";
 import { ProjectsRoute } from "@/routes/projects";
@@ -21,6 +20,11 @@ import { SettingsRoute } from "@/routes/settings";
 import { DebugRoute } from "@/routes/debug";
 import { DevPrimitivesRoute } from "@/routes/dev-primitives";
 
+function NewTaskRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: "/", search }} replace />;
+}
+
 export function App() {
   const platform = usePlatform();
   // 首次启动时让 atom 跟上后端 sticky default（多 tab 之间 atomWithStorage
@@ -32,7 +36,7 @@ export function App() {
       <AppShell>
         <Routes>
           <Route path="/" element={<PanelRoute />} />
-          <Route path="/new" element={<NewTaskRoute />} />
+          <Route path="/new" element={<NewTaskRedirect />} />
           <Route path="/tasks/:taskId" element={<ErrorBoundary><DetailRoute /></ErrorBoundary>} />
           <Route path="/history" element={<HistoryRoute />} />
           <Route path="/projects" element={<ProjectsRoute />} />

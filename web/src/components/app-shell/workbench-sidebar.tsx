@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Folder, LayoutDashboard, MessageSquare, Plus, Search } from "lucide-react";
+import { Folder, MessageSquare, Plus, Search } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useSessions } from "@/hooks/use-sessions";
@@ -132,7 +132,7 @@ export function WorkbenchSidebar() {
 
   return (
     <aside className={s.sidebar}>
-      <button type="button" className={s.newTask} onClick={() => navigate("/new")}>
+      <button type="button" className={s.newTask} onClick={() => navigate("/")}>
         <span className={s.newTaskLead}>
           <Plus size={14} strokeWidth={2.2} />
           <span>新建任务</span>
@@ -152,19 +152,8 @@ export function WorkbenchSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>§01 · 工作台</span>
-            <span className={s.labelNum}>03</span>
+            <span className={s.labelNum}>02</span>
           </div>
-          <button
-            type="button"
-            className={s.sideItem}
-            data-active={location.pathname === "/" ? "true" : undefined}
-            onClick={() => navigate("/")}
-          >
-            <span className={s.sideItemIcon}>
-              <LayoutDashboard size={14} />
-            </span>
-            <span className={s.sideItemLabel}>任务面板</span>
-          </button>
           <button
             type="button"
             className={s.sideItem}

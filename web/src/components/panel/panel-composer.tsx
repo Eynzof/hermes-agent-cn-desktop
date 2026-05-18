@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAtom } from "jotai";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
 import { useCreateAndSendSession } from "@/hooks/use-create-and-send-session";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
@@ -8,6 +8,11 @@ import { useModelOptions } from "@/hooks/use-model-options";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
+import {
+  normalizeWorkspacePath,
+  rememberWorkspaceProject,
+  writeWorkspacePath,
+} from "@/lib/workspaces";
 import { composerPrefillAtom } from "@/stores/panel";
 import { GooseComposer } from "@/components/chat/goose-composer";
 import type {
@@ -18,6 +23,7 @@ import type {
 
 export function PanelComposer() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const {
     connect,
     getModelOptions,
@@ -34,6 +40,13 @@ export function PanelComposer() {
   const [prefilledText, setPrefilledText] = useState("");
   const [prefill, setPrefill] = useAtom(composerPrefillAtom);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const initialWorkspacePath = normalizeWorkspacePath(searchParams.get("workspace"));
+
+  useEffect(() => {
+    if (!initialWorkspacePath) return;
+    writeWorkspacePath(initialWorkspacePath);
+    rememberWorkspaceProject(initialWorkspacePath);
+  }, [initialWorkspacePath]);
 
   useEffect(() => {
     if (!prefill) return;
@@ -117,8 +130,10 @@ export function PanelComposer() {
   return (
     <div ref={wrapperRef}>
       <GooseComposer
+        key={initialWorkspacePath || "default-workspace"}
         onSend={onSend}
         initial={prefilledText}
+        initialWorkspacePath={initialWorkspacePath}
         placeholder="描述你想完成的任务，⌘ ↵ 发送…"
         variant="big"
         headerLabel="新任务"

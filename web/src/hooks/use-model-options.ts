@@ -3,7 +3,7 @@ import type { ModelOptionsResult } from "@hermes/protocol";
 import { useGateway } from "@/hooks/use-gateway";
 
 // React Query handle for the server-global model.options. Shared cache means
-// composer instances on /new, /, and /tasks/* don't each pay for their own
+// composer instances on /, /tasks/*, and compatible /new redirects don't each pay for their own
 // initial fetch + spinner; once the first instance warms it, every other
 // mount renders the picker fully populated.
 //

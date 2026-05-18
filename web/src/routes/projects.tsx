@@ -262,7 +262,7 @@ export function ProjectsRoute() {
             <FolderPlus size={28} />
             <p>还没有项目</p>
             <p className={s.emptySub}>
-              在<a onClick={() => navigate("/new")}>新建任务</a>时指定工作区，或者点上方
+              在<a onClick={() => navigate("/")}>新建任务</a>时指定工作区，或者点上方
               <strong> 添加项目 </strong>开始。
             </p>
           </div>

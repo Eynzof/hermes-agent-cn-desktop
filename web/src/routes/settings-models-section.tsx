@@ -423,7 +423,7 @@ export function ModelsSection() {
       await saveConfig.mutateAsync(
         buildCurrentModelConfigUpdate(config, selectedProvider, providerForm),
       );
-      // PanelComposer / NewTaskRoute seed their model picker from localStorage.
+      // PanelComposer seeds its model picker from localStorage.
       // This mirrors picking a model from the workbench composer, so the next
       // new session carries this explicit choice even before /api/model/info
       // finishes refetching.
