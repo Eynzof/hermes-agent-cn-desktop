@@ -2,7 +2,6 @@ import { useLocation } from "react-router-dom";
 
 export type TopTab =
   | "workbench"
-  | "projects"
   | "skills"
   | "automation"
   | "observability";
@@ -25,18 +24,12 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path === "/" ||
       path.startsWith("/new") ||
       path.startsWith("/tasks/") ||
-      path.startsWith("/history"),
-  },
-  {
-    id: "projects",
-    num: "02",
-    label: "项目",
-    href: "/projects",
-    matches: (path) => path === "/projects" || path.startsWith("/projects/"),
+      path.startsWith("/history") ||
+      path.startsWith("/projects"),
   },
   {
     id: "skills",
-    num: "03",
+    num: "02",
     label: "配置",
     href: "/skills",
     matches: (path) =>
@@ -47,14 +40,14 @@ export const TOP_TABS: readonly TopTabDef[] = [
   },
   {
     id: "automation",
-    num: "04",
+    num: "03",
     label: "自动化",
     href: "/cron",
     matches: (path) => path.startsWith("/cron"),
   },
   {
     id: "observability",
-    num: "05",
+    num: "04",
     label: "可观测",
     href: "/health",
     matches: (path) =>

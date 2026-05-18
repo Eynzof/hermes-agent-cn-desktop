@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Folder, Plus, Search } from "lucide-react";
+import { Folder, LayoutDashboard, MessageSquare, Plus, Search } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useSessions } from "@/hooks/use-sessions";
@@ -151,7 +151,47 @@ export function WorkbenchSidebar() {
       <div className={s.scrollY}>
         <section className={s.section}>
           <div className={s.label}>
-            <span>§01 · 进行中</span>
+            <span>§01 · 工作台</span>
+            <span className={s.labelNum}>03</span>
+          </div>
+          <button
+            type="button"
+            className={s.sideItem}
+            data-active={location.pathname === "/" ? "true" : undefined}
+            onClick={() => navigate("/")}
+          >
+            <span className={s.sideItemIcon}>
+              <LayoutDashboard size={14} />
+            </span>
+            <span className={s.sideItemLabel}>任务面板</span>
+          </button>
+          <button
+            type="button"
+            className={s.sideItem}
+            data-active={location.pathname.startsWith("/history") ? "true" : undefined}
+            onClick={() => navigate("/history")}
+          >
+            <span className={s.sideItemIcon}>
+              <MessageSquare size={14} />
+            </span>
+            <span className={s.sideItemLabel}>对话历史</span>
+          </button>
+          <button
+            type="button"
+            className={s.sideItem}
+            data-active={location.pathname.startsWith("/projects") ? "true" : undefined}
+            onClick={() => navigate("/projects")}
+          >
+            <span className={s.sideItemIcon}>
+              <Folder size={14} />
+            </span>
+            <span className={s.sideItemLabel}>项目列表</span>
+          </button>
+        </section>
+
+        <section className={s.section}>
+          <div className={s.label}>
+            <span>§02 · 进行中</span>
             <span className={s.labelNum}>{active.length.toString().padStart(2, "0")}</span>
           </div>
           {active.length === 0 ? (
@@ -172,7 +212,7 @@ export function WorkbenchSidebar() {
 
         <section className={s.section}>
           <div className={s.label}>
-            <span>§02 · 今日</span>
+            <span>§03 · 今日</span>
             <span className={s.labelNum}>{today.length.toString().padStart(2, "0")}</span>
           </div>
           {today.length === 0 ? (
@@ -202,7 +242,7 @@ export function WorkbenchSidebar() {
 
         <section className={s.section}>
           <div className={s.label}>
-            <span>§03 · 项目快捷</span>
+            <span>§04 · 项目快捷</span>
             <span className={s.labelNum}>{sortedProjects.length.toString().padStart(2, "0")}</span>
           </div>
           {sortedProjects.length === 0 ? (
