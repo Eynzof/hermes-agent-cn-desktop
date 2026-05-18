@@ -362,7 +362,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(31, 30, 27, 0.55);
+  background: rgba(0, 0, 0, 0.68);
   padding: 24px;
 }
 
@@ -373,10 +373,10 @@
   height: min(720px, calc(100vh - 48px));
   border: 1px solid var(--h-line);
   border-radius: 18px;
-  background: var(--h-bg-input);
+  background: var(--h-bg-app);
   box-shadow:
-    0 24px 72px rgba(31, 30, 27, 0.18),
-    0 8px 24px rgba(31, 30, 27, 0.08);
+    0 26px 84px rgba(0, 0, 0, 0.58),
+    0 8px 28px rgba(0, 0, 0, 0.45);
   color: var(--h-text);
   overflow: hidden;
 }
