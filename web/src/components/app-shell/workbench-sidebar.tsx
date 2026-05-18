@@ -152,7 +152,7 @@ export function WorkbenchSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>§01 · 工作台</span>
-            <span className={s.labelNum}>02</span>
+            <span className={s.labelNum}>✕✕</span>
           </div>
           <button
             type="button"
@@ -181,7 +181,7 @@ export function WorkbenchSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>§02 · 进行中</span>
-            <span className={s.labelNum}>{active.length.toString().padStart(2, "0")}</span>
+            <span className={s.labelNum}>✕✕</span>
           </div>
           {active.length === 0 ? (
             <div className={s.empty}>暂无运行任务</div>
@@ -202,7 +202,7 @@ export function WorkbenchSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>§03 · 今日</span>
-            <span className={s.labelNum}>{today.length.toString().padStart(2, "0")}</span>
+            <span className={s.labelNum}>✕✕</span>
           </div>
           {today.length === 0 ? (
             <div className={s.empty}>今日暂无完成</div>
@@ -232,7 +232,7 @@ export function WorkbenchSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>§04 · 项目快捷</span>
-            <span className={s.labelNum}>{sortedProjects.length.toString().padStart(2, "0")}</span>
+            <span className={s.labelNum}>✕✕</span>
           </div>
           {sortedProjects.length === 0 ? (
             <button

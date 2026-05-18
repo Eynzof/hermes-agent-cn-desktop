@@ -13,7 +13,7 @@ export function AutomationSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>§04 · 自动化</span>
-            <span className={s.labelNum}>01</span>
+            <span className={s.labelNum}>✕✕</span>
           </div>
           <button
             type="button"

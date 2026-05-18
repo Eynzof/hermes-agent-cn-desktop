@@ -29,7 +29,7 @@ export function AdvancedSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>§05 · 高级</span>
-            <span className={s.labelNum}>{ITEMS.length.toString().padStart(2, "0")}</span>
+            <span className={s.labelNum}>✕✕</span>
           </div>
           {ITEMS.map((item) => {
             const Icon = item.icon;
