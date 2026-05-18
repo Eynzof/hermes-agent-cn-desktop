@@ -23,6 +23,57 @@
   grid-row: 2;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.sidebarInfoPanel {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  color: rgba(133, 126, 111, 0.76);
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.sidebarInfoMeta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebarInfoDot {
+  color: rgba(133, 126, 111, 0.54);
+}
+
+.sidebarInfoVersion {
+  color: rgba(255, 122, 61, 0.78);
+}
+
+.sidebarInfoNote {
+  max-width: 100%;
+  color: rgba(133, 126, 111, 0.5);
+  font-family: var(--h-font-cn);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mainSlot {

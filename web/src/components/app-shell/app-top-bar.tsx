@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { Search, Settings } from "lucide-react";
+import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { TOP_TABS } from "./use-active-top-tab";
 import s from "./app-top-bar.module.css";
@@ -10,10 +11,12 @@ export function AppTopBar() {
 
   return (
     <header className={s.topbar} data-window-drag data-tauri-drag-region="deep">
-      <div className={s.brand}>
-        <span className={s.glyph}>H</span>
-        <span>Hermes</span>
-        <span className={s.ver}>/ v2</span>
+      <div className={s.brand} aria-label="Hermes Agent CN">
+        <HermesLogoMark className={s.brandMark} size={22} />
+        <span className={s.wordmark}>
+          Hermes <em>Agent</em>
+        </span>
+        <span className={s.ver}>中文社区桌面版</span>
       </div>
 
       <nav className={s.nav} aria-label="主导航">

@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { AppTopBar } from "./app-top-bar";
 import { AppSidebar } from "./app-sidebar";
 import { AppStatusBar } from "./app-status-bar";
+import { SidebarVersionTag } from "./sidebar-version-tag";
 import s from "./app-shell.module.css";
 
 interface AppShellProps {
@@ -21,6 +22,7 @@ export function AppShell({ children }: AppShellProps) {
       </div>
       <div className={s.sidebarSlot}>
         <AppSidebar />
+        <SidebarVersionTag />
       </div>
       <div className={s.mainSlot}>{children}</div>
       <div className={s.statusbarSlot}>

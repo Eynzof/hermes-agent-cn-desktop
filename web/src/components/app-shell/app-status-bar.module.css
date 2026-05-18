@@ -8,6 +8,7 @@
   gap: 14px;
   font-family: var(--h-font-mono);
   font-size: 10.5px;
+  line-height: 1;
   color: var(--h-text-2);
   border-top: 1px solid var(--h-line);
   background: var(--ink-100);
@@ -15,8 +16,10 @@
 
 .stat {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
+  min-height: 12px;
+  line-height: 1;
 }
 
 .stat[data-tone="warn"] .val {
@@ -24,25 +27,32 @@
 }
 
 .lbl {
+  display: inline-block;
   color: var(--bone-600);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 9px;
+  line-height: 1;
 }
 
 .val {
+  display: inline-block;
   color: var(--bone-200);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .sep {
   width: 1px;
   height: 10px;
   background: var(--h-line);
+  flex: 0 0 auto;
 }
 
 .right {
   margin-left: auto;
   display: flex;
+  align-items: center;
   gap: 14px;
 }
 
@@ -51,6 +61,8 @@
   height: 6px;
   border-radius: 50%;
   display: inline-block;
+  align-self: center;
+  flex: 0 0 auto;
 }
 
 .dot[data-state="running"] {

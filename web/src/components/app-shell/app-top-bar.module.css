@@ -20,45 +20,52 @@
 
 .brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
+  width: calc(var(--h-sidebar-w) - 30px);
+  flex-shrink: 0;
   font-family: var(--h-font-brand);
-  font-style: italic;
-  font-size: 18px;
-  font-weight: 500;
+  font-style: normal;
+  font-size: 17px;
+  font-weight: 400;
   color: var(--bone-100);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   user-select: none;
 }
 
-.glyph {
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--persimmon);
+.brandMark {
+  display: block;
+  flex-shrink: 0;
+  border-radius: 5px;
+  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.35));
+}
+
+.wordmark {
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.wordmark em {
   color: var(--persimmon);
-  font-family: var(--h-font-mono);
-  font-size: 10px;
   font-style: normal;
-  border-radius: 2px;
-  transform: rotate(-6deg);
 }
 
 .ver {
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  color: var(--bone-600);
+  font-family: var(--h-font-cn);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--bone-300);
   font-style: normal;
   letter-spacing: 0.04em;
+  white-space: nowrap;
+  transform: translateY(1.5px);
 }
 
 .nav {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-left: 8px;
+  margin-left: 0;
   -webkit-app-region: no-drag;
 }
 
@@ -101,8 +108,10 @@
 }
 
 .search {
-  flex: 1;
+  flex: 0 1 clamp(220px, 28vw, 360px);
+  width: clamp(220px, 28vw, 360px);
   max-width: 360px;
+  margin-left: auto;
   height: 28px;
   background: var(--ink-200);
   border: 1px solid var(--h-line);
@@ -134,7 +143,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
+  margin-left: 0;
   -webkit-app-region: no-drag;
 }
 

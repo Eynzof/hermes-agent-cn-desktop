@@ -214,6 +214,7 @@
 
 .box[data-variant="big"] {
   padding: 0;
+  border-radius: var(--h-r-lg);
 }
 
 .box[data-variant="big"] .textarea {
@@ -297,8 +298,8 @@
   padding: 10px 14px 10px;
   border-top: 1px solid var(--h-line-soft);
   background: var(--h-bg-soft);
-  border-bottom-left-radius: 17px;
-  border-bottom-right-radius: 17px;
+  border-bottom-left-radius: calc(var(--h-r-lg) - 1px);
+  border-bottom-right-radius: calc(var(--h-r-lg) - 1px);
 }
 
 .box[data-variant="big"] .attachmentTray {
@@ -933,6 +934,7 @@
   flex: 0 1 auto;
   height: var(--composer-tool-height);
   gap: 6px;
+  border-radius: var(--h-r-md);
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   font-size: 12px;
@@ -1132,6 +1134,7 @@
   height: var(--composer-action-height);
   gap: 7px;
   border: 1px solid var(--h-accent);
+  border-radius: var(--h-r-md);
   background: var(--h-accent);
   color: #fff;
   box-shadow: none;

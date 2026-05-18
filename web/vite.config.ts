@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { execSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { dirname, join, resolve } from "path";
@@ -75,6 +76,19 @@ const SESSION_ARCHIVE_STATE_FILE = "session-ui-state.json";
 // dashboard (e.g. a P-009 SSE-enabled instance on port 9120 for QA without
 // disturbing the user's main dashboard on 9119).
 const API_PROXY_TARGET = process.env.HERMES_DASHBOARD_ORIGIN || "http://127.0.0.1:9119";
+
+function gitShortCommit(): string {
+  if (process.env.HERMES_BUILD_COMMIT) return process.env.HERMES_BUILD_COMMIT;
+  try {
+    return execSync("git rev-parse --short=12 HEAD", {
+      cwd: resolve(__dirname, ".."),
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    return "unknown";
+  }
+}
 
 function hermesHomePath(): string {
   return process.env.HERMES_DESKTOP_HERMES_HOME || process.env.HERMES_HOME || join(homedir(), ".hermes");
@@ -236,6 +250,9 @@ function hermesSessionArchivePlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), hermesTokenPlugin(), hermesSessionLogPlugin(), hermesSessionArchivePlugin()],
+  define: {
+    "import.meta.env.VITE_HERMES_BUILD_COMMIT": JSON.stringify(gitShortCommit()),
+  },
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
