@@ -12,8 +12,10 @@ type TopBarActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement>;
 export function TopBar({ title, sub, right }: TopBarProps) {
   return (
     <div className={s.topBar} data-window-drag data-tauri-drag-region="deep">
-      {title && <span className={s.title}>{title}</span>}
-      {sub && <span className={s.sub}>{sub}</span>}
+      <div className={s.titleGroup}>
+        {title && <span className={s.title}>{title}</span>}
+        {sub && <span className={s.sub}>{sub}</span>}
+      </div>
       <span className={s.spacer} />
       {right && <div className={s.actions}>{right}</div>}
     </div>

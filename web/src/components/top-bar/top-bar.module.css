@@ -13,15 +13,24 @@
   user-select: none;
 }
 
+.titleGroup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
 .title {
   font-size: 13px;
   font-weight: 600;
   color: var(--h-text);
+  line-height: 1;
 }
 
 .sub {
   font-size: 11px;
   color: var(--h-text-3);
+  line-height: 1;
 }
 
 .spacer {
@@ -32,6 +41,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  align-self: center;
   -webkit-app-region: no-drag;
 }
 
@@ -50,4 +60,3 @@
 .chip:hover {
   background: var(--h-bg-soft);
 }
-
