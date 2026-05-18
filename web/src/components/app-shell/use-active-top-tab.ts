@@ -52,6 +52,7 @@ export const TOP_TABS: readonly TopTabDef[] = [
     href: "/health",
     matches: (path) =>
       path.startsWith("/health") ||
+      path.startsWith("/analytics") ||
       path.startsWith("/logs") ||
       path.startsWith("/debug") ||
       path.startsWith("/settings") ||

@@ -6,7 +6,6 @@ import { useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
 import { useCronJobs, useCreateCronJob, useDeleteCronJob, useCronAction } from "@/hooks/use-cron";
-import { useAnalytics } from "@/hooks/use-analytics";
 import { useLogs } from "@/hooks/use-logs";
 import { useStatus } from "@/hooks/use-status";
 import {
@@ -19,16 +18,13 @@ import { showReasoningAtom } from "@/stores/ui";
 import { postJSON } from "@/lib/transport";
 import { TopBarActions } from "@/components/top-bar/top-bar";
 import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
-import { DebugSection } from "./settings-debug-section";
 import s from "./settings.module.css";
 
-type Section = "general" | "config" | "analytics" | "debug" | "about";
+type Section = "general" | "config" | "about";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "general", label: "常规" },
   { id: "config", label: "配置" },
-  { id: "analytics", label: "数据分析" },
-  { id: "debug", label: "Debug" },
   { id: "about", label: "关于" },
 ];
 
@@ -72,8 +68,6 @@ export function SettingsRoute() {
         <div className={s.content}>
           {section === "general" && <GeneralSection />}
           {section === "config" && <ConfigSection />}
-          {section === "analytics" && <AnalyticsSection />}
-          {section === "debug" && <DebugSection />}
           {section === "about" && <AboutSection />}
         </div>
       </div>
@@ -317,70 +311,6 @@ export function CronSection() {
       ) : (
         <button className={s.btnPrimary} style={{ marginTop: 12 }} onClick={() => setShowNew(true)}>＋ 新建定时任务</button>
       )}
-    </div>
-  );
-}
-
-/* ── Analytics ───────────────────────────────────────────────────────── */
-
-function AnalyticsSection() {
-  const [days, setDays] = useState(30);
-  const { data, isLoading } = useAnalytics(days);
-
-  if (isLoading) return <div className={s.desc}>加载中…</div>;
-  if (!data) return null;
-
-  const totals = data.totals ?? {};
-
-  return (
-    <div>
-      <h2 className={s.heading}>数据分析</h2>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <span className={s.desc} style={{ margin: 0 }}>时间范围:</span>
-        <RadioGroup
-          value={String(days)}
-          options={[{ value: "7", label: "7 天" }, { value: "30", label: "30 天" }, { value: "90", label: "90 天" }]}
-          onChange={(v) => setDays(Number(v))}
-        />
-      </div>
-
-      <div className={s.providerGrid}>
-        <StatCard label="总 Tokens" value={formatLargeNum((totals.total_input ?? 0) + (totals.total_output ?? 0))} />
-        <StatCard label="总费用" value={`$${(totals.total_estimated_cost ?? 0).toFixed(4)}`} />
-        <StatCard label="会话数" value={String(totals.total_sessions ?? 0)} />
-        <StatCard label="API 调用" value={String(totals.total_api_calls ?? 0)} />
-      </div>
-
-      <div className={s.modelsLabel}>按模型</div>
-      {data.by_model.map((m) => (
-        <div key={m.model} className={s.row}>
-          <div className={s.rowLeft}><div className={s.rowLabel}>{m.model}</div></div>
-          <div className={s.rowRight} style={{ gap: 12 }}>
-            <span className={s.rowSub}>{formatLargeNum(m.input_tokens + m.output_tokens)} tok</span>
-            {m.estimated_cost != null && <span className={s.rowSub}>${m.estimated_cost.toFixed(4)}</span>}
-          </div>
-        </div>
-      ))}
-
-      <div className={s.modelsLabel} style={{ marginTop: 16 }}>每日明细</div>
-      <div className={s.logBlock}>
-        {data.daily.map((d) => (
-          <div key={d.day} className={s.logLine}>
-            {d.day} — {d.sessions} 会话 · {formatLargeNum(d.input_tokens + d.output_tokens)} tok · ${d.estimated_cost.toFixed(4)}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className={s.providerMini}>
-      <div className={s.providerInfo}>
-        <span className={s.providerVendor}>{label}</span>
-        <span className={s.providerName}>{value}</span>
-      </div>
     </div>
   );
 }
@@ -792,10 +722,4 @@ function groupBy<T>(arr: T[], fn: (item: T) => string): Record<string, T[]> {
     (result[key] ??= []).push(item);
   }
   return result;
-}
-
-function formatLargeNum(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
 }

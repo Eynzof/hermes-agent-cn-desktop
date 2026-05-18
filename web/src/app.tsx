@@ -18,6 +18,7 @@ import { HealthRoute } from "@/routes/health";
 import { LogsRoute } from "@/routes/logs";
 import { SettingsRoute } from "@/routes/settings";
 import { DebugRoute } from "@/routes/debug";
+import { AnalyticsRoute } from "@/routes/analytics";
 import { DevPrimitivesRoute } from "@/routes/dev-primitives";
 
 function NewTaskRedirect() {
@@ -47,6 +48,7 @@ export function App() {
           <Route path="/profiles" element={<ProfilesRoute />} />
           <Route path="/cron" element={<CronRoute />} />
           <Route path="/health" element={<HealthRoute />} />
+          <Route path="/analytics" element={<AnalyticsRoute />} />
           <Route path="/logs" element={<LogsRoute />} />
           <Route path="/debug" element={<DebugRoute />} />
           <Route path="/settings" element={<ErrorBoundary><SettingsRoute /></ErrorBoundary>} />

@@ -1,5 +1,13 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bug, FileText, FlaskConical, HeartPulse, Settings, type LucideIcon } from "lucide-react";
+import {
+  BarChart3,
+  Bug,
+  FileText,
+  FlaskConical,
+  HeartPulse,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import s from "./debug-sidebar.module.css";
 
 interface ObservabilityItem {
@@ -10,8 +18,9 @@ interface ObservabilityItem {
 
 const ITEMS: readonly ObservabilityItem[] = [
   { label: "健康检查", path: "/health", icon: HeartPulse },
+  { label: "数据分析", path: "/analytics", icon: BarChart3 },
   { label: "日志", path: "/logs", icon: FileText },
-  { label: "调试入口", path: "/debug", icon: Bug },
+  { label: "Debug", path: "/debug", icon: Bug },
   { label: "设置", path: "/settings", icon: Settings },
   ...(import.meta.env.DEV
     ? [
@@ -36,7 +45,7 @@ export function ObservabilitySidebar() {
       <div className={s.scrollY}>
         <section className={s.section}>
           <div className={s.label}>
-            <span>§05 · 可观测</span>
+            <span>§04 · 可观测</span>
             <span className={s.labelNum}>{ITEMS.length.toString().padStart(2, "0")}</span>
           </div>
           {ITEMS.map((item) => {

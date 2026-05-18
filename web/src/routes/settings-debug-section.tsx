@@ -40,7 +40,11 @@ function useDebugEntries(): DebugEntry[] {
   );
 }
 
-export function DebugSection() {
+interface DebugSectionProps {
+  showHeading?: boolean;
+}
+
+export function DebugSection({ showHeading = true }: DebugSectionProps) {
   const entries = useDebugEntries();
   const [typeFilter, setTypeFilter] = useState<DebugEntryType | "all">("all");
   const [levelFilter, setLevelFilter] = useState<DebugEntryLevel | "all">("all");
@@ -94,7 +98,7 @@ export function DebugSection() {
 
   return (
     <div>
-      <h2 className={s.heading}>Debug</h2>
+      {showHeading && <h2 className={s.heading}>Debug</h2>}
       <p className={s.desc}>
         实时捕获前端的 Gateway 事件、REST 请求失败、Console 错误与未处理异常。
         最近 {entries.length} 条 · 错误 {counts.errors} · REST 失败 {counts.restFailures}。
