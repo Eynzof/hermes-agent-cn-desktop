@@ -37,14 +37,14 @@
 
 :root,
 [data-theme="light"] {
-  --h-bg-app: #f4f2ed;
-  --h-bg-pane: #fbfaf6;
-  --h-bg-soft: #f7f4ee;
+  --h-bg-app: #fbfaf7;
+  --h-bg-pane: #ffffff;
+  --h-bg-soft: #f8f7f3;
   --h-bg-input: #ffffff;
-  --h-bg-chip: #ece8df;
-  --h-bg-code: #f1ede4;
-  --h-line: #e3dfd6;
-  --h-line-soft: #ece8df;
+  --h-bg-chip: #f0eee8;
+  --h-bg-code: #f7f6f1;
+  --h-line: #e8e4dc;
+  --h-line-soft: #efebe4;
   --h-text: #2a2620;
   --h-text-2: #6b665c;
   --h-text-3: #a8a195;
@@ -56,7 +56,7 @@
   --h-err: #c4554d;
   --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   --h-shadow-l: 0 4px 16px rgba(0, 0, 0, 0.06);
-  --h-sidebar-stripe: #f4f2ed;
+  --h-sidebar-stripe: #fbfaf7;
   --h-accent: #c96b3a;
   --h-accent-soft: #f4dfd0;
   --h-accent-border: #e8b896;
