@@ -638,7 +638,7 @@
 
 .toolActivitySummary {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   max-width: 100%;
   gap: 6px;
   border: 0;
@@ -664,6 +664,7 @@
 
 .toolActivityChevron {
   flex: 0 0 14px;
+  align-self: center;
   width: 14px;
   height: 14px;
   color: var(--h-text-3);
@@ -680,6 +681,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--h-text-3);
+  line-height: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -691,6 +693,7 @@
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 11px;
+  line-height: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -722,7 +725,7 @@
 
 .toolHeader {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   max-width: 100%;
   gap: 7px;
   min-height: 24px;
@@ -733,6 +736,7 @@
   cursor: pointer;
   padding: 2px 4px;
   font-size: 12px;
+  line-height: 1.45;
   text-align: left;
 }
 
@@ -750,6 +754,7 @@
   height: 6px;
   border-radius: 999px;
   background: var(--h-text-3);
+  align-self: center;
   flex: 0 0 auto;
 }
 
@@ -770,6 +775,7 @@
   min-width: 0;
   color: var(--h-text);
   font-weight: 500;
+  line-height: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -784,6 +790,7 @@
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 11px;
+  line-height: inherit;
 }
 
 .toolElapsed {
@@ -791,6 +798,7 @@
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 10px;
+  line-height: inherit;
   font-variant-numeric: tabular-nums;
 }
 
@@ -799,6 +807,7 @@
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 10px;
+  line-height: inherit;
   font-variant-numeric: tabular-nums;
   padding: 0 5px;
   border-radius: 999px;

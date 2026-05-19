@@ -6,6 +6,7 @@ import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useSessions } from "@/hooks/use-sessions";
 import { isSessionRunning } from "@/lib/session-activity";
+import { sessionDisplayTitle } from "@/lib/session-title";
 import {
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
@@ -60,7 +61,7 @@ interface SessionRowProps {
 }
 
 function SessionRow({ session, state, active, meta, onClick }: SessionRowProps) {
-  const title = session.title ?? session.preview ?? `会话 ${session.id.slice(0, 6)}`;
+  const title = sessionDisplayTitle(session);
   return (
     <button
       type="button"

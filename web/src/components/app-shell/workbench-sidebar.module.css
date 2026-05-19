@@ -169,14 +169,18 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   min-width: 0;
   overflow: visible;
 }
 
 .ttlText {
+  display: block;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dot {
