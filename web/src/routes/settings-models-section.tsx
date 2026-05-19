@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useDeleteEnv, useEnvVars, useRevealEnv, useSetEnv } from "@/hooks/use-env";
@@ -46,6 +46,7 @@ const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
 ];
 
 const PROVIDER_ACTION_LOADING_MIN_MS = 450;
+const PROVIDER_SWITCH_LOADING_MIN_MS = 280;
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -82,6 +83,8 @@ export function ModelsSection() {
     BUILTIN_PROVIDER_CATALOG.providers.find((p) => p.id === TOP5_PROVIDER_IDS[0]) ??
     BUILTIN_PROVIDER_CATALOG.providers[0];
   const [selectedProviderId, setSelectedProviderId] = useState(initialProvider?.id ?? "");
+  const [providerPanelLoading, setProviderPanelLoading] = useState(false);
+  const selectedProviderIdRef = useRef(selectedProviderId);
   const [providerForm, setProviderForm] = useState({
     apiKey: "",
     baseUrl: initialProvider?.baseUrl ?? "",
@@ -112,6 +115,26 @@ export function ModelsSection() {
     model: "",
   });
   const customDialogTitleId = useId();
+  const selectProvider = useCallback((providerId: string) => {
+    if (!providerId || selectedProviderIdRef.current === providerId) return;
+    selectedProviderIdRef.current = providerId;
+    setProviderPanelLoading(true);
+    setSelectedProviderId(providerId);
+  }, []);
+
+  useEffect(() => {
+    selectedProviderIdRef.current = selectedProviderId;
+  }, [selectedProviderId]);
+
+  useEffect(() => {
+    if (!providerPanelLoading) return;
+    const handle = window.setTimeout(
+      () => setProviderPanelLoading(false),
+      PROVIDER_SWITCH_LOADING_MIN_MS,
+    );
+    return () => window.clearTimeout(handle);
+  }, [providerPanelLoading, selectedProviderId]);
+
   const closeCustomForm = useCallback(() => {
     setShowCustomForm(false);
     setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
@@ -330,7 +353,7 @@ export function ModelsSection() {
     if (!match) return;
     const targetId = decodeURIComponent(match[1]);
     if (!allProviders.some((p) => p.id === targetId)) return;
-    setSelectedProviderId(targetId);
+    selectProvider(targetId);
     // Wait one frame for the list item to mount with the new active state,
     // then scroll it into view with a soft highlight pulse.
     const handle = window.requestAnimationFrame(() => {
@@ -475,7 +498,7 @@ export function ModelsSection() {
       buildProviderConfigUpdate(config, preset, { apiKey, baseUrl, model }),
       {
         onSuccess: () => {
-          setSelectedProviderId(candidate);
+          selectProvider(candidate);
           setShowCustomForm(false);
           setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
           setProviderForm({ apiKey: "", baseUrl, model });
@@ -558,7 +581,7 @@ export function ModelsSection() {
                   id={`provider-${provider.id}`}
                   className={s.providerPresetItem}
                   data-active={selectedProvider?.id === provider.id}
-                  onClick={() => setSelectedProviderId(provider.id)}
+                  onClick={() => selectProvider(provider.id)}
                 >
                   <span className={s.providerPresetName}>{provider.name}</span>
                   <span className={s.providerPresetVendor}>{provider.vendor}</span>
@@ -578,146 +601,152 @@ export function ModelsSection() {
         </div>
 
         {selectedProvider && (
-          <div className={s.providerPresetPanel}>
-            <div className={s.providerPresetHeader}>
-              <div>
-                <div className={s.providerDetailName}>{selectedProvider.name}</div>
-                <div className={s.providerDetailVendor}>
-                  {selectedProvider.id} · {selectedProvider.vendor}
-                  {selectedProvider.docsUrl && <> · <a href={selectedProvider.docsUrl} target="_blank" rel="noreferrer" className={s.link}>文档 ↗</a></>}
+          <div className={s.providerPresetPanel} data-loading={providerPanelLoading}>
+            {providerPanelLoading ? (
+              <ProviderPanelLoading providerName={selectedProvider.name} />
+            ) : (
+              <>
+                <div className={s.providerPresetHeader}>
+                  <div>
+                    <div className={s.providerDetailName}>{selectedProvider.name}</div>
+                    <div className={s.providerDetailVendor}>
+                      {selectedProvider.id} · {selectedProvider.vendor}
+                      {selectedProvider.docsUrl && <> · <a href={selectedProvider.docsUrl} target="_blank" rel="noreferrer" className={s.link}>文档 ↗</a></>}
+                    </div>
+                  </div>
+                  <span className={s.statusBadge} data-on={selectedHasCredentials}>
+                    {selectedHasCredentials ? "已保存密钥" : "未设置"}
+                  </span>
                 </div>
-              </div>
-              <span className={s.statusBadge} data-on={selectedHasCredentials}>
-                {selectedHasCredentials ? "已保存密钥" : "未设置"}
-              </span>
-            </div>
 
-            <div className={s.providerFormGrid}>
-              <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>{selectedProvider.apiKeyLabel}</div>
-                <input
-                  className={s.fieldInput}
-                  data-mono="true"
-                  type="password"
-                  value={providerForm.apiKey}
-                  placeholder={selectedHasCredentials ? "已保存" : "粘贴 API Key"}
-                  onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
-                />
-              </label>
-              <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>Base URL</div>
-                <input
-                  className={s.fieldInput}
-                  data-mono="true"
-                  value={providerForm.baseUrl}
-                  onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
-                />
-              </label>
-              <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>模型</div>
-                <div className={s.modelPickerRow}>
-                  <ModelCombobox
-                    value={providerForm.model}
-                    onChange={(next) => setProviderForm((prev) => ({ ...prev, model: next }))}
-                    options={mergedModelOptions}
-                  />
-                  {supportsModelListing ? (
-                    <button
-                      type="button"
-                      className={s.btn}
-                      disabled={modelsQuery.isFetching}
-                      onClick={() => modelsQuery.refetch()}
-                      title={`从 ${providerForm.baseUrl}/models 拉取`}
-                    >
-                      {refreshLabel}
-                    </button>
-                  ) : null}
+                <div className={s.providerFormGrid}>
+                  <label className={s.fieldRow}>
+                    <div className={s.fieldLabel}>{selectedProvider.apiKeyLabel}</div>
+                    <input
+                      className={s.fieldInput}
+                      data-mono="true"
+                      type="password"
+                      value={providerForm.apiKey}
+                      placeholder={selectedHasCredentials ? "已保存" : "粘贴 API Key"}
+                      onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
+                    />
+                  </label>
+                  <label className={s.fieldRow}>
+                    <div className={s.fieldLabel}>Base URL</div>
+                    <input
+                      className={s.fieldInput}
+                      data-mono="true"
+                      value={providerForm.baseUrl}
+                      onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
+                    />
+                  </label>
+                  <label className={s.fieldRow}>
+                    <div className={s.fieldLabel}>模型</div>
+                    <div className={s.modelPickerRow}>
+                      <ModelCombobox
+                        value={providerForm.model}
+                        onChange={(next) => setProviderForm((prev) => ({ ...prev, model: next }))}
+                        options={mergedModelOptions}
+                      />
+                      {supportsModelListing ? (
+                        <button
+                          type="button"
+                          className={s.btn}
+                          disabled={modelsQuery.isFetching}
+                          onClick={() => modelsQuery.refetch()}
+                          title={`从 ${providerForm.baseUrl}/models 拉取`}
+                        >
+                          {refreshLabel}
+                        </button>
+                      ) : null}
+                    </div>
+                  </label>
+                  {!supportsModelListing && (
+                    <div className={s.modelPickerHint}>此服务商不提供 /models 端点，使用预设模型或手动输入即可</div>
+                  )}
+                  {refreshErrorText && (
+                    <div className={s.modelPickerError}>{refreshErrorText}</div>
+                  )}
                 </div>
-              </label>
-              {!supportsModelListing && (
-                <div className={s.modelPickerHint}>此服务商不提供 /models 端点，使用预设模型或手动输入即可</div>
-              )}
-              {refreshErrorText && (
-                <div className={s.modelPickerError}>{refreshErrorText}</div>
-              )}
-            </div>
 
-            <div className={s.modelTags}>
-              {mergedModelOptions.slice(0, 8).map((id) => (
-                <span key={id} className={s.modelTag}>{id}</span>
-              ))}
-            </div>
+                <div className={s.modelTags}>
+                  {mergedModelOptions.slice(0, 8).map((id) => (
+                    <span key={id} className={s.modelTag}>{id}</span>
+                  ))}
+                </div>
 
-            <div className={s.providerActions}>
-              <button
-                className={s.btnPrimary}
-                disabled={
-                  providerSavePending ||
-                  providerSetCurrentPending ||
-                  !isFormDirty ||
-                  (!selectedHasCredentials && !providerForm.apiKey.trim())
-                }
-                onClick={() => void handleProviderSave()}
-              >
-                {providerSavePending
-                  ? (
-                    <>
-                      <span className={s.buttonSpinner} aria-hidden="true" />
-                      保存中…
-                    </>
-                  )
-                  : showSavedFlash
-                    ? "✓ 已保存"
-                    : "保存配置"}
-              </button>
-              <button
-                className={isFormDirty || selectedProviderIsCurrent ? s.btn : s.btnPrimary}
-                disabled={
-                  selectedProviderIsCurrent ||
-                  providerSavePending ||
-                  providerSetCurrentPending ||
-                  !selectedProviderModel ||
-                  !selectedHasCredentials
-                }
-                onClick={() => void handleSetCurrentModel()}
-                title={
-                  selectedProviderIsCurrent
-                    ? "当前已在使用这个模型"
-                    : selectedHasCredentials
-                      ? "切换当前运行模型；如刚修改了 Base URL / API Key，请先保存配置"
-                      : "请先保存 API Key / provider 配置"
-                }
-              >
-                {providerSetCurrentPending
-                  ? (
-                    <>
-                      <span className={s.buttonSpinner} aria-hidden="true" />
-                      切换中…
-                    </>
-                  )
-                  : selectedProviderIsCurrent
-                    ? "已是当前模型"
-                    : "设为当前模型"}
-              </button>
-              <button
-                className={s.btn}
-                disabled={
-                  probeForSelected?.status === "pending" ||
-                  (!selectedHasCredentials && !providerForm.apiKey.trim())
-                }
-                onClick={() => void handleProbe()}
-                title="向 /models 端点发一次 GET，验证 API Key + 网络通"
-              >
-                {probeForSelected?.status === "pending" ? "测试中…" : "测试连接"}
-              </button>
-            </div>
-            {probeForSelected && probeForSelected.status !== "pending" && (
-              <ProbeResultRow probe={probeForSelected} />
-            )}
-            {providerSaveError && (
-              <div className={s.modelPickerError} style={{ marginTop: 8 }}>
-                操作失败：{providerSaveError}
-              </div>
+                <div className={s.providerActions}>
+                  <button
+                    className={s.btnPrimary}
+                    disabled={
+                      providerSavePending ||
+                      providerSetCurrentPending ||
+                      !isFormDirty ||
+                      (!selectedHasCredentials && !providerForm.apiKey.trim())
+                    }
+                    onClick={() => void handleProviderSave()}
+                  >
+                    {providerSavePending
+                      ? (
+                        <>
+                          <span className={s.buttonSpinner} aria-hidden="true" />
+                          保存中…
+                        </>
+                      )
+                      : showSavedFlash
+                        ? "✓ 已保存"
+                        : "保存配置"}
+                  </button>
+                  <button
+                    className={isFormDirty || selectedProviderIsCurrent ? s.btn : s.btnPrimary}
+                    disabled={
+                      selectedProviderIsCurrent ||
+                      providerSavePending ||
+                      providerSetCurrentPending ||
+                      !selectedProviderModel ||
+                      !selectedHasCredentials
+                    }
+                    onClick={() => void handleSetCurrentModel()}
+                    title={
+                      selectedProviderIsCurrent
+                        ? "当前已在使用这个模型"
+                        : selectedHasCredentials
+                          ? "切换当前运行模型；如刚修改了 Base URL / API Key，请先保存配置"
+                          : "请先保存 API Key / provider 配置"
+                    }
+                  >
+                    {providerSetCurrentPending
+                      ? (
+                        <>
+                          <span className={s.buttonSpinner} aria-hidden="true" />
+                          切换中…
+                        </>
+                      )
+                      : selectedProviderIsCurrent
+                        ? "已是当前模型"
+                        : "设为当前模型"}
+                  </button>
+                  <button
+                    className={s.btn}
+                    disabled={
+                      probeForSelected?.status === "pending" ||
+                      (!selectedHasCredentials && !providerForm.apiKey.trim())
+                    }
+                    onClick={() => void handleProbe()}
+                    title="向 /models 端点发一次 GET，验证 API Key + 网络通"
+                  >
+                    {probeForSelected?.status === "pending" ? "测试中…" : "测试连接"}
+                  </button>
+                </div>
+                {probeForSelected && probeForSelected.status !== "pending" && (
+                  <ProbeResultRow probe={probeForSelected} />
+                )}
+                {providerSaveError && (
+                  <div className={s.modelPickerError} style={{ marginTop: 8 }}>
+                    操作失败：{providerSaveError}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -874,6 +903,26 @@ function EnvRow({ envKey, info, revealedValue, isEditing, editVal, onEdit, onEdi
             {info.is_set && <button className={s.btnDanger} onClick={onDelete}>删除</button>}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ProviderPanelLoading({ providerName }: { providerName: string }) {
+  return (
+    <div className={s.providerPanelLoading} role="status" aria-live="polite">
+      <div className={s.providerPanelLoadingHeader}>
+        <span className={s.providerPanelSpinner} aria-hidden="true" />
+        <div>
+          <div className={s.providerPanelLoadingTitle}>正在加载 {providerName}</div>
+          <div className={s.providerPanelLoadingDesc}>正在同步配置、密钥状态和模型预设…</div>
+        </div>
+      </div>
+      <div className={s.providerPanelSkeleton} aria-hidden="true">
+        <span className={s.providerPanelSkeletonLine} data-width="long" />
+        <span className={s.providerPanelSkeletonLine} data-width="full" />
+        <span className={s.providerPanelSkeletonLine} data-width="full" />
+        <span className={s.providerPanelSkeletonLine} data-width="medium" />
       </div>
     </div>
   );
