@@ -56,7 +56,7 @@ function timeAgo(ts: number | null | undefined): string {
 function providerDescription(provider: MemoryProviderOption): string {
   const raw = provider.description || "";
   const key = raw.startsWith("memory.providers.") ? raw.split(".").pop() || provider.name : provider.name;
-  return PROVIDER_DESCRIPTIONS[key] ?? (raw || "外部记忆提供商。");
+  return PROVIDER_DESCRIPTIONS[key] ?? (raw || "外置记忆系统。");
 }
 
 function CapacityBar({ label, used, limit }: { label: string; used: number; limit: number }) {
@@ -171,7 +171,7 @@ export function MemoryRoute() {
       ) : (
         <div className={s.memoryPage}>
           <p className={s.desc}>
-            这里管理当前 Profile 的长期记忆。代理记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。
+            这里管理当前 Profile 的长期记忆。记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。
           </p>
 
           <div className={s.statsGrid}>
@@ -181,19 +181,19 @@ export function MemoryRoute() {
           </div>
 
           <div className={s.capacityGrid}>
-            <CapacityBar label="代理记忆" used={data.memory.charCount} limit={data.memory.charLimit} />
+            <CapacityBar label="记忆" used={data.memory.charCount} limit={data.memory.charLimit} />
             <CapacityBar label="用户画像" used={data.user.charCount} limit={data.user.charLimit} />
           </div>
 
           <div className={s.tabs}>
             <button type="button" data-active={tab === "entries" ? "true" : undefined} onClick={() => setTab("entries")}>
-              代理记忆 <span>{timeAgo(data.memory.lastModified)}</span>
+              记忆 <span>{timeAgo(data.memory.lastModified)}</span>
             </button>
             <button type="button" data-active={tab === "profile" ? "true" : undefined} onClick={() => setTab("profile")}>
               用户画像 <span>{timeAgo(data.user.lastModified)}</span>
             </button>
             <button type="button" data-active={tab === "providers" ? "true" : undefined} onClick={() => setTab("providers")}>
-              记忆提供商 <span>{activeProvider}</span>
+              外置记忆系统 <span>{activeProvider}</span>
             </button>
           </div>
 
@@ -203,7 +203,7 @@ export function MemoryRoute() {
             <section className={s.panel}>
               <div className={s.panelHead}>
                 <div>
-                  <strong>{data.memory.entries.length} 条代理记忆</strong>
+                  <strong>{data.memory.entries.length} 条记忆</strong>
                   <span>写入当前 Profile 的 memories/MEMORY.md</span>
                 </div>
                 <button type="button" className={s.primaryButton} onClick={() => setShowAdd((v) => !v)}>
@@ -299,14 +299,14 @@ export function MemoryRoute() {
             <section className={s.panel}>
               <div className={s.panelHead}>
                 <div>
-                  <strong>记忆提供商</strong>
+                  <strong>外置记忆系统</strong>
                   <span>当前 {activeProvider}</span>
                 </div>
               </div>
               <p className={s.providerHint}>
-                内置文件记忆始终可用；外部记忆提供商用于增强长期召回。部分提供商需要先在 <code>.env</code> 中配置 API Key，或运行 <code>hermes memory setup</code> 完成初始化。
+                内置文件记忆始终可用；外置记忆系统用于增强长期召回。部分系统需要先在 <code>.env</code> 中配置 API Key，或运行 <code>hermes memory setup</code> 完成初始化。
               </p>
-              {providersQuery.isError && <div className={s.errorState}>无法读取记忆提供商列表，仍可继续使用内置文件记忆。</div>}
+              {providersQuery.isError && <div className={s.errorState}>无法读取外置记忆系统列表，仍可继续使用内置文件记忆。</div>}
               <div className={s.providerGrid}>
                 {providers.map((provider) => {
                   const active = activeProvider === provider.name || (activeProvider === "" && provider.name === "builtin");

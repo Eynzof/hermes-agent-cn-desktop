@@ -418,6 +418,14 @@
   color: var(--h-text);
 }
 
+.messageActions button[data-copy-state="copied"] {
+  color: var(--h-ok);
+}
+
+.messageActions button[data-copy-state="error"] {
+  color: var(--h-err);
+}
+
 .messageStats {
   position: relative;
   display: inline-flex;
@@ -655,10 +663,12 @@
 }
 
 .toolActivityChevron {
-  display: inline-block;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
   color: var(--h-text-3);
-  font-size: 13px;
-  line-height: 1;
+  transform-box: fill-box;
+  transform-origin: center;
   transition: transform 0.15s;
 }
 

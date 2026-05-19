@@ -265,7 +265,12 @@
 }
 
 .rowTag {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-size: 9.5px;
+  line-height: 1.4;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 1px 6px;
@@ -305,20 +310,30 @@
   border-bottom: 1px solid var(--h-line);
 }
 .detailHeadRow1 {
+  display: block;
+  margin-bottom: 10px;
+}
+.detailHeadRow2 {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 6px;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 14px;
 }
 .detailHeadTitle {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-size: 24px;
   font-weight: 600;
   color: var(--h-text);
   letter-spacing: -0.01em;
+  line-height: 1.2;
   margin: 0;
 }
 .detailHeadActions {
   display: flex;
+  align-items: center;
+  flex: 0 0 auto;
   gap: 8px;
   margin-left: auto;
 }
@@ -332,6 +347,9 @@
   gap: 8px;
 }
 .nameEnCopy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--h-text-3);
   cursor: pointer;
@@ -344,11 +362,22 @@
 .nameEnCopy:hover {
   color: var(--h-text);
 }
+.nameEnCopy[data-copy-state="copied"] {
+  color: var(--h-ok);
+  border-color: color-mix(in srgb, var(--h-ok) 42%, var(--h-line));
+  background: var(--h-ok-soft);
+}
+.nameEnCopy[data-copy-state="error"] {
+  color: var(--h-err);
+  border-color: color-mix(in srgb, var(--h-err) 40%, var(--h-line));
+  background: color-mix(in srgb, var(--h-err) 8%, transparent);
+}
 .detailPills {
   display: flex;
+  min-width: 0;
   gap: 8px;
   align-items: center;
-  margin-bottom: 16px;
+  flex: 1 1 auto;
   flex-wrap: wrap;
 }
 .detailDesc {
@@ -391,22 +420,26 @@
 
 .metaRow {
   display: flex;
+  align-items: baseline;
   gap: 18px;
   flex-wrap: wrap;
   font-size: 12px;
+  line-height: 1.5;
   color: var(--h-text-3);
 }
 .metaItem {
   display: inline-flex;
   gap: 6px;
-  align-items: center;
+  align-items: baseline;
 }
 .metaK {
   color: var(--h-text-3);
+  line-height: inherit;
 }
 .metaV {
   color: var(--h-text-2);
   font-family: var(--h-font-mono);
+  line-height: inherit;
 }
 
 .detailBody {
@@ -493,16 +526,224 @@
   gap: 8px;
 }
 
+.markdownCard {
+  overflow-x: auto;
+  overflow-y: visible;
+  border: 1px solid var(--h-line);
+  border-radius: 12px;
+  background: var(--h-bg-pane);
+}
+
+.markdownState {
+  padding: 18px 20px;
+  color: var(--h-text-3);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.markdownState[data-tone="error"] {
+  color: var(--h-err);
+}
+
+.skillMarkdown {
+  padding: 22px 26px;
+  color: var(--h-text);
+  font-size: 13.5px;
+  line-height: 1.76;
+}
+
+.skillMarkdown h1,
+.skillMarkdown h2,
+.skillMarkdown h3,
+.skillMarkdown h4 {
+  color: var(--h-text);
+  line-height: 1.28;
+  margin: 1.1em 0 0.55em;
+}
+
+.skillMarkdown h1:first-child,
+.skillMarkdown h2:first-child,
+.skillMarkdown h3:first-child,
+.skillMarkdown h4:first-child,
+.skillMarkdown p:first-child {
+  margin-top: 0;
+}
+
+.skillMarkdown h1 {
+  font-size: 22px;
+}
+
+.skillMarkdown h2 {
+  font-size: 17px;
+}
+
+.skillMarkdown h3,
+.skillMarkdown h4 {
+  font-size: 14px;
+}
+
+.skillMarkdown p {
+  margin: 0 0 0.9em;
+}
+
+.skillMarkdown ul,
+.skillMarkdown ol {
+  margin: 0.3em 0 1em;
+  padding-left: 1.4em;
+}
+
+.skillMarkdown li + li {
+  margin-top: 0.25em;
+}
+
+.skillMarkdown blockquote {
+  margin: 1em 0;
+  padding: 0.15em 0 0.15em 1em;
+  border-left: 3px solid var(--h-line);
+  color: var(--h-text-2);
+}
+
+.skillMarkdown a {
+  color: var(--h-accent);
+  text-decoration: none;
+}
+
+.skillMarkdown a:hover {
+  text-decoration: underline;
+}
+
+.skillMarkdown code {
+  border-radius: 5px;
+  background: var(--h-bg-code);
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 0.92em;
+  padding: 0.12em 0.36em;
+}
+
+.skillMarkdown :global([data-streamdown="code-block"]) {
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 10px;
+  background: var(--h-bg-code);
+}
+
+.skillMarkdown :global([data-streamdown="code-block-header"]) {
+  border-bottom: 1px solid var(--h-line-soft);
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  padding: 7px 12px;
+}
+
+.skillMarkdown :global([data-streamdown="code-block-body"]) {
+  overflow-x: auto;
+}
+
+.skillMarkdown :global([data-streamdown="code-block-body"] pre) {
+  margin: 0;
+  padding: 12px 14px;
+  background: transparent;
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.58;
+  white-space: pre-wrap;
+}
+
+.skillMarkdown :global([data-streamdown="code-block-body"] code) {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.skillMarkdown table {
+  width: max-content;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 12px;
+}
+
+.skillMarkdown th,
+.skillMarkdown td {
+  border: 1px solid var(--h-line-soft);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.skillMarkdown hr {
+  margin: 18px 0;
+  border: 0;
+  border-top: 1px solid var(--h-line);
+}
+
+.sourceCard {
+  display: grid;
+  gap: 12px;
+}
+
+.sourceRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.sourceIcon {
+  color: var(--h-text-3);
+}
+
+.sourceText {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.sourceLabel {
+  color: var(--h-text-3);
+  font-size: 11.5px;
+}
+
+.sourceText code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--h-text-2);
+  background: var(--h-bg-code);
+  border-radius: 6px;
+  padding: 5px 7px;
+}
+
+.sourceHint {
+  padding-top: 12px;
+  border-top: 1px dashed var(--h-line);
+  color: var(--h-text-3);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 /* 按钮 */
 .btn,
 .btnPrimary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   gap: 6px;
+  min-width: 0;
   height: 30px;
   padding: 0 12px;
   border-radius: 8px;
   font-size: 12.5px;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   font-family: var(--h-font-cn);
   border: 1px solid var(--h-line);
@@ -511,6 +752,16 @@
 }
 .btn:hover {
   background: var(--h-bg-soft);
+}
+.btn[data-copy-state="copied"] {
+  color: var(--h-ok);
+  border-color: color-mix(in srgb, var(--h-ok) 42%, var(--h-line));
+  background: var(--h-ok-soft);
+}
+.btn[data-copy-state="error"] {
+  color: var(--h-err);
+  border-color: color-mix(in srgb, var(--h-err) 40%, var(--h-line));
+  background: color-mix(in srgb, var(--h-err) 8%, transparent);
 }
 .btnPrimary {
   background: var(--h-accent);

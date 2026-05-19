@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { debugBus, type DebugEntry, type DebugEntryLevel, type DebugEntryType } from "@/lib/debug-bus";
+import { CopyButton } from "@/components/ui/copy-button";
 import s from "./settings.module.css";
 
 const TYPE_OPTIONS: { id: DebugEntryType | "all"; label: string }[] = [
@@ -51,7 +52,6 @@ export function DebugSection({ showHeading = true }: DebugSectionProps) {
   const [search, setSearch] = useState("");
   const [paused, setPaused] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-  const [copyHint, setCopyHint] = useState("");
 
   useEffect(() => {
     debugBus.setPaused(paused);
@@ -76,16 +76,6 @@ export function DebugSection({ showHeading = true }: DebugSectionProps) {
     }
     return { total: entries.length, errors, restFailures };
   }, [entries]);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(safeStringify(debugBus.snapshot()));
-      setCopyHint("已复制到剪贴板");
-    } catch {
-      setCopyHint("复制失败：浏览器可能未授予剪贴板权限");
-    }
-    setTimeout(() => setCopyHint(""), 2500);
-  };
 
   const toggleExpanded = (id: number) => {
     setExpanded((prev) => {
@@ -158,8 +148,7 @@ export function DebugSection({ showHeading = true }: DebugSectionProps) {
           <span>暂停采集</span>
         </label>
         <button className={s.btn} onClick={() => debugBus.clear()}>清空</button>
-        <button className={s.btn} onClick={handleCopy}>导出 JSON</button>
-        {copyHint ? <span className={s.desc} style={{ margin: 0 }}>{copyHint}</span> : null}
+        <CopyButton className={s.btn} text={() => safeStringify(debugBus.snapshot())}>导出 JSON</CopyButton>
       </div>
 
       <div

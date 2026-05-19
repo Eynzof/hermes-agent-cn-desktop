@@ -72,6 +72,8 @@ interface GooseComposerProps {
   headerLabel?: string;
   /** Empty-state hints shown only in big variant when textarea is empty. */
   hints?: ComposerHint[];
+  /** Keyboard shortcut for submitting; plain Enter keeps the existing chat behavior. */
+  submitShortcut?: "enter" | "shift-enter";
   loadingPlaceholder?: string;
   modelPicker?: ComposerModelPickerProps;
   contextUsage?: ComposerContextUsage | null;
@@ -96,6 +98,7 @@ export function GooseComposer({
   headerLabel = "新任务",
   loadingPlaceholder,
   hints,
+  submitShortcut = "enter",
   modelPicker,
   contextUsage,
   initialWorkspacePath = "",
@@ -359,7 +362,13 @@ export function GooseComposer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && !event.shiftKey && !event.altKey) {
+    if (event.nativeEvent.isComposing || event.key !== "Enter" || event.altKey) return;
+    const shouldSubmit =
+      submitShortcut === "shift-enter"
+        ? event.shiftKey
+        : !event.shiftKey;
+
+    if (shouldSubmit) {
       event.preventDefault();
       void send();
     }

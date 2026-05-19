@@ -71,7 +71,7 @@ function SessionRow({ session, state, active, meta, onClick }: SessionRowProps) 
     >
       <div className={s.ttl}>
         <span className={s.dot} data-state={state === "idle" ? undefined : state} />
-        <span>{title}</span>
+        <span className={s.ttlText}>{title}</span>
       </div>
       <div className={s.meta}>{meta}</div>
     </button>

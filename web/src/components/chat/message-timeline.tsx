@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useAtomValue } from "jotai";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle, ChevronRight, Info } from "lucide-react";
 import { showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
 import { MessageText } from "./message-text";
+import { CopyButton } from "@/components/ui/copy-button";
 import s from "./message-timeline.module.css";
 import { summarizeToolActivity } from "./tool-activity";
 import { groupConsecutiveTools, groupElapsedMs } from "./group-tools";
@@ -48,11 +49,6 @@ function formatTime(timestamp: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function copyText(text?: string) {
-  if (!text) return;
-  void navigator.clipboard?.writeText(text);
 }
 
 const PROGRESS_TRANSLATIONS: Record<string, string> = {
@@ -299,7 +295,12 @@ function ToolActivity({ tools }: { tools: ChatToolItem[] }) {
         aria-expanded={open}
         data-open={open}
       >
-        <span className={s.toolActivityChevron}>›</span>
+        <ChevronRight
+          className={s.toolActivityChevron}
+          size={14}
+          strokeWidth={2.25}
+          aria-hidden="true"
+        />
         <span className={s.toolStatus} data-status={summary.status} />
         <span className={s.toolActivityLabel}>{summary.label}</span>
         {summary.meta ? <span className={s.toolActivityMeta}>{summary.meta}</span> : null}
@@ -607,9 +608,9 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel }: 
           <span className={s.messageActionsControls}>
             <span>{formatTime(message.createdAt)}</span>
             {copyable ? (
-              <button type="button" onClick={() => copyText(copyable)}>
+              <CopyButton text={copyable} showStatusIcon={false}>
                 复制
-              </button>
+              </CopyButton>
             ) : null}
           </span>
           {message.stats ? <MessageStatsFooter stats={message.stats} /> : null}

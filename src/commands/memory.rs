@@ -208,7 +208,7 @@ pub fn add_memory_entry(
         return Ok(MemoryMutationResult {
             success: false,
             error: Some(format!(
-                "超过代理记忆上限（{} / {} 字符）",
+                "超过记忆上限（{} / {} 字符）",
                 char_count(&next),
                 MEMORY_CHAR_LIMIT
             )),
@@ -246,7 +246,7 @@ pub fn update_memory_entry(
         return Ok(MemoryMutationResult {
             success: false,
             error: Some(format!(
-                "超过代理记忆上限（{} / {} 字符）",
+                "超过记忆上限（{} / {} 字符）",
                 char_count(&next),
                 MEMORY_CHAR_LIMIT
             )),

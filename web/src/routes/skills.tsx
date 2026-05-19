@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Copy, Folder, Info, Languages, Lock, Package, Plus, RefreshCw, User } from "lucide-react";
 import type { SkillInfo } from "@hermes/protocol";
-import { useSkills, useToggleSkill } from "@/hooks/use-skills";
+import { useSkillMarkdown, useSkills, useToggleSkill } from "@/hooks/use-skills";
 import { Pill, Dot } from "@/components/ui/pill";
 import {
   categoryTranslations,
@@ -9,20 +9,34 @@ import {
   translateCategory,
   translateSkill,
 } from "@/lib/skill-translations";
+import { MarkdownText } from "@/components/chat/markdown-renderer";
 import { TopBarActions } from "@/components/top-bar/top-bar";
+import { CopyButton } from "@/components/ui/copy-button";
 import s from "./skills.module.css";
 
 type Tab = "builtin" | "user";
 type Filter = "all" | "enabled" | "disabled";
 type Lang = "zh" | "en";
 
-/**
- * `/api/skills` 当前不返回 `origin` 字段，且 Hermes 安装的所有 skill 都来自
- * `~/.hermes/skills/`（即"内置"）。这里用前端启发式：以 `user/` 开头的 skill
- * name 视为"自建"，其余视为"内置"。等后端补 `origin` 字段后可以移除此函数。
- */
+function skillOrigin(skill: SkillInfo): "builtin" | "user" | "external" {
+  return skill.origin ?? (skill.name.startsWith("user/") ? "user" : "builtin");
+}
+
 function isUserSkill(skill: SkillInfo): boolean {
-  return skill.name.startsWith("user/");
+  return skillOrigin(skill) !== "builtin";
+}
+
+function sourceLabel(origin: ReturnType<typeof skillOrigin>): string {
+  if (origin === "builtin") return "Hermes 内置";
+  if (origin === "external") return "外部目录";
+  return "用户自建";
+}
+
+function markdownWithoutFrontmatter(content: string): string {
+  const normalized = content.replace(/^\uFEFF/, "");
+  const match = normalized.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/);
+  if (!match) return content;
+  return normalized.slice(match[0].length).replace(/^\s+/, "");
 }
 
 export function SkillsRoute() {
@@ -317,29 +331,42 @@ function SkillDetail({ skill, tab, lang, setLang, onToggle }: SkillDetailProps) 
   const tr = translateSkill(skill.name, skill.description);
   const isTranslated = skill.name in skillTranslations;
   const cnCategory = translateCategory(skill.category);
-
-  const handleCopy = (text: string) => {
-    void navigator.clipboard.writeText(text);
-  };
+  const origin = skillOrigin(skill);
+  const sourcePath = skill.source_path || "后端未返回来源目录";
+  const skillFile = skill.skill_file || "";
+  const markdownQuery = useSkillMarkdown(skill.name);
+  const markdown = markdownQuery.data;
+  const canReadMarkdown = Boolean(window.hermesDesktop?.readSkillMarkdown);
 
   return (
     <section className={s.detail}>
       <div className={s.detailHead}>
         <div className={s.detailHeadRow1}>
           <h1 className={s.detailHeadTitle}>{tr.displayName}</h1>
+        </div>
+        <div className={s.detailHeadRow2}>
           <span className={`${s.rowTag} ${tab === "builtin" ? s.rowTagBuiltin : s.rowTagUser}`}>
             {tab === "builtin" ? "内置" : "自建"}
           </span>
+          <div className={s.detailPills}>
+            <Pill tone={skill.enabled ? "ok" : "neutral"}>
+              <Dot tone={skill.enabled ? "ok" : "neutral"} />
+              {skill.enabled ? "已启用" : "已禁用"}
+            </Pill>
+            <Pill>类目 · {cnCategory}</Pill>
+            {!isTranslated && tab === "builtin" && (
+              <Pill tone="warn">未翻译 · 显示英文原文</Pill>
+            )}
+          </div>
           <div className={s.detailHeadActions}>
-            <button
-              type="button"
+            <CopyButton
+              text={skill.name}
               className={s.btn}
-              onClick={() => handleCopy(skill.name)}
               title="复制原文 ID"
             >
               <Copy size={13} />
               复制 ID
-            </button>
+            </CopyButton>
             <button
               type="button"
               className={s.btn}
@@ -353,26 +380,15 @@ function SkillDetail({ skill, tab, lang, setLang, onToggle }: SkillDetailProps) 
         {isTranslated && (
           <div className={s.nameEnBig}>
             <span>{skill.name}</span>
-            <button
-              type="button"
+            <CopyButton
+              text={skill.name}
               className={s.nameEnCopy}
-              onClick={() => handleCopy(skill.name)}
             >
               复制
-            </button>
+            </CopyButton>
           </div>
         )}
 
-        <div className={s.detailPills}>
-          <Pill tone={skill.enabled ? "ok" : "neutral"}>
-            <Dot tone={skill.enabled ? "ok" : "neutral"} />
-            {skill.enabled ? "已启用" : "已禁用"}
-          </Pill>
-          <Pill>类目 · {cnCategory}</Pill>
-          {!isTranslated && tab === "builtin" && (
-            <Pill tone="warn">未翻译 · 显示英文原文</Pill>
-          )}
-        </div>
 
         {tab === "builtin" && (
           <div className={s.readonlyNotice}>
@@ -396,7 +412,7 @@ function SkillDetail({ skill, tab, lang, setLang, onToggle }: SkillDetailProps) 
           </span>
           <span className={s.metaItem}>
             <span className={s.metaK}>来源</span>
-            <span className={s.metaV}>{tab === "builtin" ? "Hermes 内置" : "用户自建"}</span>
+            <span className={s.metaV}>{sourceLabel(origin)}</span>
           </span>
         </div>
       </div>
@@ -435,12 +451,43 @@ function SkillDetail({ skill, tab, lang, setLang, onToggle }: SkillDetailProps) 
             ) : (
               <p className={s.descriptionCardOriginal}>{skill.description}</p>
             )}
-            <div className={s.descriptionCardFooter}>
-              <Languages size={13} />
-              {isTranslated
-                ? "中文版基于 SKILL.md description 字段翻译。完整 SKILL.md 内容请到来源目录查看。"
-                : "此 Skill 暂未翻译，显示上游英文 description。"}
+            {isTranslated ? (
+              <div className={s.descriptionCardFooter}>
+                <Languages size={13} />
+                中文版基于 SKILL.md description 字段翻译。完整 SKILL.md 内容请到来源目录查看。
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <section className={s.sec}>
+          <div className={s.secHead}>
+            <h2>SKILL.md</h2>
+            <div className={s.secHeadRight}>
+              {markdown?.content ? (
+                <CopyButton text={markdown.content} className={s.btn}>
+                  <Copy size={13} />
+                  复制 Markdown
+                </CopyButton>
+              ) : null}
             </div>
+          </div>
+          <div className={s.markdownCard} aria-busy={markdownQuery.isFetching}>
+            {!canReadMarkdown ? (
+              <div className={s.markdownState}>当前运行环境不支持读取本地 SKILL.md，请在桌面端查看。</div>
+            ) : markdownQuery.isLoading ? (
+              <div className={s.markdownState}>正在读取 SKILL.md…</div>
+            ) : markdownQuery.isError ? (
+              <div className={s.markdownState} data-tone="error">
+                读取失败：{markdownQuery.error instanceof Error ? markdownQuery.error.message : "unknown error"}
+              </div>
+            ) : markdown?.content ? (
+              <div className={s.skillMarkdown}>
+                <MarkdownText text={markdownWithoutFrontmatter(markdown.content)} />
+              </div>
+            ) : (
+              <div className={s.markdownState}>没有可展示的 SKILL.md 内容。</div>
+            )}
           </div>
         </section>
 
@@ -448,11 +495,36 @@ function SkillDetail({ skill, tab, lang, setLang, onToggle }: SkillDetailProps) 
           <div className={s.secHead}>
             <h2>来源目录</h2>
           </div>
-          <div className={s.descriptionCard}>
-            <p style={{ fontSize: 13, color: "var(--h-text-2)" }}>
-              <Folder size={13} style={{ display: "inline", marginRight: 6, verticalAlign: "-2px" }} />
-              来源由 Hermes 后端在 <code style={{ fontFamily: "var(--h-font-mono)", background: "var(--h-bg-code)", padding: "1px 5px", borderRadius: 4, fontSize: 12 }}>~/.hermes/skills/</code> 与外部目录中扫描得到。
-              SKILL.md 全文、触发规则、文件清单等详细信息将在后端补 <code style={{ fontFamily: "var(--h-font-mono)", background: "var(--h-bg-code)", padding: "1px 5px", borderRadius: 4, fontSize: 12 }}>/api/skills/{`{name}`}</code> 端点后展示。
+          <div className={`${s.descriptionCard} ${s.sourceCard}`}>
+            <div className={s.sourceRow}>
+              <Folder size={14} className={s.sourceIcon} />
+              <div className={s.sourceText}>
+                <span className={s.sourceLabel}>实际安装目录</span>
+                <code>{sourcePath}</code>
+              </div>
+              {skill.source_path && (
+                <CopyButton text={skill.source_path} className={s.btn}>
+                  <Copy size={13} />
+                  复制
+                </CopyButton>
+              )}
+            </div>
+            {skillFile && (
+              <div className={s.sourceRow}>
+                <Folder size={14} className={s.sourceIcon} />
+                <div className={s.sourceText}>
+                  <span className={s.sourceLabel}>SKILL.md</span>
+                  <code>{skillFile}</code>
+                </div>
+                <CopyButton text={skillFile} className={s.btn}>
+                  <Copy size={13} />
+                  复制
+                </CopyButton>
+              </div>
+            )}
+            <p className={s.sourceHint}>
+              这里展示的是后端实际扫描到的 Skill 副本。内置 Skill 会从自带 runtime 包同步到当前 Hermes home；
+              自建或外部目录 Skill 则显示它们自己的安装位置。
             </p>
           </div>
         </section>

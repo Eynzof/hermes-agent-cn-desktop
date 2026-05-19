@@ -4,4 +4,5 @@ pub mod gateway;
 pub mod memory;
 pub mod profiles;
 pub mod runtime_manager;
+pub mod skills;
 pub mod sse_proxy;

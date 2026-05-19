@@ -16,6 +16,7 @@ import type {
   SwitchProfileInput,
   SwitchProfileResult,
 } from "@hermes/protocol";
+import type { SkillMarkdownResult } from "./runtime";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
 
@@ -122,6 +123,11 @@ const tauriBridge = {
   async switchProfile(input: SwitchProfileInput): Promise<SwitchProfileResult> {
     const inv = await ensureInvoke();
     return inv("switch_profile", { input });
+  },
+
+  async readSkillMarkdown(input: { name: string }): Promise<SkillMarkdownResult> {
+    const inv = await ensureInvoke();
+    return inv("read_skill_markdown", { input });
   },
 
   async readMemory() {

@@ -59,6 +59,13 @@ export interface MemoryMutationResult {
   error?: string | null;
 }
 
+export interface SkillMarkdownResult {
+  name: string;
+  path: string;
+  content: string;
+  sizeBytes: number;
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -87,6 +94,7 @@ declare global {
       installRuntimeUpdate?(): Promise<RuntimeInstallUpdateResult>;
       rollbackRuntime?(): Promise<RuntimeInstallUpdateResult>;
       switchProfile?(input: SwitchProfileInput): Promise<SwitchProfileResult>;
+      readSkillMarkdown?(input: { name: string }): Promise<SkillMarkdownResult>;
       readMemory?(): Promise<MemoryInfo>;
       addMemoryEntry?(content: string): Promise<MemoryMutationResult>;
       updateMemoryEntry?(index: number, content: string): Promise<MemoryMutationResult>;

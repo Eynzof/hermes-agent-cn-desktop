@@ -28,6 +28,7 @@ import {
 import { showReasoningAtom } from "@/stores/ui";
 import { postJSON } from "@/lib/transport";
 import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
+import { CopyButton } from "@/components/ui/copy-button";
 import s from "./settings.module.css";
 
 /* ── General ─────────────────────────────────────────────────────────── */
@@ -381,7 +382,6 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
   const [restarting, setRestarting] = useState(false);
   const [runtimeMessage, setRuntimeMessage] = useState("");
   const [aboutMessage, setAboutMessage] = useState("");
-  const [copyMessage, setCopyMessage] = useState("");
 
   const handleRestart = async () => {
     setRestarting(true);
@@ -453,14 +453,6 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     await Promise.all([runtimeInfo.refetch(), statusQuery.refetch()]);
   };
 
-  const handleCopyDiagnostics = async () => {
-    await copyToClipboard(JSON.stringify(diagnostics, null, 2), setCopyMessage, "已复制诊断 JSON");
-  };
-
-  const handleCopyCommand = async () => {
-    await copyToClipboard(process?.commandLine ?? "", setCopyMessage, "已复制启动命令");
-  };
-
   const handleOpenPath = async (path: string | undefined, label: string, setMessage = setRuntimeMessage) => {
     if (!path || !window.hermesDesktop?.openWorkspacePath) return;
     setRuntimeMessage("");
@@ -497,10 +489,10 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           <RefreshCw size={13} />
           {refreshing ? "刷新中" : "刷新状态"}
         </button>
-        <button className={s.btn} type="button" onClick={handleCopyDiagnostics}>
+        <CopyButton className={s.btn} text={() => JSON.stringify(diagnostics, null, 2)}>
           <Copy size={13} />
           复制诊断 JSON
-        </button>
+        </CopyButton>
         <button
           className={s.btn}
           type="button"
@@ -524,7 +516,6 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           {restarting ? "重启中…" : "重启 Gateway"}
         </button>
       </div>
-      {copyMessage && <div className={s.runtimeMessage}>{copyMessage}</div>}
       {aboutMessage && <div className={s.runtimeMessage} data-tone="error">{aboutMessage}</div>}
 
       <div className={s.aboutDebugGrid}>
@@ -543,7 +534,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             <div className={s.commandBlock}>
               <div className={s.commandBlockHeader}>
                 <span><Terminal size={13} /> 启动命令</span>
-                <button className={s.inlineCopyButton} type="button" onClick={handleCopyCommand}>复制</button>
+                <CopyButton className={s.inlineCopyButton} text={process.commandLine}>复制</CopyButton>
               </div>
               <code>{process.commandLine}</code>
             </div>
@@ -763,21 +754,6 @@ function formatDateTime(value: string | undefined): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-CN", { hour12: false });
-}
-
-async function copyToClipboard(
-  value: string,
-  setMessage: (message: string) => void,
-  successMessage: string,
-): Promise<void> {
-  if (!value) return;
-  try {
-    await navigator.clipboard.writeText(value);
-    setMessage(successMessage);
-  } catch {
-    setMessage("复制失败：浏览器未授予剪贴板权限");
-  }
-  window.setTimeout(() => setMessage(""), 2400);
 }
 
 function formatRuntimeUpdateResult(result: RuntimeUpdateCheckResult): string {

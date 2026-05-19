@@ -378,6 +378,18 @@
   color: var(--h-text);
 }
 
+.btn[data-copy-state="copied"] {
+  border-color: color-mix(in srgb, var(--h-ok) 40%, var(--h-line));
+  background: var(--h-ok-soft);
+  color: var(--h-ok);
+}
+
+.btn[data-copy-state="error"] {
+  border-color: color-mix(in srgb, var(--h-err) 40%, var(--h-line));
+  background: color-mix(in srgb, var(--h-err) 8%, transparent);
+  color: var(--h-err);
+}
+
 .btnPrimary {
   border: 1px solid var(--h-accent);
   background: var(--h-accent);
@@ -706,8 +718,19 @@
   background: transparent;
   color: var(--h-accent);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: var(--h-font-cn);
   font-size: 11px;
+}
+
+.inlineCopyButton[data-copy-state="copied"] {
+  color: var(--h-ok);
+}
+
+.inlineCopyButton[data-copy-state="error"] {
+  color: var(--h-err);
 }
 
 .commandBlock code {

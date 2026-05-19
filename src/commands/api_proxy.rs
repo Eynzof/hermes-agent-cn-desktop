@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::error::AppError;
+use crate::process::dashboard::{build_gateway_url, fetch_session_token};
 use crate::session_archive;
 use crate::session_log;
 use crate::state::AppState;
@@ -46,7 +47,7 @@ static EXTERNAL_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .expect("valid external HTTP client")
 });
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiRequestInput {
     pub path: String,
@@ -432,7 +433,38 @@ pub async fn api_request(
             inner.hermes_home.clone(),
         )
     };
-    api_request_impl(input, &api_base_url, session_token.as_deref(), &hermes_home).await
+
+    let first = api_request_impl(
+        input.clone(),
+        &api_base_url,
+        session_token.as_deref(),
+        &hermes_home,
+    )
+    .await?;
+    if first.status != 401 {
+        return Ok(first);
+    }
+
+    // Dashboard session tokens are process-local. If the dashboard restarts
+    // while the Tauri process remains alive, the cached token becomes stale and
+    // every proxied request fails with 401. Refresh from the dashboard HTML and
+    // retry once so ordinary UI reads recover without requiring an app restart.
+    let fresh_token = match std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok() {
+        Some(token) => Some(token),
+        None => fetch_session_token(&api_base_url).await,
+    };
+    if fresh_token.is_none() || fresh_token == session_token {
+        return Ok(first);
+    }
+
+    let fresh_gateway_url = build_gateway_url(&api_base_url, fresh_token.as_deref());
+    {
+        let mut inner = state.inner.lock()?;
+        inner.session_token = fresh_token.clone();
+        inner.gateway_url = fresh_gateway_url;
+    }
+
+    api_request_impl(input, &api_base_url, fresh_token.as_deref(), &hermes_home).await
 }
 
 /// Proxy an HTTP request to an arbitrary external URL (15s timeout).

@@ -9,6 +9,7 @@ import {
   usePollOAuthSession,
   useCancelOAuthSession,
 } from "@/hooks/use-oauth-providers";
+import { CopyButton } from "@/components/ui/copy-button";
 import settings from "./settings.module.css";
 import s from "./settings-oauth-section.module.css";
 
@@ -120,12 +121,9 @@ export function OAuthProvidersSection() {
                 </button>
               )}
               {!provider.status.logged_in && provider.flow === "external" && provider.cli_command && (
-                <button
-                  className={settings.btn}
-                  onClick={() => navigator.clipboard.writeText(provider.cli_command!)}
-                >
+                <CopyButton className={settings.btn} text={provider.cli_command}>
                   复制命令
-                </button>
+                </CopyButton>
               )}
               {canDisconnect && (
                 <button
@@ -345,12 +343,9 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
             </p>
             <div className={s.userCode}>{startResult.user_code}</div>
             <div className={s.modalActions}>
-              <button
-                className={settings.btn}
-                onClick={() => navigator.clipboard.writeText(startResult.user_code)}
-              >
+              <CopyButton className={settings.btn} text={startResult.user_code}>
                 复制验证码
-              </button>
+              </CopyButton>
               <button
                 className={s.linkBtn}
                 onClick={() => window.open(startResult.verification_url, "_blank")}

@@ -511,6 +511,7 @@ fn main() {
             commands::runtime_manager::runtime_install_update,
             commands::runtime_manager::runtime_rollback,
             commands::profiles::switch_profile,
+            commands::skills::read_skill_markdown,
             commands::memory::read_memory,
             commands::memory::add_memory_entry,
             commands::memory::update_memory_entry,

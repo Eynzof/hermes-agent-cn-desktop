@@ -296,6 +296,9 @@ export const SkillInfo = z.object({
   description: z.string(),
   category: z.string().nullable(),
   enabled: z.boolean(),
+  origin: z.enum(["builtin", "user", "external"]).optional(),
+  source_path: z.string().optional(),
+  skill_file: z.string().optional(),
 });
 export type SkillInfo = z.infer<typeof SkillInfo>;
 
