@@ -157,8 +157,16 @@ fn downloads_root() -> PathBuf {
     runtime_root().join("downloads")
 }
 
+pub fn gateway_runtime_dir() -> PathBuf {
+    runtime_root().join("gateway-runtime")
+}
+
 fn current_record_path() -> PathBuf {
     runtime_root().join(CURRENT_FILE)
+}
+
+pub fn current_record_path_display() -> String {
+    current_record_path().to_string_lossy().to_string()
 }
 
 fn read_json_file<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
@@ -326,12 +334,15 @@ fn configured_public_key() -> Option<String> {
 /// Get current runtime information.
 pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
     let current = read_current_record();
-    let mode = if std::env::var("HERMES_DESKTOP_AGENT_COMMAND").is_ok() {
-        "dev-command"
-    } else if current.is_some() {
+    let external_allowed = crate::process::dashboard::external_agent_allowed();
+    let mode = if current.is_some() {
         "managed"
+    } else if external_allowed && std::env::var("HERMES_DESKTOP_AGENT_COMMAND").is_ok() {
+        "external-command"
+    } else if external_allowed {
+        "external-path"
     } else {
-        "dev-source"
+        "managed-pending"
     };
 
     let manifest_url = configured_manifest_url();

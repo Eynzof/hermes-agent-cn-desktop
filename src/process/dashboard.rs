@@ -76,13 +76,12 @@ async fn dashboard_supports_uploads(api_base_url: &str) -> bool {
 }
 
 /// Check whether the dashboard has the P-009 SSE/POST routes
-/// (`/api/v2/events` + `/api/v2/rpc`). If absent, the desktop's default
-/// SSE transport will fail with "SSE closed during connect" — see
-/// issue #10. Caller should log an actionable warning, not refuse to
-/// start, so users can still fall back to WebSocket transport via
-/// `localStorage.HERMES_TRANSPORT = "ws"`.
+/// (`/api/v2/events` + `/api/v2/rpc`). Managed runtime mode treats this as a
+/// compatibility requirement so the desktop does not reuse an older external
+/// dashboard by accident.
 pub async fn dashboard_supports_sse(api_base_url: &str) -> bool {
     has_openapi_path(api_base_url, "/api/v2/events").await
+        && has_openapi_path(api_base_url, "/api/v2/rpc").await
 }
 
 async fn has_openapi_path(api_base_url: &str, path: &str) -> bool {
@@ -171,42 +170,88 @@ pub struct EnsureDashboardOptions {
     pub host: String,
     pub port: u16,
     pub hermes_home: String,
+    /// Whether the desktop is allowed to reuse/spawn a dashboard outside the
+    /// managed runtime directory. This is intentionally false for the product
+    /// and for managed dev: the kernel must live under runtime/current.json.
+    pub allow_external_agent: bool,
+    /// Whether an occupied primary port may fall back to port+1..port+20.
+    /// Production can do this because the Tauri bridge receives the final
+    /// apiBaseUrl. Vite dev proxy is fixed before Rust starts, so managed dev
+    /// keeps this false and asks the user to free the port instead.
+    pub allow_port_fallback: bool,
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name)
+        .ok()
+        .map(|value| {
+            let value = value.trim().to_ascii_lowercase();
+            matches!(value.as_str(), "1" | "true" | "yes" | "on")
+        })
+        .unwrap_or(false)
+}
+
+pub fn external_agent_allowed() -> bool {
+    env_flag("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT")
+        || env_flag("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD")
+}
+
+pub fn dev_external_dashboard_enabled() -> bool {
+    env_flag("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD")
 }
 
 /// Find and resolve the hermes executable path.
-/// Order: managed runtime (current.json) → HERMES_DESKTOP_AGENT_COMMAND env
-/// → "hermes" on PATH.
+/// Order: managed runtime (current.json) → explicitly allowed external
+/// HERMES_DESKTOP_AGENT_COMMAND → explicitly allowed "hermes" on PATH.
 ///
 /// The managed runtime is preferred because it's a fork-specific binary
-/// we installed and signature-verified ourselves. Falling through to PATH
-/// `hermes` is the legacy path that hits upstream `hermes-agent` (without
-/// P-009 SSE routes) on most user machines — see issue #10.
-fn resolve_hermes_command() -> (String, Vec<String>) {
+/// we installed and signature-verified ourselves. Falling through to PATH is
+/// disabled by default because it hits whatever happens to be installed on the
+/// user machine and lets the kernel spill outside the desktop runtime folder.
+fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<String>), AppError> {
     if let Some(record) = crate::process::runtime::read_current_record() {
         log::info!(
             "Using managed runtime v{} at {}",
             record.version,
             record.executable_path
         );
-        return (record.executable_path, vec![]);
+        return Ok((record.executable_path, vec![]));
     }
 
     if let Ok(cmd) = std::env::var("HERMES_DESKTOP_AGENT_COMMAND") {
         if !cmd.is_empty() {
+            if !allow_external_agent {
+                return Err(AppError::RuntimeUnavailable(format!(
+                    "Managed runtime is not installed at {} and external agent command is disabled. \
+                     Install a runtime first, or set HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT=1 only for explicit debugging.",
+                    crate::process::runtime::current_record_path_display()
+                )));
+            }
             // Shell-wrapped command (matches Electron's `shell: true` behavior)
             if cfg!(target_os = "windows") {
-                return ("cmd".to_string(), vec!["/C".to_string(), cmd]);
+                return Ok(("cmd".to_string(), vec!["/C".to_string(), cmd]));
             } else {
-                return ("sh".to_string(), vec!["-c".to_string(), cmd]);
+                return Ok(("sh".to_string(), vec!["-c".to_string(), cmd]));
             }
         }
     }
-    ("hermes".to_string(), vec![])
+
+    if allow_external_agent {
+        log::warn!(
+            "Managed runtime is not installed; falling back to PATH `hermes` because external agents are explicitly allowed"
+        );
+        return Ok(("hermes".to_string(), vec![]));
+    }
+
+    Err(AppError::RuntimeUnavailable(format!(
+        "Managed runtime is not installed at {}. The desktop will not fall back to PATH `hermes`.",
+        crate::process::runtime::current_record_path_display()
+    )))
 }
 
 /// Spawn the hermes dashboard subprocess.
 fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<Child, AppError> {
-    let (program, mut prefix_args) = resolve_hermes_command();
+    let (program, mut prefix_args) = resolve_hermes_command(options.allow_external_agent)?;
 
     let api_args = vec![
         "dashboard".to_string(),
@@ -220,12 +265,23 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<Child, AppError> 
     prefix_args.extend(api_args);
 
     let mut cmd = Command::new(&program);
+    let gateway_runtime_dir = crate::process::runtime::gateway_runtime_dir();
+    let gateway_lock_dir = gateway_runtime_dir.join("token-locks");
+    let _ = std::fs::create_dir_all(&gateway_lock_dir);
+    let _ = std::fs::create_dir_all(&gateway_runtime_dir);
     cmd.args(&prefix_args)
         .env("HERMES_HOME", &options.hermes_home)
         .env(
             "HERMES_DASHBOARD_TUI",
             std::env::var("HERMES_DASHBOARD_TUI").unwrap_or_else(|_| "1".to_string()),
-        )
+        );
+    if std::env::var("HERMES_GATEWAY_LOCK_DIR").is_err() {
+        cmd.env("HERMES_GATEWAY_LOCK_DIR", gateway_lock_dir);
+    }
+    if std::env::var("HERMES_GATEWAY_RUNTIME_DIR").is_err() {
+        cmd.env("HERMES_GATEWAY_RUNTIME_DIR", gateway_runtime_dir);
+    }
+    cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -241,6 +297,13 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<Child, AppError> 
         .map_err(|e| AppError::DashboardStartup(e.to_string()))?;
     drain_dashboard_output(&mut child);
     Ok(child)
+}
+
+async fn dashboard_is_compatible(api_base_url: &str, hermes_home: &str) -> bool {
+    probe_dashboard(api_base_url).await
+        && dashboard_supports_uploads(api_base_url).await
+        && dashboard_supports_sse(api_base_url).await
+        && dashboard_matches_hermes_home(api_base_url, hermes_home).await
 }
 
 fn drain_dashboard_output(child: &mut Child) {
@@ -299,10 +362,13 @@ pub async fn ensure_hermes_dashboard(
 ) -> Result<DashboardHandle, AppError> {
     let api_base_url = dashboard_base_url(&options.host, options.port);
 
-    // Check if there's already a compatible dashboard running
-    if probe_dashboard(&api_base_url).await
-        && dashboard_supports_uploads(&api_base_url).await
-        && dashboard_matches_hermes_home(&api_base_url, &options.hermes_home).await
+    // Reuse an existing process only in explicit external-agent mode. Managed
+    // mode must spawn from runtime/current.json so the desktop never silently
+    // attaches to a user-installed or PATH-provided hermes.
+    let primary_occupied = probe_dashboard(&api_base_url).await;
+    if primary_occupied
+        && options.allow_external_agent
+        && dashboard_is_compatible(&api_base_url, &options.hermes_home).await
     {
         log::info!("Reusing existing dashboard at {}", api_base_url);
         return Ok(DashboardHandle {
@@ -317,9 +383,17 @@ pub async fn ensure_hermes_dashboard(
         host: options.host.clone(),
         port: options.port,
         hermes_home: options.hermes_home.clone(),
+        allow_external_agent: options.allow_external_agent,
+        allow_port_fallback: options.allow_port_fallback,
     };
 
-    if probe_dashboard(&api_base_url).await {
+    if primary_occupied {
+        if !options.allow_port_fallback {
+            return Err(AppError::DashboardStartup(format!(
+                "{} is already occupied by an existing dashboard. Managed dev mode refuses to reuse external dashboard processes; stop the process on port {} or set HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD=1 for an explicit external-dashboard session.",
+                api_base_url, options.port
+            )));
+        }
         log::warn!(
             "Dashboard at {} is not compatible; trying alternate ports",
             api_base_url
@@ -328,8 +402,8 @@ pub async fn ensure_hermes_dashboard(
         for candidate_port in fallback_ports(options.port) {
             let candidate_url = dashboard_base_url(&options.host, candidate_port);
             if probe_dashboard(&candidate_url).await {
-                if dashboard_supports_uploads(&candidate_url).await
-                    && dashboard_matches_hermes_home(&candidate_url, &options.hermes_home).await
+                if options.allow_external_agent
+                    && dashboard_is_compatible(&candidate_url, &options.hermes_home).await
                 {
                     return Ok(DashboardHandle {
                         api_base_url: candidate_url,

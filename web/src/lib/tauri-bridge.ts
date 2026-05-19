@@ -299,11 +299,13 @@ export async function installTauriBridge(): Promise<void> {
   // reliable dev/prod signal. Use Vite's explicit build mode instead.
   const isDevMode = isTauriDevMode();
 
-  // First-run in prod: Rust spawned the install task and returned
-  // immediately with empty state. Show the overlay and block here
-  // until the `runtime-status` event reports `ready`, then refetch
-  // the config so we get the populated apiBaseUrl/sessionToken.
-  if (!isDevMode && !config.apiBaseUrl) {
+  // First-run / managed dev: Rust spawned the install/start task and returned
+  // immediately with empty state. Show the overlay and block here until the
+  // `runtime-status` event reports `ready`, then refetch the config so we get
+  // the populated apiBaseUrl/sessionToken. In Vite dev we still avoid writing
+  // apiBaseUrl into window.__HERMES_RUNTIME__ later, but waiting here prevents
+  // the React app from racing the managed dashboard startup.
+  if (!config.apiBaseUrl) {
     const result = await waitForBootstrap("正在启动Hermes Agent内核...", () => inv("get_runtime_config"));
     if (result.failed) {
       // Leave the overlay up — the user needs to see the message

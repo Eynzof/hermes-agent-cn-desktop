@@ -228,6 +228,8 @@ async fn do_switch_profile(
         host: host.clone(),
         port,
         hermes_home: new_home.to_string(),
+        allow_external_agent: dashboard::external_agent_allowed(),
+        allow_port_fallback: true,
     })
     .await
     {
@@ -312,6 +314,8 @@ async fn try_recover_previous(
         host: host.to_string(),
         port,
         hermes_home: previous_home.to_string(),
+        allow_external_agent: dashboard::external_agent_allowed(),
+        allow_port_fallback: true,
     })
     .await?;
 

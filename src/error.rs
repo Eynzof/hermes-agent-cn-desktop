@@ -51,6 +51,9 @@ pub enum AppError {
     #[error("Runtime install failed: {0}")]
     RuntimeInstallFailed(String),
 
+    #[error("Runtime unavailable: {0}")]
+    RuntimeUnavailable(String),
+
     #[error("No previous runtime version to rollback to")]
     RuntimeNoPreviousVersion,
 

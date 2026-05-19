@@ -184,6 +184,46 @@ setup() → runtime::read_current_record() 返回 Some(record)
 
 冷启动延迟约 1-3s（cargo 优化构建 + 一次 ensure_dashboard 探测）。
 
+### 本地开发启动
+
+现在 `pnpm tauri:dev` 默认也走 managed runtime 路径，不再静默连接
+PATH 里的 `hermes`。脚本会先把相邻 checkout：
+
+```
+../hermes-agent-cn
+```
+
+安装进桌面端 runtime 目录里的独立 venv，然后写入 `current.json`：
+
+```
+~/Library/Application Support/cn.hermes.agent.desktop/runtime/
+  versions/dev-local-<version>-<commit>[-dirty-...]/venv/
+  current.json
+```
+
+这个 venv 是普通 wheel 安装，不是 editable install；dashboard 进程从
+`current.json.executablePath` 启动，所以代码和依赖都收束在 runtime
+目录里。开发时如果刚改过 `hermes-agent-cn`，重新运行：
+
+```
+pnpm runtime:install-local -- --force
+```
+
+再启动：
+
+```
+pnpm tauri:dev
+```
+
+只有明确需要连外部 dashboard 时才用旧模式：
+
+```
+pnpm tauri:dev:external
+```
+
+该模式会设置 `HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD=1` 和
+`HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT=1`，用于调试，不是产品默认路径。
+
 ## 五、Runtime 升级
 
 ```

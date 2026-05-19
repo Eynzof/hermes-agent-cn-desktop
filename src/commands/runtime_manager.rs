@@ -117,6 +117,8 @@ async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), AppError> 
         host,
         port,
         hermes_home,
+        allow_external_agent: dashboard::external_agent_allowed(),
+        allow_port_fallback: true,
     })
     .await?;
 

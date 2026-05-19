@@ -133,6 +133,9 @@ fn main() {
             // only as an emergency fallback to the old blocking path.
             let is_dev = std::env::var("HERMES_DESKTOP_DEV_URL").is_ok() || cfg!(debug_assertions);
             let async_bootstrap = std::env::var("HERMES_DESKTOP_SYNC_BOOTSTRAP").is_err();
+            let external_dev_dashboard = is_dev && dashboard::dev_external_dashboard_enabled();
+            let allow_external_agent = dashboard::external_agent_allowed();
+            let allow_port_fallback = !is_dev;
 
             if async_bootstrap {
                 {
@@ -149,10 +152,13 @@ fn main() {
                 let profile_for_task = current_profile.clone();
 
                 tauri::async_runtime::spawn(async move {
-                    let handle = if is_dev {
+                    let handle = if external_dev_dashboard {
                         let api_base_url = dashboard::dashboard_base_url(&host_for_task, port);
                         if !dashboard::probe_dashboard(&api_base_url).await {
-                            log::warn!("Dev mode: dashboard not reachable at {}", api_base_url);
+                            log::warn!(
+                                "External dev dashboard mode: dashboard not reachable at {}",
+                                api_base_url
+                            );
                         }
                         DashboardHandle {
                             api_base_url,
@@ -190,8 +196,8 @@ fn main() {
                         } else if info.current.is_none() {
                             log::warn!(
                                 "No managed runtime installed and update channel \
-                                 is not configured; relying on PATH `hermes` \
-                                 (likely upstream, missing SSE routes)"
+                                 is not configured. PATH `hermes` fallback is disabled; \
+                                 dashboard startup will fail until a managed runtime is installed."
                             );
                         }
 
@@ -205,6 +211,8 @@ fn main() {
                                 host: host_for_task,
                                 port,
                                 hermes_home: boot_home_for_task.clone(),
+                                allow_external_agent,
+                                allow_port_fallback,
                             },
                         )
                         .await
@@ -263,12 +271,15 @@ fn main() {
                 log::info!("Hermes Agent CN desktop bootstrapping in background");
                 Ok(())
             } else {
-                let handle = if is_dev {
+                let handle = if external_dev_dashboard {
                     let api_base_url = dashboard::dashboard_base_url(&host, port);
                     let alive =
                         tauri::async_runtime::block_on(dashboard::probe_dashboard(&api_base_url));
                     if !alive {
-                        log::warn!("Dev mode: dashboard not reachable at {}", api_base_url);
+                        log::warn!(
+                            "External dev dashboard mode: dashboard not reachable at {}",
+                            api_base_url
+                        );
                     }
                     DashboardHandle {
                         api_base_url,
@@ -333,6 +344,8 @@ fn main() {
                                     host: host_for_task,
                                     port,
                                     hermes_home: boot_home_for_task.clone(),
+                                    allow_external_agent,
+                                    allow_port_fallback,
                                 },
                             )
                             .await
@@ -406,8 +419,8 @@ fn main() {
                     if info.current.is_none() {
                         log::warn!(
                             "No managed runtime installed and update channel \
-                         is not configured; relying on PATH `hermes` \
-                         (likely upstream, missing SSE routes)"
+                         is not configured. PATH `hermes` fallback is disabled; \
+                         dashboard startup will fail until a managed runtime is installed."
                         );
                     }
 
@@ -416,6 +429,8 @@ fn main() {
                             host: host.clone(),
                             port,
                             hermes_home: boot_home_str.clone(),
+                            allow_external_agent,
+                            allow_port_fallback,
                         },
                     )) {
                         Ok(h) => h,
