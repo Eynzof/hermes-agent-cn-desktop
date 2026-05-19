@@ -3,6 +3,7 @@ import { AppTopBar } from "./app-top-bar";
 import { AppSidebar } from "./app-sidebar";
 import { AppStatusBar } from "./app-status-bar";
 import { SidebarVersionTag } from "./sidebar-version-tag";
+import { ModelOnboardingGuard } from "./model-onboarding-guard";
 import s from "./app-shell.module.css";
 
 interface AppShellProps {
@@ -19,7 +20,7 @@ export function AppShell({ children }: AppShellProps) {
         <AppSidebar />
         <SidebarVersionTag />
       </div>
-      <div className={s.mainSlot}>{children}</div>
+      <div className={s.mainSlot}>{children}<ModelOnboardingGuard /></div>
       <div className={s.statusbarSlot}>
         <AppStatusBar />
       </div>

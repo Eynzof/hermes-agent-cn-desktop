@@ -79,6 +79,7 @@
 .mainSlot {
   grid-column: 2;
   grid-row: 2;
+  position: relative;
   min-height: 0;
   min-width: 0;
   overflow: hidden;

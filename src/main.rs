@@ -28,54 +28,21 @@ fn emit_runtime_status(app: &tauri::AppHandle, phase: &str, message: &str) {
     );
 }
 
-fn looks_like_existing_hermes_home(path: &Path) -> bool {
-    path.join("config.yaml").is_file()
-        || path.join(".env").is_file()
-        || path.join("auth.json").is_file()
-        || path.join("state.db").is_file()
-}
-
 fn create_and_return(path: PathBuf) -> PathBuf {
     let _ = fs::create_dir_all(&path);
     path
 }
 
 fn resolve_hermes_home() -> PathBuf {
-    if let Ok(override_path) = std::env::var("HERMES_DESKTOP_HERMES_HOME") {
-        let trimmed = override_path.trim();
-        if !trimmed.is_empty() {
-            return create_and_return(PathBuf::from(trimmed));
-        }
+    if std::env::var_os("HERMES_DESKTOP_HERMES_HOME").is_some()
+        || std::env::var_os("HERMES_HOME").is_some()
+    {
+        log::warn!(
+            "Ignoring external HERMES_HOME overrides; desktop uses isolated managed runtime home"
+        );
     }
 
-    if let Ok(override_path) = std::env::var("HERMES_HOME") {
-        let trimmed = override_path.trim();
-        if !trimmed.is_empty() {
-            return create_and_return(PathBuf::from(trimmed));
-        }
-    }
-
-    // Reuse the normal Hermes installer home when it already exists. Starting
-    // with a fresh desktop-only home hides the user's provider config and makes
-    // the app fail with "No inference provider configured".
-    if let Some(local_data_dir) = dirs::data_local_dir() {
-        let hermes_home = local_data_dir.join("hermes");
-        if looks_like_existing_hermes_home(&hermes_home) {
-            return hermes_home;
-        }
-    }
-
-    if let Some(home_dir) = dirs::home_dir() {
-        let hermes_home = home_dir.join(".hermes");
-        if looks_like_existing_hermes_home(&hermes_home) {
-            return hermes_home;
-        }
-    }
-
-    let data_dir =
-        dirs::data_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")));
-    let hermes_home = data_dir.join("cn.hermes.agent.desktop").join("hermes-home");
-    create_and_return(hermes_home)
+    create_and_return(runtime::hermes_home_dir())
 }
 
 fn profile_hermes_home(base: &Path, profile: &str) -> PathBuf {

@@ -9,8 +9,8 @@ const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`Usage: pnpm tauri:dev:external
 
-Starts the legacy dev mode that attaches to an already running dashboard on
-HERMES_DESKTOP_API_PORT / 9119 and allows external PATH hermes fallback.`);
+Deprecated compatibility alias. The desktop is locked to its managed runtime,
+so this now starts the same managed dev path as pnpm tauri:dev.`);
   process.exit(0);
 }
 
@@ -19,8 +19,7 @@ const child = spawn(pnpm, ["exec", "tauri", "dev"], {
   stdio: "inherit",
   env: {
     ...process.env,
-    HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD: "1",
-    HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT: "1",
+    HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT: "0",
     HERMES_DASHBOARD_TUI: process.env.HERMES_DASHBOARD_TUI ?? "1",
   },
 });

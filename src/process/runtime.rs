@@ -204,10 +204,27 @@ fn runtime_binary_names() -> Vec<String> {
     ]
 }
 
-/// Get the runtime root directory (inside the app's data directory).
+/// Get the runtime root directory.
+///
+/// This is the single containment root for the desktop-managed Hermes
+/// environment: installed agent runtime versions, downloads, gateway runtime
+/// files, and the isolated HERMES_HOME all live under this directory.
+/// `HERMES_DESKTOP_RUNTIME_ROOT` may move the whole tree, but individual
+/// subdirectories are intentionally not independently overridable.
 pub fn runtime_root() -> PathBuf {
+    if let Ok(override_path) = std::env::var("HERMES_DESKTOP_RUNTIME_ROOT") {
+        let trimmed = override_path.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+
     let data_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     data_dir.join("cn.hermes.agent.desktop").join("runtime")
+}
+
+pub fn hermes_home_dir() -> PathBuf {
+    runtime_root().join("hermes-home")
 }
 
 fn versions_root() -> PathBuf {
@@ -1121,6 +1138,21 @@ mod tests {
         let payload = signature_payload(m);
         let sig = key.sign(&payload);
         m.signature = base64::engine::general_purpose::STANDARD.encode(sig.to_bytes());
+    }
+
+    // -------- containment roots --------
+
+    #[test]
+    #[serial]
+    fn runtime_root_override_moves_the_entire_desktop_runtime_tree() {
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", tmp.path());
+
+        assert_eq!(runtime_root(), tmp.path());
+        assert_eq!(hermes_home_dir(), tmp.path().join("hermes-home"));
+        assert_eq!(gateway_runtime_dir(), tmp.path().join("gateway-runtime"));
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 
     // -------- sha256_hex --------

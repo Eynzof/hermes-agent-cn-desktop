@@ -200,22 +200,32 @@ fn env_flag(name: &str) -> bool {
 }
 
 pub fn external_agent_allowed() -> bool {
-    env_flag("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT")
+    if env_flag("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT")
         || env_flag("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD")
+    {
+        log::warn!(
+            "Ignoring external desktop-agent flags; desktop is locked to the managed runtime"
+        );
+    }
+    false
 }
 
 pub fn dev_external_dashboard_enabled() -> bool {
-    env_flag("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD")
+    if env_flag("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD") {
+        log::warn!(
+            "Ignoring HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD; desktop is locked to the managed runtime"
+        );
+    }
+    false
 }
 
 /// Find and resolve the hermes executable path.
-/// Order: managed runtime (current.json) → explicitly allowed external
-/// HERMES_DESKTOP_AGENT_COMMAND → explicitly allowed "hermes" on PATH.
+/// Order: managed runtime (current.json) only.
 ///
-/// The managed runtime is preferred because it's a fork-specific binary
-/// we installed and signature-verified ourselves. Falling through to PATH is
-/// disabled by default because it hits whatever happens to be installed on the
-/// user machine and lets the kernel spill outside the desktop runtime folder.
+/// The desktop is deliberately locked to the fork-specific managed runtime so
+/// the kernel, HERMES_HOME, gateway pid/lock/status files, and runtime assets
+/// stay under one desktop-owned runtime root. External PATH / shell commands
+/// are not accepted, even in dev mode.
 fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<String>), AppError> {
     if let Some(record) = crate::process::runtime::read_current_record() {
         log::info!(
@@ -226,33 +236,15 @@ fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<Str
         return Ok((record.executable_path, vec![]));
     }
 
-    if let Ok(cmd) = std::env::var("HERMES_DESKTOP_AGENT_COMMAND") {
-        if !cmd.is_empty() {
-            if !allow_external_agent {
-                return Err(AppError::RuntimeUnavailable(format!(
-                    "Managed runtime is not installed at {} and external agent command is disabled. \
-                     Install a runtime first, or set HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT=1 only for explicit debugging.",
-                    crate::process::runtime::current_record_path_display()
-                )));
-            }
-            // Shell-wrapped command (matches Electron's `shell: true` behavior)
-            if cfg!(target_os = "windows") {
-                return Ok(("cmd".to_string(), vec!["/C".to_string(), cmd]));
-            } else {
-                return Ok(("sh".to_string(), vec!["-c".to_string(), cmd]));
-            }
-        }
-    }
-
-    if allow_external_agent {
+    if allow_external_agent || std::env::var("HERMES_DESKTOP_AGENT_COMMAND").is_ok() {
         log::warn!(
-            "Managed runtime is not installed; falling back to PATH `hermes` because external agents are explicitly allowed"
+            "Ignoring external agent configuration; desktop requires managed runtime at {}",
+            crate::process::runtime::current_record_path_display()
         );
-        return Ok(("hermes".to_string(), vec![]));
     }
 
     Err(AppError::RuntimeUnavailable(format!(
-        "Managed runtime is not installed at {}. The desktop will not fall back to PATH `hermes`.",
+        "Managed runtime is not installed at {}. The desktop is locked to its bundled managed runtime and will not fall back to PATH or HERMES_DESKTOP_AGENT_COMMAND.",
         crate::process::runtime::current_record_path_display()
     )))
 }
@@ -283,12 +275,8 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
             "HERMES_DASHBOARD_TUI",
             std::env::var("HERMES_DASHBOARD_TUI").unwrap_or_else(|_| "1".to_string()),
         );
-    if std::env::var("HERMES_GATEWAY_LOCK_DIR").is_err() {
-        cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir);
-    }
-    if std::env::var("HERMES_GATEWAY_RUNTIME_DIR").is_err() {
-        cmd.env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir);
-    }
+    cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
+        .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     // Windows: hide the console window for the child process
@@ -374,11 +362,12 @@ pub async fn ensure_hermes_dashboard(
 ) -> Result<DashboardHandle, AppError> {
     let api_base_url = dashboard_base_url(&options.host, options.port);
 
-    // Reuse an existing process only in explicit external-agent mode. Managed
-    // mode must spawn from runtime/current.json so the desktop never silently
-    // attaches to a user-installed or PATH-provided hermes.
+    // Reuse an existing dashboard only after the compatibility probe proves it
+    // is serving the same isolated runtime HERMES_HOME and supports the
+    // desktop-required routes. This keeps hot reload / second launch usable
+    // without falling back to a user-installed ~/.hermes or PATH runtime.
     let primary_occupied = probe_dashboard(&api_base_url).await;
-    let can_reuse_existing = options.allow_external_agent || !options.allow_port_fallback;
+    let can_reuse_existing = true;
     if primary_occupied
         && can_reuse_existing
         && dashboard_is_compatible(&api_base_url, &options.hermes_home).await
@@ -415,7 +404,7 @@ pub async fn ensure_hermes_dashboard(
     if primary_occupied {
         if !options.allow_port_fallback {
             return Err(AppError::DashboardStartup(format!(
-                "{} is already occupied by an incompatible dashboard. Stop the process on port {} or set HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD=1 for an explicit external-dashboard session.",
+                "{} is already occupied by another dashboard. Stop the process on port {} so the desktop can spawn its managed runtime dashboard.",
                 api_base_url, options.port
             )));
         }
@@ -488,6 +477,20 @@ pub async fn ensure_hermes_dashboard(
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn external_agent_escape_hatches_are_ignored() {
+        std::env::set_var("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT", "1");
+        std::env::set_var("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD", "1");
+
+        assert!(!external_agent_allowed());
+        assert!(!dev_external_dashboard_enabled());
+
+        std::env::remove_var("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT");
+        std::env::remove_var("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD");
+    }
 
     #[test]
     fn dashboard_base_url_standard() {

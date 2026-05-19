@@ -501,8 +501,21 @@ export function ModelsSection() {
   if (isLoading || configLoading) return <div className={s.desc}>加载中…</div>;
   if (!envVars || !config) return null;
 
+  const needsInitialModelSetup = !modelInfo?.model?.trim() || !modelInfo?.provider?.trim() || configuredCount === 0;
+
   return (
     <div className={s.modelsSettings}>
+      {needsInitialModelSetup && (
+        <div className={s.firstRunModelNotice}>
+          <div>
+            <strong>需要先完成模型初始化</strong>
+            <p>
+              当前独立 runtime 的 Hermes home 还没有可用模型。请选择一个服务商，粘贴 API Key，点击「保存配置」，再点击「设为当前模型」。
+            </p>
+          </div>
+          <span>推荐从 DeepSeek 开始 · <a href="https://platform.deepseek.com/" target="_blank" rel="noreferrer" className={s.link}>DeepSeek 开放平台 ↗</a></span>
+        </div>
+      )}
       <div className={s.modelsSectionHeader}>
         <div>
           <p className={s.desc}>

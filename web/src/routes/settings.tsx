@@ -651,7 +651,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           )}
         </DebugCard>
 
-        <DebugCard icon={<GitCommit size={15} />} title="最近提交" sub="显示 current.json 指向仓库的最近 5 条提交">
+        <DebugCard icon={<GitCommit size={15} />} title="最近提交" sub="显示 current.json 指向仓库的最近 5 条提交" wide>
           {source?.recentCommits.length ? (
             <div className={s.commitList}>
               {source.recentCommits.map((commit) => {
