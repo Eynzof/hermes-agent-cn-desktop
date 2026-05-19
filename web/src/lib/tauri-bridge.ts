@@ -233,6 +233,7 @@ function showBootstrapOverlay(initialMessage: string): {
 async function waitForBootstrap(
   initialMessage: string,
   readConfig: () => Promise<{ apiBaseUrl?: string }>,
+  readRuntimeInfo: () => Promise<{ lastError?: string }>,
 ): Promise<{ failed: boolean; message: string }> {
   const overlay = showBootstrapOverlay(initialMessage);
   const { listen } = await import("@tauri-apps/api/event");
@@ -255,6 +256,14 @@ async function waitForBootstrap(
       void readConfig()
         .then((cfg) => {
           if (cfg.apiBaseUrl) finish({ failed: false, message: "" });
+        })
+        .catch(() => {});
+      void readRuntimeInfo()
+        .then((info) => {
+          if (info.lastError) {
+            overlay.update("error", info.lastError);
+            finish({ failed: true, message: info.lastError });
+          }
         })
         .catch(() => {});
     };
@@ -306,7 +315,11 @@ export async function installTauriBridge(): Promise<void> {
   // apiBaseUrl into window.__HERMES_RUNTIME__ later, but waiting here prevents
   // the React app from racing the managed dashboard startup.
   if (!config.apiBaseUrl) {
-    const result = await waitForBootstrap("正在启动Hermes Agent内核...", () => inv("get_runtime_config"));
+    const result = await waitForBootstrap(
+      "正在启动Hermes Agent内核...",
+      () => inv("get_runtime_config"),
+      () => inv("runtime_info"),
+    );
     if (result.failed) {
       // Leave the overlay up — the user needs to see the message
       // and decide what to do (close and reopen, fix env vars, etc).

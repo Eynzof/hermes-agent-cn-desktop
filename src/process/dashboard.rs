@@ -181,6 +181,14 @@ pub struct EnsureDashboardOptions {
     pub allow_port_fallback: bool,
 }
 
+struct SpawnedDashboard {
+    child: Child,
+    command_program: String,
+    command_args: Vec<String>,
+    gateway_runtime_dir: String,
+    gateway_lock_dir: String,
+}
+
 fn env_flag(name: &str) -> bool {
     std::env::var(name)
         .ok()
@@ -250,7 +258,7 @@ fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<Str
 }
 
 /// Spawn the hermes dashboard subprocess.
-fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<Child, AppError> {
+fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard, AppError> {
     let (program, mut prefix_args) = resolve_hermes_command(options.allow_external_agent)?;
 
     let api_args = vec![
@@ -276,14 +284,12 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<Child, AppError> 
             std::env::var("HERMES_DASHBOARD_TUI").unwrap_or_else(|_| "1".to_string()),
         );
     if std::env::var("HERMES_GATEWAY_LOCK_DIR").is_err() {
-        cmd.env("HERMES_GATEWAY_LOCK_DIR", gateway_lock_dir);
+        cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir);
     }
     if std::env::var("HERMES_GATEWAY_RUNTIME_DIR").is_err() {
-        cmd.env("HERMES_GATEWAY_RUNTIME_DIR", gateway_runtime_dir);
+        cmd.env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir);
     }
-    cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     // Windows: hide the console window for the child process
     #[cfg(target_os = "windows")]
@@ -296,7 +302,13 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<Child, AppError> 
         .spawn()
         .map_err(|e| AppError::DashboardStartup(e.to_string()))?;
     drain_dashboard_output(&mut child);
-    Ok(child)
+    Ok(SpawnedDashboard {
+        child,
+        command_program: program,
+        command_args: prefix_args,
+        gateway_runtime_dir: gateway_runtime_dir.to_string_lossy().to_string(),
+        gateway_lock_dir: gateway_lock_dir.to_string_lossy().to_string(),
+    })
 }
 
 async fn dashboard_is_compatible(api_base_url: &str, hermes_home: &str) -> bool {
@@ -366,14 +378,27 @@ pub async fn ensure_hermes_dashboard(
     // mode must spawn from runtime/current.json so the desktop never silently
     // attaches to a user-installed or PATH-provided hermes.
     let primary_occupied = probe_dashboard(&api_base_url).await;
+    let can_reuse_existing = options.allow_external_agent || !options.allow_port_fallback;
     if primary_occupied
-        && options.allow_external_agent
+        && can_reuse_existing
         && dashboard_is_compatible(&api_base_url, &options.hermes_home).await
     {
-        log::info!("Reusing existing dashboard at {}", api_base_url);
+        log::info!(
+            "Reusing compatible dashboard at {}{}",
+            api_base_url,
+            if options.allow_external_agent {
+                " (external agent explicitly allowed)"
+            } else {
+                " (fixed-port managed dev)"
+            }
+        );
         return Ok(DashboardHandle {
             api_base_url,
             owns_process: false,
+            command_program: None,
+            command_args: vec![],
+            gateway_runtime_dir: None,
+            gateway_lock_dir: None,
             child: None,
         });
     }
@@ -390,7 +415,7 @@ pub async fn ensure_hermes_dashboard(
     if primary_occupied {
         if !options.allow_port_fallback {
             return Err(AppError::DashboardStartup(format!(
-                "{} is already occupied by an existing dashboard. Managed dev mode refuses to reuse external dashboard processes; stop the process on port {} or set HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD=1 for an explicit external-dashboard session.",
+                "{} is already occupied by an incompatible dashboard. Stop the process on port {} or set HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD=1 for an explicit external-dashboard session.",
                 api_base_url, options.port
             )));
         }
@@ -408,6 +433,10 @@ pub async fn ensure_hermes_dashboard(
                     return Ok(DashboardHandle {
                         api_base_url: candidate_url,
                         owns_process: false,
+                        command_program: None,
+                        command_args: vec![],
+                        gateway_runtime_dir: None,
+                        gateway_lock_dir: None,
                         child: None,
                     });
                 }
@@ -427,10 +456,10 @@ pub async fn ensure_hermes_dashboard(
     }
 
     // Spawn a new dashboard
-    let child = spawn_dashboard(&spawn_options)?;
+    let spawned = spawn_dashboard(&spawn_options)?;
     let child_url = dashboard_base_url(&spawn_options.host, spawn_options.port);
 
-    let mut child_opt = Some(child);
+    let mut child_opt = Some(spawned.child);
     let ready = wait_for_dashboard(&child_url, &mut child_opt).await;
     if !ready {
         if let Some(ref mut c) = child_opt {
@@ -447,6 +476,10 @@ pub async fn ensure_hermes_dashboard(
     Ok(DashboardHandle {
         api_base_url: child_url,
         owns_process: true,
+        command_program: Some(spawned.command_program),
+        command_args: spawned.command_args,
+        gateway_runtime_dir: Some(spawned.gateway_runtime_dir),
+        gateway_lock_dir: Some(spawned.gateway_lock_dir),
         child: child_opt,
     })
 }

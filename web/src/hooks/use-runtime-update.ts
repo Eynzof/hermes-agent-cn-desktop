@@ -10,7 +10,7 @@ const RUNTIME_INFO_KEY = ["desktop-runtime-info"] as const;
 
 function hasRuntimeBridge(): boolean {
   return typeof window !== "undefined" &&
-    runtime.platform === "electron" &&
+    runtime.platform !== "web" &&
     Boolean(window.hermesDesktop?.getRuntimeInfo);
 }
 

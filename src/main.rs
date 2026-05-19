@@ -163,6 +163,10 @@ fn main() {
                         DashboardHandle {
                             api_base_url,
                             owns_process: false,
+                            command_program: None,
+                            command_args: vec![],
+                            gateway_runtime_dir: None,
+                            gateway_lock_dir: None,
                             child: None,
                         }
                     } else {
@@ -183,6 +187,14 @@ fn main() {
                                     .clone()
                                     .unwrap_or_else(|| "unknown install error".into());
                                 log::error!("Bootstrap install failed: {}", msg);
+                                {
+                                    use tauri::Manager;
+                                    let state = app_handle.state::<AppState>();
+                                    if let Ok(mut inner) = state.inner.lock() {
+                                        inner.last_runtime_error =
+                                            Some(format!("runtime 安装失败: {}", msg));
+                                    };
+                                }
                                 emit_runtime_status(
                                     &app_handle,
                                     "error",
@@ -220,11 +232,15 @@ fn main() {
                             Ok(h) => h,
                             Err(e) => {
                                 log::error!("Bootstrap dashboard ensure failed: {}", e);
-                                emit_runtime_status(
-                                    &app_handle,
-                                    "error",
-                                    &format!("dashboard 启动失败: {}", e),
-                                );
+                                let msg = format!("dashboard 启动失败: {}", e);
+                                {
+                                    use tauri::Manager;
+                                    let state = app_handle.state::<AppState>();
+                                    if let Ok(mut inner) = state.inner.lock() {
+                                        inner.last_runtime_error = Some(msg.clone());
+                                    };
+                                }
+                                emit_runtime_status(&app_handle, "error", &msg);
                                 return;
                             }
                         }
@@ -284,6 +300,10 @@ fn main() {
                     DashboardHandle {
                         api_base_url,
                         owns_process: false,
+                        command_program: None,
+                        command_args: vec![],
+                        gateway_runtime_dir: None,
+                        gateway_lock_dir: None,
                         child: None,
                     }
                 } else {
@@ -323,6 +343,14 @@ fn main() {
                                     .clone()
                                     .unwrap_or_else(|| "unknown install error".into());
                                 log::error!("Bootstrap install failed: {}", msg);
+                                {
+                                    use tauri::Manager;
+                                    let state = app_handle.state::<AppState>();
+                                    if let Ok(mut inner) = state.inner.lock() {
+                                        inner.last_runtime_error =
+                                            Some(format!("runtime 安装失败: {}", msg));
+                                    };
+                                }
                                 emit_runtime_status(
                                     &app_handle,
                                     "error",
@@ -353,11 +381,15 @@ fn main() {
                                 Ok(h) => h,
                                 Err(e) => {
                                     log::error!("Bootstrap dashboard ensure failed: {}", e);
-                                    emit_runtime_status(
-                                        &app_handle,
-                                        "error",
-                                        &format!("dashboard 启动失败: {}", e),
-                                    );
+                                    let msg = format!("dashboard 启动失败: {}", e);
+                                    {
+                                        use tauri::Manager;
+                                        let state = app_handle.state::<AppState>();
+                                        if let Ok(mut inner) = state.inner.lock() {
+                                            inner.last_runtime_error = Some(msg.clone());
+                                        };
+                                    }
+                                    emit_runtime_status(&app_handle, "error", &msg);
                                     return;
                                 }
                             };

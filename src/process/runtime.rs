@@ -5,7 +5,9 @@
 // verifying signatures, extracting, smoke-testing, and installing.
 
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::Command as StdCommand;
 use std::process::Stdio;
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -35,6 +37,8 @@ pub struct RuntimeInstallRecord {
     pub upstream_repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upstream_commit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_dirty_hash: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact_sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,11 +73,68 @@ pub struct RuntimeInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current: Option<RuntimeInstallRecord>,
     pub runtime_root: String,
+    pub current_record_path: String,
+    pub versions_dir: String,
+    pub downloads_dir: String,
+    pub gateway_runtime_dir: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_manifest_url: Option<String>,
     pub updates_configured: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub executable_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<RuntimeSourceInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub process: Option<RuntimeProcessInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeSourceInfo {
+    pub repo: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_commit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_short_commit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dirty: Option<bool>,
+    pub recent_commits: Vec<RuntimeSourceCommit>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeSourceCommit {
+    pub hash: String,
+    pub short_hash: String,
+    pub author: String,
+    pub date: String,
+    pub subject: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeProcessInfo {
+    pub api_base_url: String,
+    pub gateway_url: String,
+    pub hermes_home: String,
+    pub hermes_home_base: String,
+    pub current_profile: String,
+    pub owns_process: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_program: Option<String>,
+    pub command_args: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_line: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gateway_runtime_dir: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gateway_lock_dir: Option<String>,
+    pub session_token_present: bool,
+    pub gateway_sse_proxy_active: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -167,6 +228,14 @@ fn current_record_path() -> PathBuf {
 
 pub fn current_record_path_display() -> String {
     current_record_path().to_string_lossy().to_string()
+}
+
+fn versions_dir_display() -> String {
+    versions_root().to_string_lossy().to_string()
+}
+
+fn downloads_dir_display() -> String {
+    downloads_root().to_string_lossy().to_string()
 }
 
 fn read_json_file<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
@@ -346,6 +415,10 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
     };
 
     let manifest_url = configured_manifest_url();
+    let executable_sha256 = current
+        .as_ref()
+        .and_then(|record| file_sha256(Path::new(&record.executable_path)));
+    let source = current.as_ref().and_then(runtime_source_info);
     RuntimeInfo {
         mode: mode.to_string(),
         packaged: false, // Tauri's `is_packaged` equivalent checked at runtime
@@ -353,10 +426,105 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
         arch: current_arch().to_string(),
         current,
         runtime_root: runtime_root().to_string_lossy().to_string(),
+        current_record_path: current_record_path_display(),
+        versions_dir: versions_dir_display(),
+        downloads_dir: downloads_dir_display(),
+        gateway_runtime_dir: gateway_runtime_dir().to_string_lossy().to_string(),
         update_manifest_url: manifest_url.clone(),
         updates_configured: manifest_url.is_some() && configured_public_key().is_some(),
+        executable_sha256,
+        source,
+        process: None,
         last_error,
     }
+}
+
+fn file_sha256(path: &Path) -> Option<String> {
+    let mut file = fs::File::open(path).ok()?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Some(format!("{:x}", hasher.finalize()))
+}
+
+fn runtime_source_info(record: &RuntimeInstallRecord) -> Option<RuntimeSourceInfo> {
+    let repo = record.upstream_repo.as_ref()?;
+    let repo_path = Path::new(repo);
+    if !repo_path.exists() {
+        return Some(RuntimeSourceInfo {
+            repo: repo.clone(),
+            head_commit: None,
+            head_short_commit: None,
+            dirty: None,
+            recent_commits: vec![],
+        });
+    }
+
+    let head_commit = git_capture(repo_path, &["rev-parse", "HEAD"]);
+    let head_short_commit = git_capture(repo_path, &["rev-parse", "--short=12", "HEAD"]);
+    let dirty =
+        git_capture(repo_path, &["status", "--porcelain=v1"]).map(|out| !out.trim().is_empty());
+    let recent_commits = git_recent_commits(repo_path);
+
+    Some(RuntimeSourceInfo {
+        repo: repo.clone(),
+        head_commit,
+        head_short_commit,
+        dirty,
+        recent_commits,
+    })
+}
+
+fn git_capture(repo: &Path, args: &[&str]) -> Option<String> {
+    let output = StdCommand::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8(output.stdout).ok()?;
+    Some(text.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+fn git_recent_commits(repo: &Path) -> Vec<RuntimeSourceCommit> {
+    let Some(out) = git_capture(
+        repo,
+        &[
+            "log",
+            "-n",
+            "5",
+            "--pretty=format:%H%x1f%h%x1f%an%x1f%ad%x1f%s",
+            "--date=iso-strict",
+        ],
+    ) else {
+        return vec![];
+    };
+
+    out.lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\x1f').collect();
+            if parts.len() != 5 {
+                return None;
+            }
+            Some(RuntimeSourceCommit {
+                hash: parts[0].to_string(),
+                short_hash: parts[1].to_string(),
+                author: parts[2].to_string(),
+                date: parts[3].to_string(),
+                subject: parts[4].to_string(),
+            })
+        })
+        .collect()
 }
 
 /// Check for a runtime update by fetching the remote manifest.
@@ -739,6 +907,7 @@ pub async fn install_runtime_update(
         installed_at: chrono_now(),
         upstream_repo: Some(resolved.upstream_repo.clone()),
         upstream_commit: Some(resolved.upstream_commit.clone()),
+        local_dirty_hash: None,
         artifact_sha256: Some(resolved.sha256.clone()),
         previous_version: previous.as_ref().map(|p| p.version.clone()),
     };
@@ -806,6 +975,7 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
         installed_at: chrono_now(),
         upstream_repo: None,
         upstream_commit: None,
+        local_dirty_hash: None,
         artifact_sha256: None,
         previous_version: Some(current.version.clone()),
     };

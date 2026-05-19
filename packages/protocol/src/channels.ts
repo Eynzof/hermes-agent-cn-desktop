@@ -59,23 +59,73 @@ export interface RuntimeInstallRecord {
   arch: string;
   path: string;
   executablePath: string;
-  source: "bundled" | "update" | "dev";
+  source: "bundled" | "update" | "dev" | "local-source" | string;
   installedAt: string;
   upstreamRepo?: string;
   upstreamCommit?: string;
+  localDirtyHash?: string | null;
   artifactSha256?: string;
   previousVersion?: string;
 }
 
+export interface RuntimeSourceCommit {
+  hash: string;
+  shortHash: string;
+  author: string;
+  date: string;
+  subject: string;
+}
+
+export interface RuntimeSourceInfo {
+  repo: string;
+  headCommit?: string;
+  headShortCommit?: string;
+  dirty?: boolean;
+  recentCommits: RuntimeSourceCommit[];
+}
+
+export interface RuntimeProcessInfo {
+  apiBaseUrl: string;
+  gatewayUrl: string;
+  hermesHome: string;
+  hermesHomeBase: string;
+  currentProfile: string;
+  ownsProcess: boolean;
+  pid?: number;
+  commandProgram?: string;
+  commandArgs: string[];
+  commandLine?: string;
+  gatewayRuntimeDir?: string;
+  gatewayLockDir?: string;
+  sessionTokenPresent: boolean;
+  gatewaySseProxyActive: boolean;
+}
+
 export interface RuntimeInfo {
-  mode: "managed" | "dev-command" | "dev-source" | "path-fallback" | "missing";
+  mode:
+    | "managed"
+    | "managed-pending"
+    | "external-command"
+    | "external-path"
+    | "dev-command"
+    | "dev-source"
+    | "path-fallback"
+    | "missing"
+    | string;
   packaged: boolean;
   platform: string;
   arch: string;
   current?: RuntimeInstallRecord;
   runtimeRoot: string;
+  currentRecordPath: string;
+  versionsDir: string;
+  downloadsDir: string;
+  gatewayRuntimeDir: string;
   updateManifestUrl?: string;
   updatesConfigured: boolean;
+  executableSha256?: string;
+  source?: RuntimeSourceInfo;
+  process?: RuntimeProcessInfo;
   lastError?: string;
 }
 

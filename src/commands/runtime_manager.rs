@@ -10,14 +10,60 @@ use crate::error::AppError;
 use crate::process::dashboard;
 use crate::process::runtime;
 use crate::state::AppState;
+use std::sync::atomic::Ordering;
 
 #[tauri::command]
 pub fn runtime_info(state: State<'_, AppState>) -> Result<runtime::RuntimeInfo, AppError> {
-    let last_error = {
+    let (last_error, process) = {
         let inner = state.inner.lock()?;
-        inner.last_runtime_error.clone()
+        let dashboard = inner.dashboard_handle.as_ref();
+        let process = dashboard.map(|handle| {
+            let command_line = handle.command_program.as_ref().map(|program| {
+                std::iter::once(program.as_str())
+                    .chain(handle.command_args.iter().map(|arg| arg.as_str()))
+                    .map(shell_quote)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            });
+            runtime::RuntimeProcessInfo {
+                api_base_url: inner.api_base_url.clone(),
+                gateway_url: inner.gateway_url.clone(),
+                hermes_home: inner.hermes_home.clone(),
+                hermes_home_base: inner.hermes_home_base.clone(),
+                current_profile: inner.current_profile.clone(),
+                owns_process: handle.owns_process,
+                pid: handle.child.as_ref().map(|child| child.id()),
+                command_program: handle.command_program.clone(),
+                command_args: handle.command_args.clone(),
+                command_line,
+                gateway_runtime_dir: handle.gateway_runtime_dir.clone(),
+                gateway_lock_dir: handle.gateway_lock_dir.clone(),
+                session_token_present: inner.session_token.is_some(),
+                gateway_sse_proxy_active: inner
+                    .gateway_sse_stop
+                    .as_ref()
+                    .map(|stop| !stop.load(Ordering::Relaxed))
+                    .unwrap_or(false),
+            }
+        });
+        (inner.last_runtime_error.clone(), process)
     };
-    Ok(runtime::get_runtime_info(last_error))
+    let mut info = runtime::get_runtime_info(last_error);
+    info.process = process;
+    Ok(info)
+}
+
+fn shell_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+    if value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '_' | '-' | ':' | '='))
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 #[tauri::command]

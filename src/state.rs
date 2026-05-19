@@ -17,6 +17,14 @@ pub struct DashboardHandle {
     pub api_base_url: String,
     /// Whether we spawned this process (true) or attached to an existing one (false).
     pub owns_process: bool,
+    /// Program used to spawn the dashboard when `owns_process` is true.
+    pub command_program: Option<String>,
+    /// Arguments passed to `command_program`.
+    pub command_args: Vec<String>,
+    /// Runtime-scoped gateway directory injected into the dashboard environment.
+    pub gateway_runtime_dir: Option<String>,
+    /// Runtime-scoped lock directory injected into the dashboard environment.
+    pub gateway_lock_dir: Option<String>,
     /// The child process, if we own it.
     pub child: Option<Child>,
 }

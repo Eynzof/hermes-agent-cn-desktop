@@ -1,6 +1,18 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useAtom } from "jotai";
-import { FolderOpen, RefreshCw } from "lucide-react";
+import {
+  Activity,
+  Bug,
+  CheckCircle2,
+  Copy,
+  FolderOpen,
+  GitCommit,
+  RefreshCw,
+  RotateCcw,
+  Server,
+  ShieldCheck,
+  Terminal,
+} from "lucide-react";
 import { useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
@@ -360,7 +372,8 @@ function FilterGroup({ label, children }: { label: string; children: React.React
 /* ── About ───────────────────────────────────────────────────────────── */
 
 export function AboutSection({ showHeading = true }: SettingsSectionProps) {
-  const { data: status } = useStatus();
+  const statusQuery = useStatus();
+  const status = statusQuery.data;
   const runtimeInfo = useRuntimeInfo();
   const checkRuntimeUpdate = useCheckRuntimeUpdate();
   const installRuntimeUpdate = useInstallRuntimeUpdate();
@@ -368,6 +381,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
   const [restarting, setRestarting] = useState(false);
   const [runtimeMessage, setRuntimeMessage] = useState("");
   const [aboutMessage, setAboutMessage] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
 
   const handleRestart = async () => {
     setRestarting(true);
@@ -398,151 +412,372 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
   };
 
   const info = runtimeInfo.data;
+  const process = info?.process;
+  const source = info?.source;
+  const rendererRuntime = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
   const hermesHomePath = status?.hermes_home;
-  const runtimeRootPath = info?.current?.path ?? info?.runtimeRoot;
+  const runtimeRootPath = info?.runtimeRoot;
+  const runtimeVersionPath = info?.current?.path;
+  const currentRecordPath = info?.currentRecordPath;
   const updateResult = checkRuntimeUpdate.data;
   const installing = installRuntimeUpdate.isPending;
   const checking = checkRuntimeUpdate.isPending;
   const rollingBack = rollbackRuntime.isPending;
   const hasRuntimeBridge = typeof window !== "undefined" && Boolean(window.hermesDesktop?.getRuntimeInfo);
   const canInstall = Boolean(updateResult?.ok && updateResult.updateAvailable && info?.updatesConfigured);
+  const refreshing = runtimeInfo.isFetching || statusQuery.isFetching;
+  const runtimeInsideRoot = Boolean(
+    info?.current?.executablePath &&
+    info.runtimeRoot &&
+    info.current.executablePath.startsWith(info.runtimeRoot),
+  );
+  const isolationOk = Boolean(
+    info?.mode === "managed" &&
+    runtimeInsideRoot &&
+    process,
+  );
+  const diagnostics = useMemo(() => ({
+    generatedAt: new Date().toISOString(),
+    runtime: info ?? null,
+    status: status ?? null,
+    rendererRuntime: rendererRuntime ?? null,
+    bridge: typeof window !== "undefined" ? {
+      windowType: window.hermesDesktop?.windowType ?? null,
+      hasRuntimeInfo: Boolean(window.hermesDesktop?.getRuntimeInfo),
+      hasOpenWorkspacePath: Boolean(window.hermesDesktop?.openWorkspacePath),
+    } : null,
+  }), [info, rendererRuntime, status]);
 
-  const handleOpenRuntimeRoot = async () => {
-    if (!runtimeRootPath || !window.hermesDesktop?.openWorkspacePath) return;
-    setRuntimeMessage("");
-    const result = await window.hermesDesktop.openWorkspacePath({ path: runtimeRootPath });
-    if (!result.ok) {
-      setRuntimeMessage(result.body || "打开内置 Hermes 根目录失败");
-    }
+  const handleRefreshAll = async () => {
+    setAboutMessage("");
+    await Promise.all([runtimeInfo.refetch(), statusQuery.refetch()]);
   };
 
-  const handleOpenHermesHome = async () => {
-    if (!hermesHomePath || !window.hermesDesktop?.openWorkspacePath) return;
+  const handleCopyDiagnostics = async () => {
+    await copyToClipboard(JSON.stringify(diagnostics, null, 2), setCopyMessage, "已复制诊断 JSON");
+  };
+
+  const handleCopyCommand = async () => {
+    await copyToClipboard(process?.commandLine ?? "", setCopyMessage, "已复制启动命令");
+  };
+
+  const handleOpenPath = async (path: string | undefined, label: string, setMessage = setRuntimeMessage) => {
+    if (!path || !window.hermesDesktop?.openWorkspacePath) return;
+    setRuntimeMessage("");
     setAboutMessage("");
-    const result = await window.hermesDesktop.openWorkspacePath({ path: hermesHomePath });
+    const result = await window.hermesDesktop.openWorkspacePath({ path });
     if (!result.ok) {
-      setAboutMessage(result.body || "打开 HERMES_HOME 失败");
+      setMessage(result.body || `打开${label}失败`);
     }
   };
 
   return (
     <div>
       {showHeading && <h2 className={s.heading}>关于</h2>}
-      <div className={s.aboutText}>
-        <div><b>Hermes Agent</b> · {status?.version ?? "…"} ({status?.release_date ?? ""})</div>
-        <div>Gateway: {status?.gateway_state ?? "unknown"} {status?.gateway_pid ? `(PID ${status.gateway_pid})` : ""}</div>
-        <div>活跃会话: {status?.active_sessions ?? 0}</div>
-        <div>HERMES_HOME: {hermesHomePath ?? "…"}</div>
-        {status?.gateway_platforms && Object.entries(status.gateway_platforms).map(([name, plat]) => (
-          <div key={name}>平台: {name} — {plat.state}</div>
-        ))}
+      <div className={s.aboutHero} data-ok={isolationOk}>
+        <div className={s.aboutHeroMark}>{isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}</div>
+        <div className={s.aboutHeroBody}>
+          <div className={s.aboutEyebrow}>Hermes Agent CN Desktop Kernel</div>
+          <h3>{isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}</h3>
+          <p>
+            {isolationOk && process?.ownsProcess
+              ? "当前 Dashboard 由桌面端托管的 managed runtime 子进程提供，内核、gateway runtime 与锁文件都收束在桌面 runtime 目录下。"
+              : isolationOk
+                ? "当前固定端口上已有兼容 Dashboard，桌面端已连接它；runtime 指针和可执行路径仍位于桌面 managed runtime 目录内。"
+              : "此处用于确认桌面端是否真的使用独立 hermes-agent-cn runtime，而不是复用全局 PATH 或外部 dashboard。"}
+          </p>
+        </div>
+        <span className={s.statusBadge} data-on={isolationOk}>
+          {info ? runtimeModeLabel(info.mode) : "读取中"}
+        </span>
       </div>
-      <div className={s.providerActions} style={{ marginTop: 16 }}>
+
+      <div className={s.debugActionBar}>
+        <button className={s.btn} type="button" onClick={handleRefreshAll} disabled={refreshing}>
+          <RefreshCw size={13} />
+          {refreshing ? "刷新中" : "刷新状态"}
+        </button>
+        <button className={s.btn} type="button" onClick={handleCopyDiagnostics}>
+          <Copy size={13} />
+          复制诊断 JSON
+        </button>
         <button
           className={s.btn}
           type="button"
-          onClick={handleOpenHermesHome}
+          onClick={() => handleOpenPath(hermesHomePath, " HERMES_HOME", setAboutMessage)}
           disabled={!hermesHomePath || !window.hermesDesktop?.openWorkspacePath}
         >
           <FolderOpen size={13} />
           打开 HERMES_HOME
         </button>
+        <button
+          className={s.btn}
+          type="button"
+          onClick={() => handleOpenPath(runtimeRootPath, " runtime 根目录")}
+          disabled={!runtimeRootPath || !window.hermesDesktop?.openWorkspacePath}
+        >
+          <FolderOpen size={13} />
+          打开 runtime
+        </button>
         <button className={s.btnPrimary} onClick={handleRestart} disabled={restarting}>
+          <RotateCcw size={13} />
           {restarting ? "重启中…" : "重启 Gateway"}
         </button>
       </div>
+      {copyMessage && <div className={s.runtimeMessage}>{copyMessage}</div>}
       {aboutMessage && <div className={s.runtimeMessage} data-tone="error">{aboutMessage}</div>}
 
-      {hasRuntimeBridge && (
-        <div className={s.runtimePanel}>
-          <div className={s.sectionTitleRow}>
-            <h3 className={s.runtimeHeading}>内置 Hermes Runtime</h3>
-            <span className={s.statusBadge} data-on={info?.mode === "managed"}>
-              {info ? runtimeModeLabel(info.mode) : "读取中"}
-            </span>
-          </div>
+      <div className={s.aboutDebugGrid}>
+        <DebugCard icon={<Server size={15} />} title="内核进程" sub="Dashboard 子进程与连接状态" wide>
           <div className={s.runtimeGrid}>
-            <RuntimeField label="版本" value={info?.current?.version ?? "未安装"} />
-            <RuntimeField label="来源" value={info?.current?.source ?? info?.mode ?? "unknown"} />
-            <RuntimeField label="平台" value={info ? `${info.platform}-${info.arch}` : "…"} />
-            <RuntimeField label="上游提交" value={shortCommit(info?.current?.upstreamCommit)} />
-            <RuntimeField label="更新源" value={info?.updatesConfigured ? "已配置" : "未配置"} />
-            <RuntimeField label="运行目录" value={info?.current?.path ?? info?.runtimeRoot ?? "…"} mono />
+            <RuntimeField label="托管方式" value={process ? (process.ownsProcess ? "桌面端独立子进程" : info?.mode === "managed" ? "连接到已存在 managed dashboard" : "复用外部进程") : "—"} />
+            <RuntimeField label="PID" value={process?.pid ? String(process.pid) : "—"} mono />
+            <RuntimeField label="API Origin" value={process?.apiBaseUrl ?? rendererRuntime?.apiBaseUrl ?? "Vite proxy / relative"} mono wide />
+            <RuntimeField label="Gateway URL" value={process?.gatewayUrl ?? rendererRuntime?.gatewayUrl ?? "relative / SSE proxy"} mono wide />
+            <RuntimeField label="Profile" value={process?.currentProfile ?? rendererRuntime?.currentProfile ?? "—"} />
+            <RuntimeField label="Session Token" value={process?.sessionTokenPresent ? "已注入" : "未注入 / dev proxy"} />
+            <RuntimeField label="SSE 代理" value={process?.gatewaySseProxyActive ? "连接中" : "未连接或浏览器直连"} />
+            <RuntimeField label="HERMES_HOME" value={process?.hermesHome || hermesHomePath || "—"} mono wide />
           </div>
-          {info?.lastError && <div className={s.runtimeMessage} data-tone="error">{info.lastError}</div>}
-          {runtimeMessage && (
-            <div className={s.runtimeMessage} data-tone={runtimeMessage.includes("失败") ? "error" : "normal"}>
-              {runtimeMessage}
+          {process?.commandLine && (
+            <div className={s.commandBlock}>
+              <div className={s.commandBlockHeader}>
+                <span><Terminal size={13} /> 启动命令</span>
+                <button className={s.inlineCopyButton} type="button" onClick={handleCopyCommand}>复制</button>
+              </div>
+              <code>{process.commandLine}</code>
             </div>
           )}
-          <div className={s.providerActions}>
-            <button
-              className={s.btn}
-              type="button"
-              onClick={handleOpenRuntimeRoot}
-              disabled={!runtimeRootPath || !window.hermesDesktop?.openWorkspacePath}
-            >
-              <FolderOpen size={13} />
-              打开内置 Hermes 根目录
-            </button>
-            <button
-              className={s.btn}
-              type="button"
-              onClick={handleCheckRuntime}
-              disabled={!info?.updatesConfigured || checking}
-            >
-              <RefreshCw size={13} />
-              {checking ? "检查中" : "检查更新"}
-            </button>
-            <button
-              className={s.btnPrimary}
-              type="button"
-              onClick={handleInstallRuntime}
-              disabled={!canInstall || installing}
-            >
-              {installing ? "安装中…" : "安装更新"}
-            </button>
-            <button
-              className={s.btn}
-              type="button"
-              onClick={handleRollbackRuntime}
-              disabled={!info?.current?.previousVersion || rollingBack}
-            >
-              {rollingBack ? "回滚中…" : "回滚 Runtime"}
-            </button>
-          </div>
-          {!info?.updatesConfigured && (
-            <p className={s.desc}>
-              桌面端未配置 runtime 更新 manifest 或公钥，当前只能使用安装包内置版本。
-            </p>
+        </DebugCard>
+
+        <DebugCard icon={<ShieldCheck size={15} />} title="Managed Runtime" sub="当前内置 hermes-agent-cn 版本" wide>
+          {hasRuntimeBridge ? (
+            <>
+              <div className={s.runtimeGrid}>
+                <RuntimeField label="Runtime 版本" value={info?.current?.version ?? "未安装"} />
+                <RuntimeField label="来源" value={runtimeSourceLabel(info?.current?.source ?? info?.mode)} />
+                <RuntimeField label="平台" value={info ? `${info.platform}-${info.arch}` : "…"} />
+                <RuntimeField label="安装时间" value={formatDateTime(info?.current?.installedAt)} />
+                <RuntimeField label="上游仓库" value={info?.current?.upstreamRepo ?? source?.repo ?? "—"} mono wide />
+                <RuntimeField label="已安装提交" value={shortCommit(info?.current?.upstreamCommit)} mono />
+                <RuntimeField label="源码 HEAD" value={shortCommit(source?.headCommit)} mono />
+                <RuntimeField label="源码工作区" value={source?.dirty == null ? "未知" : source.dirty ? "有未提交改动" : "干净"} />
+                <RuntimeField label="本地 dirty hash" value={info?.current?.localDirtyHash ?? "—"} mono />
+                <RuntimeField label="可执行 SHA-256" value={shortHash(info?.executableSha256, 16)} mono />
+              </div>
+              {info?.lastError && <div className={s.runtimeMessage} data-tone="error">{info.lastError}</div>}
+              {runtimeMessage && (
+                <div className={s.runtimeMessage} data-tone={runtimeMessage.includes("失败") ? "error" : "normal"}>
+                  {runtimeMessage}
+                </div>
+              )}
+              <div className={s.providerActions}>
+                <button
+                  className={s.btn}
+                  type="button"
+                  onClick={() => handleOpenPath(runtimeVersionPath, " runtime 版本目录")}
+                  disabled={!runtimeVersionPath || !window.hermesDesktop?.openWorkspacePath}
+                >
+                  <FolderOpen size={13} />
+                  打开版本目录
+                </button>
+                <button
+                  className={s.btn}
+                  type="button"
+                  onClick={() => handleOpenPath(currentRecordPath, " current.json")}
+                  disabled={!currentRecordPath || !window.hermesDesktop?.openWorkspacePath}
+                >
+                  <FolderOpen size={13} />
+                  打开 current.json
+                </button>
+                <button
+                  className={s.btn}
+                  type="button"
+                  onClick={handleCheckRuntime}
+                  disabled={!info?.updatesConfigured || checking}
+                >
+                  <RefreshCw size={13} />
+                  {checking ? "检查中" : "检查更新"}
+                </button>
+                <button
+                  className={s.btnPrimary}
+                  type="button"
+                  onClick={handleInstallRuntime}
+                  disabled={!canInstall || installing}
+                >
+                  {installing ? "安装中…" : "安装更新"}
+                </button>
+                <button
+                  className={s.btn}
+                  type="button"
+                  onClick={handleRollbackRuntime}
+                  disabled={!info?.current?.previousVersion || rollingBack}
+                >
+                  {rollingBack ? "回滚中…" : "回滚 Runtime"}
+                </button>
+              </div>
+              {!info?.updatesConfigured && (
+                <p className={s.desc}>
+                  桌面端未配置 runtime 更新 manifest 或公钥；开发模式会优先使用本地安装脚本写入的 managed runtime。
+                </p>
+              )}
+            </>
+          ) : (
+            <p className={s.desc}>当前环境没有桌面 runtime bridge，无法读取独立内核信息。</p>
           )}
-        </div>
-      )}
+        </DebugCard>
+
+        <DebugCard icon={<Activity size={15} />} title="Dashboard / Gateway" sub="后端状态与网关运行态" wide>
+          <div className={s.runtimeGrid}>
+            <RuntimeField label="Hermes Agent" value={status ? `${status.version} (${status.release_date})` : "…"} />
+            <RuntimeField label="活跃会话" value={String(status?.active_sessions ?? 0)} />
+            <RuntimeField label="Gateway 状态" value={status?.gateway_state || (status?.gateway_running ? "running" : "unknown")} />
+            <RuntimeField label="Gateway PID" value={status?.gateway_pid ? String(status.gateway_pid) : "—"} mono />
+            <RuntimeField label="Gateway Health" value={status?.gateway_health_url ?? "—"} mono wide />
+            <RuntimeField label="Gateway 更新时间" value={formatDateTime(status?.gateway_updated_at ?? undefined)} />
+            <RuntimeField label="config.yaml" value={status?.config_path ?? "—"} mono wide />
+            <RuntimeField label=".env" value={status?.env_path ?? "—"} mono wide />
+          </div>
+          {status?.gateway_platforms && Object.keys(status.gateway_platforms).length > 0 && (
+            <div className={s.platformList}>
+              {Object.entries(status.gateway_platforms).map(([name, plat]) => (
+                <div key={name} className={s.platformItem}>
+                  <span>{name}</span>
+                  <b>{plat.state}</b>
+                  {plat.error_message && <em>{plat.error_message}</em>}
+                </div>
+              ))}
+            </div>
+          )}
+        </DebugCard>
+
+        <DebugCard icon={<GitCommit size={15} />} title="最近提交" sub="显示 current.json 指向仓库的最近 5 条提交">
+          {source?.recentCommits.length ? (
+            <div className={s.commitList}>
+              {source.recentCommits.map((commit) => {
+                const active = commit.hash === info?.current?.upstreamCommit;
+                return (
+                  <div key={commit.hash} className={s.commitItem} data-active={active}>
+                    <div className={s.commitHash}>
+                      <code>{commit.shortHash}</code>
+                      {active && <span><CheckCircle2 size={12} /> 已安装</span>}
+                    </div>
+                    <div className={s.commitSubject}>{commit.subject}</div>
+                    <div className={s.commitMeta}>{commit.author} · {formatDateTime(commit.date)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className={s.desc}>没有可读取的 Git 提交记录。发布版 runtime 可能只包含 artifact 元信息。</p>
+          )}
+        </DebugCard>
+
+        <DebugCard icon={<Terminal size={15} />} title="路径与隔离边界" sub="确认 runtime 没有外溢到全局 hermes-agent" wide>
+          <div className={s.runtimeGrid}>
+            <RuntimeField label="runtimeRoot" value={info?.runtimeRoot ?? "—"} mono wide />
+            <RuntimeField label="current.json" value={info?.currentRecordPath ?? "—"} mono wide />
+            <RuntimeField label="versions" value={info?.versionsDir ?? "—"} mono wide />
+            <RuntimeField label="downloads" value={info?.downloadsDir ?? "—"} mono wide />
+            <RuntimeField label="gatewayRuntime" value={process?.gatewayRuntimeDir ?? info?.gatewayRuntimeDir ?? "—"} mono wide />
+            <RuntimeField label="gatewayLockDir" value={process?.gatewayLockDir ?? "—"} mono wide />
+            <RuntimeField label="executablePath" value={info?.current?.executablePath ?? "—"} mono wide />
+            <RuntimeField label="previousVersion" value={info?.current?.previousVersion ?? "—"} wide />
+          </div>
+        </DebugCard>
+      </div>
     </div>
   );
 }
 
-function RuntimeField({ label, value, mono }: { label: string; value: string | undefined; mono?: boolean }) {
+function DebugCard({ icon, title, sub, children, wide }: {
+  icon: React.ReactNode;
+  title: string;
+  sub?: string;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
   return (
-    <div className={s.runtimeField}>
+    <section className={s.debugCard} data-wide={wide ? "true" : undefined}>
+      <div className={s.debugCardHeader}>
+        <div className={s.debugCardIcon}>{icon}</div>
+        <div>
+          <h3>{title}</h3>
+          {sub && <p>{sub}</p>}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function RuntimeField({ label, value, mono, wide }: {
+  label: string;
+  value: string | number | boolean | undefined;
+  mono?: boolean;
+  wide?: boolean;
+}) {
+  const display = value === undefined || value === "" ? "—" : String(value);
+  return (
+    <div className={s.runtimeField} data-wide={wide ? "true" : undefined}>
       <span>{label}</span>
-      <b data-mono={mono ? "true" : undefined}>{value || "—"}</b>
+      <b data-mono={mono ? "true" : undefined}>{display}</b>
     </div>
   );
 }
 
-function runtimeModeLabel(mode: RuntimeInfo["mode"]): string {
+function runtimeModeLabel(mode: RuntimeInfo["mode"] | undefined): string {
   switch (mode) {
     case "managed": return "托管运行";
+    case "managed-pending": return "等待安装";
+    case "external-command": return "外部命令";
+    case "external-path": return "外部 PATH";
     case "dev-command": return "开发命令";
     case "dev-source": return "源码模式";
     case "path-fallback": return "PATH 回退";
     case "missing": return "未找到";
+    default: return mode ?? "未知";
+  }
+}
+
+function runtimeSourceLabel(source: string | undefined): string {
+  switch (source) {
+    case "local-source": return "本地源码安装";
+    case "update": return "更新通道";
+    case "bundled": return "安装包内置";
+    case "managed": return "托管 runtime";
+    default: return source ?? "unknown";
   }
 }
 
 function shortCommit(commit: string | undefined): string {
-  return commit ? commit.slice(0, 12) : "";
+  return shortHash(commit, 12);
+}
+
+function shortHash(hash: string | undefined, length: number): string {
+  return hash ? hash.slice(0, length) : "";
+}
+
+function formatDateTime(value: string | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+async function copyToClipboard(
+  value: string,
+  setMessage: (message: string) => void,
+  successMessage: string,
+): Promise<void> {
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    setMessage(successMessage);
+  } catch {
+    setMessage("复制失败：浏览器未授予剪贴板权限");
+  }
+  window.setTimeout(() => setMessage(""), 2400);
 }
 
 function formatRuntimeUpdateResult(result: RuntimeUpdateCheckResult): string {
