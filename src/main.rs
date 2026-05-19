@@ -170,7 +170,10 @@ fn main() {
                                 return;
                             }
                             if let Some(installed) = &install.installed {
-                                log::info!("Installed managed runtime v{}", installed.version);
+                                log::info!(
+                                    "Installed managed runtime v{}",
+                                    installed.runtime_version
+                                );
                             }
                         } else if info.current.is_none() {
                             log::warn!(
@@ -326,7 +329,10 @@ fn main() {
                                 return;
                             }
                             if let Some(installed) = &install.installed {
-                                log::info!("Installed managed runtime v{}", installed.version);
+                                log::info!(
+                                    "Installed managed runtime v{}",
+                                    installed.runtime_version
+                                );
                             }
 
                             emit_runtime_status(

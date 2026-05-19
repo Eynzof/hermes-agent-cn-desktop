@@ -230,7 +230,7 @@ fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<Str
     if let Some(record) = crate::process::runtime::read_current_record() {
         log::info!(
             "Using managed runtime v{} at {}",
-            record.version,
+            record.runtime_version,
             record.executable_path
         );
         return Ok((record.executable_path, vec![]));

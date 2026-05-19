@@ -141,7 +141,7 @@ if (!existsSync(join(sourceRoot, "pyproject.toml"))) {
 const root = runtimeRoot();
 const versionsRoot = join(root, "versions");
 const currentPath = join(root, "current.json");
-const version = readProjectVersion();
+const kernelVersion = readProjectVersion();
 const commit = capture("git", ["-C", sourceRoot, "rev-parse", "HEAD"]) || "unknown";
 const shortCommit = commit.slice(0, 12);
 // pip's wheel build creates <source>/build. Ignore and clean it so repeated
@@ -160,19 +160,19 @@ const dirtyHash = dirty
       .slice(0, 12)
   : null;
 const dirtySuffix = dirtyHash ? `-dirty-${dirtyHash}` : "";
-const installVersion = `dev-local-${version}-${shortCommit}${dirtySuffix}`;
-const target = join(versionsRoot, installVersion);
+const runtimeVersion = `dev-local-${kernelVersion}-${shortCommit}${dirtySuffix}`;
+const target = join(versionsRoot, runtimeVersion);
 const executable = hermesExecutable(join(target, "venv"));
 const current = readCurrent(currentPath);
 
 if (
   !force
   && current?.source === "local-source"
-  && current?.upstreamCommit === commit
+  && current?.sourceCommit === commit
   && (current?.localDirtyHash ?? null) === dirtyHash
   && existsSync(current.executablePath)
 ) {
-  console.log(`managed runtime already points at local ${version} ${shortCommit}: ${current.executablePath}`);
+  console.log(`managed runtime already points at local ${kernelVersion} ${shortCommit}: ${current.executablePath}`);
   process.exit(0);
 }
 
@@ -211,24 +211,29 @@ run(hermesExecutable(venv), ["dashboard", "--help"], {
 
 const installedExecutable = hermesExecutable(join(target, "venv"));
 const record = {
-  version: installVersion,
+  schemaVersion: 2,
+  runtimeVersion,
+  kernelVersion,
+  runtimeFlavor: "cn-local",
+  runtimeRevision: 0,
   platform: platformName(),
   arch: archName(),
   path: target,
   executablePath: installedExecutable,
   source: "local-source",
   installedAt: new Date().toISOString(),
-  upstreamRepo: sourceRoot,
-  upstreamCommit: commit,
+  sourceRepo: sourceRoot,
+  sourceCommit: commit,
   localDirtyHash: dirtyHash,
   artifactSha256: null,
-  previousVersion: current?.version ?? null,
+  previousRuntimeVersion: current?.runtimeVersion ?? null,
 };
 
 writeFileSync(join(target, "manifest.json"), `${JSON.stringify({
   kind: "local-source-runtime",
   sourceRoot,
-  projectVersion: version,
+  kernelVersion,
+  runtimeVersion,
   commit,
   dirty,
   dirtyHash,

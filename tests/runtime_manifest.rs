@@ -32,17 +32,21 @@ fn host_arch() -> &'static str {
     }
 }
 
-fn manifest_json(version: &str) -> serde_json::Value {
+fn manifest_json(runtime_version: &str) -> serde_json::Value {
     serde_json::json!({
+        "schemaVersion": 2,
         "channel": "stable",
-        "version": version,
+        "runtimeVersion": runtime_version,
+        "kernelVersion": runtime_version.split("-cn.").next().unwrap_or(runtime_version),
+        "runtimeFlavor": "cn",
+        "runtimeRevision": 1,
         "platform": host_platform(),
         "arch": host_arch(),
         "artifactUrl": "https://example.com/foo.zip",
         "sha256": "0".repeat(64),
         "signature": "stub-signature",
-        "upstreamRepo": "owner/repo",
-        "upstreamCommit": "abc123",
+        "sourceRepo": "owner/repo",
+        "sourceCommit": "abc123",
     })
 }
 
@@ -63,7 +67,7 @@ async fn returns_manifest_when_remote_responds_with_valid_json() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/manifest.json"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(manifest_json("999.999.999-mock")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(manifest_json("999.999.999-cn.1")))
         .mount(&server)
         .await;
     std::env::set_var(
@@ -75,7 +79,7 @@ async fn returns_manifest_when_remote_responds_with_valid_json() {
 
     assert!(result.ok, "unexpected error: {:?}", result.error);
     let manifest = result.manifest.expect("manifest should be present");
-    assert_eq!(manifest.version, "999.999.999-mock");
+    assert_eq!(manifest.runtime_version, "999.999.999-cn.1");
     assert_eq!(manifest.platform, host_platform());
 
     clear_env();
@@ -133,7 +137,7 @@ async fn returns_error_on_malformed_json() {
 #[serial]
 async fn returns_error_for_wrong_platform() {
     clear_env();
-    let mut wrong = manifest_json("1.0.0");
+    let mut wrong = manifest_json("1.0.0-cn.1");
     wrong["platform"] = serde_json::json!("some-other-os");
     wrong["arch"] = serde_json::json!("some-other-arch");
 

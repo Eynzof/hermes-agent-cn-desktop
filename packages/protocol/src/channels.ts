@@ -54,18 +54,22 @@ export interface WorkspacePathInput {
 }
 
 export interface RuntimeInstallRecord {
-  version: string;
+  schemaVersion: number;
+  runtimeVersion: string;
+  kernelVersion: string;
+  runtimeFlavor: string;
+  runtimeRevision: number;
   platform: string;
   arch: string;
   path: string;
   executablePath: string;
   source: "bundled" | "update" | "dev" | "local-source" | string;
   installedAt: string;
-  upstreamRepo?: string;
-  upstreamCommit?: string;
+  sourceRepo?: string;
+  sourceCommit?: string;
   localDirtyHash?: string | null;
   artifactSha256?: string;
-  previousVersion?: string;
+  previousRuntimeVersion?: string;
 }
 
 export interface RuntimeSourceCommit {
@@ -130,15 +134,19 @@ export interface RuntimeInfo {
 }
 
 export interface RuntimeUpdateManifest {
+  schemaVersion: number;
   channel: string;
-  version: string;
+  runtimeVersion: string;
+  kernelVersion: string;
+  runtimeFlavor: string;
+  runtimeRevision: number;
   platform: string;
   arch: string;
   artifactUrl: string;
   sha256: string;
   signature: string;
-  upstreamRepo: string;
-  upstreamCommit: string;
+  sourceRepo: string;
+  sourceCommit: string;
   minAppVersion?: string;
   createdAt?: string;
 }
@@ -146,7 +154,7 @@ export interface RuntimeUpdateManifest {
 export interface RuntimeUpdateCheckResult {
   ok: boolean;
   updateAvailable: boolean;
-  currentVersion?: string;
+  currentRuntimeVersion?: string;
   manifest?: RuntimeUpdateManifest;
   error?: string;
 }

@@ -20,13 +20,18 @@ const RUNTIME_BASENAME: &str = "hermes-agent-cn-runtime";
 const CURRENT_FILE: &str = "current.json";
 const MANIFEST_FILE: &str = "manifest.json";
 const DEFAULT_CHANNEL: &str = "stable";
+const MANIFEST_SCHEMA_VERSION: u32 = 2;
 const SMOKE_TIMEOUT: Duration = Duration::from_secs(10);
 static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeInstallRecord {
-    pub version: String,
+    pub schema_version: u32,
+    pub runtime_version: String,
+    pub kernel_version: String,
+    pub runtime_flavor: String,
+    pub runtime_revision: u32,
     pub platform: String,
     pub arch: String,
     pub path: String,
@@ -34,29 +39,33 @@ pub struct RuntimeInstallRecord {
     pub source: String,
     pub installed_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub upstream_repo: Option<String>,
+    pub source_repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub upstream_commit: Option<String>,
+    pub source_commit: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub local_dirty_hash: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact_sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub previous_version: Option<String>,
+    pub previous_runtime_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeUpdateManifest {
+    pub schema_version: u32,
     pub channel: String,
-    pub version: String,
+    pub runtime_version: String,
+    pub kernel_version: String,
+    pub runtime_flavor: String,
+    pub runtime_revision: u32,
     pub platform: String,
     pub arch: String,
     pub artifact_url: String,
     pub sha256: String,
     pub signature: String,
-    pub upstream_repo: String,
-    pub upstream_commit: String,
+    pub source_repo: String,
+    pub source_commit: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_app_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -143,7 +152,7 @@ pub struct RuntimeUpdateCheckResult {
     pub ok: bool,
     pub update_available: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub current_version: Option<String>,
+    pub current_runtime_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manifest: Option<RuntimeUpdateManifest>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -317,6 +326,9 @@ fn find_executable_in(dir: &Path, max_depth: u32) -> Option<PathBuf> {
 
 pub fn read_current_record() -> Option<RuntimeInstallRecord> {
     let record: RuntimeInstallRecord = read_json_file(&current_record_path())?;
+    if record.schema_version != MANIFEST_SCHEMA_VERSION {
+        return None;
+    }
     if record.platform != current_platform() || record.arch != current_arch() {
         return None;
     }
@@ -471,7 +483,7 @@ fn file_sha256(path: &Path) -> Option<String> {
 }
 
 fn runtime_source_info(record: &RuntimeInstallRecord) -> Option<RuntimeSourceInfo> {
-    let repo = record.upstream_repo.as_ref()?;
+    let repo = record.source_repo.as_ref()?;
     let repo_path = Path::new(repo);
     if !repo_path.exists() {
         return Some(RuntimeSourceInfo {
@@ -552,7 +564,7 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
             return RuntimeUpdateCheckResult {
                 ok: false,
                 update_available: false,
-                current_version: None,
+                current_runtime_version: None,
                 manifest: None,
                 error: Some("Runtime update manifest URL is not configured".to_string()),
             };
@@ -562,11 +574,23 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
     match RUNTIME_HTTP_CLIENT.get(&url).send().await {
         Ok(res) if res.status().is_success() => match res.json::<RuntimeUpdateManifest>().await {
             Ok(manifest) => {
+                if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
+                    return RuntimeUpdateCheckResult {
+                        ok: false,
+                        update_available: false,
+                        current_runtime_version: None,
+                        manifest: None,
+                        error: Some(format!(
+                            "Manifest schemaVersion is {}, expected {}",
+                            manifest.schema_version, MANIFEST_SCHEMA_VERSION
+                        )),
+                    };
+                }
                 if manifest.platform != current_platform() || manifest.arch != current_arch() {
                     return RuntimeUpdateCheckResult {
                         ok: false,
                         update_available: false,
-                        current_version: None,
+                        current_runtime_version: None,
                         manifest: None,
                         error: Some(format!(
                             "Manifest is for {}-{}, not {}-{}",
@@ -580,12 +604,12 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
                 let current = read_current_record();
                 let update_available = current
                     .as_ref()
-                    .map(|c| c.version != manifest.version)
+                    .map(|c| c.runtime_version != manifest.runtime_version)
                     .unwrap_or(true);
                 RuntimeUpdateCheckResult {
                     ok: true,
                     update_available,
-                    current_version: current.map(|c| c.version),
+                    current_runtime_version: current.map(|c| c.runtime_version),
                     manifest: Some(manifest),
                     error: None,
                 }
@@ -593,7 +617,7 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
             Err(e) => RuntimeUpdateCheckResult {
                 ok: false,
                 update_available: false,
-                current_version: None,
+                current_runtime_version: None,
                 manifest: None,
                 error: Some(format!("Failed to parse manifest: {}", e)),
             },
@@ -601,14 +625,14 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
         Ok(res) => RuntimeUpdateCheckResult {
             ok: false,
             update_available: false,
-            current_version: None,
+            current_runtime_version: None,
             manifest: None,
             error: Some(format!("HTTP {}", res.status())),
         },
         Err(e) => RuntimeUpdateCheckResult {
             ok: false,
             update_available: false,
-            current_version: None,
+            current_runtime_version: None,
             manifest: None,
             error: Some(e.to_string()),
         },
@@ -623,15 +647,19 @@ fn sha256_hex(data: &[u8]) -> String {
 
 fn signature_payload(manifest: &RuntimeUpdateManifest) -> Vec<u8> {
     format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        manifest.schema_version,
         manifest.channel,
+        manifest.runtime_version,
+        manifest.kernel_version,
+        manifest.runtime_flavor,
+        manifest.runtime_revision,
         manifest.platform,
         manifest.arch,
-        manifest.version,
         manifest.artifact_url,
         manifest.sha256,
-        manifest.upstream_repo,
-        manifest.upstream_commit,
+        manifest.source_repo,
+        manifest.source_commit,
     )
     .into_bytes()
 }
@@ -843,7 +871,7 @@ pub async fn install_runtime_update(
     // Write zip to downloads dir, then extract
     let _ = fs::create_dir_all(downloads_root());
     let _ = fs::create_dir_all(versions_root());
-    let zip_path = downloads_root().join(format!("{}.zip", resolved.version));
+    let zip_path = downloads_root().join(format!("{}.zip", resolved.runtime_version));
     if let Err(e) = fs::write(&zip_path, &artifact) {
         return RuntimeInstallUpdateResult {
             ok: false,
@@ -887,7 +915,7 @@ pub async fn install_runtime_update(
     }
 
     // Install: move staging → versions/<version>/
-    let target = versions_root().join(safe_version_segment(&resolved.version));
+    let target = versions_root().join(safe_version_segment(&resolved.runtime_version));
     let _ = fs::remove_dir_all(&target);
     if let Err(e) = fs::rename(staging.path(), &target) {
         // rename may fail across filesystems; fall back to copy
@@ -915,18 +943,22 @@ pub async fn install_runtime_update(
 
     let previous = read_current_record();
     let installed = RuntimeInstallRecord {
-        version: resolved.version.clone(),
+        schema_version: MANIFEST_SCHEMA_VERSION,
+        runtime_version: resolved.runtime_version.clone(),
+        kernel_version: resolved.kernel_version.clone(),
+        runtime_flavor: resolved.runtime_flavor.clone(),
+        runtime_revision: resolved.runtime_revision,
         platform: current_platform().to_string(),
         arch: current_arch().to_string(),
         path: target.to_string_lossy().to_string(),
         executable_path: target_executable.to_string_lossy().to_string(),
         source: "update".to_string(),
         installed_at: chrono_now(),
-        upstream_repo: Some(resolved.upstream_repo.clone()),
-        upstream_commit: Some(resolved.upstream_commit.clone()),
+        source_repo: Some(resolved.source_repo.clone()),
+        source_commit: Some(resolved.source_commit.clone()),
         local_dirty_hash: None,
         artifact_sha256: Some(resolved.sha256.clone()),
-        previous_version: previous.as_ref().map(|p| p.version.clone()),
+        previous_runtime_version: previous.as_ref().map(|p| p.runtime_version.clone()),
     };
 
     let _ = write_json_file(&target.join(MANIFEST_FILE), &resolved);
@@ -954,7 +986,7 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
         }
     };
 
-    let prev_version = match &current.previous_version {
+    let prev_runtime_version = match &current.previous_runtime_version {
         Some(v) => v.clone(),
         None => {
             return RuntimeInstallUpdateResult {
@@ -966,7 +998,7 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
         }
     };
 
-    let prev_path = versions_root().join(safe_version_segment(&prev_version));
+    let prev_path = versions_root().join(safe_version_segment(&prev_runtime_version));
     let executable = match find_executable_in(&prev_path, 2) {
         Some(e) => e,
         None => {
@@ -981,20 +1013,35 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
             };
         }
     };
+    let prev_manifest: Option<RuntimeUpdateManifest> =
+        read_json_file(&prev_path.join(MANIFEST_FILE));
 
     let installed = RuntimeInstallRecord {
-        version: prev_version,
+        schema_version: MANIFEST_SCHEMA_VERSION,
+        runtime_version: prev_runtime_version.clone(),
+        kernel_version: prev_manifest
+            .as_ref()
+            .map(|m| m.kernel_version.clone())
+            .unwrap_or_else(|| current.kernel_version.clone()),
+        runtime_flavor: prev_manifest
+            .as_ref()
+            .map(|m| m.runtime_flavor.clone())
+            .unwrap_or_else(|| current.runtime_flavor.clone()),
+        runtime_revision: prev_manifest
+            .as_ref()
+            .map(|m| m.runtime_revision)
+            .unwrap_or(current.runtime_revision),
         platform: current_platform().to_string(),
         arch: current_arch().to_string(),
         path: prev_path.to_string_lossy().to_string(),
         executable_path: executable.to_string_lossy().to_string(),
         source: "update".to_string(),
         installed_at: chrono_now(),
-        upstream_repo: None,
-        upstream_commit: None,
+        source_repo: prev_manifest.as_ref().map(|m| m.source_repo.clone()),
+        source_commit: prev_manifest.as_ref().map(|m| m.source_commit.clone()),
         local_dirty_hash: None,
-        artifact_sha256: None,
-        previous_version: Some(current.version.clone()),
+        artifact_sha256: prev_manifest.as_ref().map(|m| m.sha256.clone()),
+        previous_runtime_version: Some(current.runtime_version.clone()),
     };
 
     let _ = write_json_file(&current_record_path(), &installed);
@@ -1120,15 +1167,19 @@ mod tests {
 
     fn fixture_manifest() -> RuntimeUpdateManifest {
         RuntimeUpdateManifest {
+            schema_version: MANIFEST_SCHEMA_VERSION,
             channel: "stable".to_string(),
-            version: "1.2.3".to_string(),
+            runtime_version: "1.2.3-cn.1".to_string(),
+            kernel_version: "1.2.3".to_string(),
+            runtime_flavor: "cn".to_string(),
+            runtime_revision: 1,
             platform: "linux".to_string(),
             arch: "x64".to_string(),
             artifact_url: "https://example.com/foo.zip".to_string(),
             sha256: "deadbeef".to_string(),
             signature: String::new(),
-            upstream_repo: "owner/repo".to_string(),
-            upstream_commit: "abc123".to_string(),
+            source_repo: "owner/repo".to_string(),
+            source_commit: "abc123".to_string(),
             min_app_version: None,
             created_at: None,
         }
@@ -1247,14 +1298,18 @@ mod tests {
         assert_eq!(
             lines,
             vec![
+                "2",                           // schema_version
                 "stable",                      // channel
+                "1.2.3-cn.1",                  // runtime_version
+                "1.2.3",                       // kernel_version
+                "cn",                          // runtime_flavor
+                "1",                           // runtime_revision
                 "linux",                       // platform
                 "x64",                         // arch
-                "1.2.3",                       // version
                 "https://example.com/foo.zip", // artifact_url
                 "deadbeef",                    // sha256
-                "owner/repo",                  // upstream_repo
-                "abc123",                      // upstream_commit
+                "owner/repo",                  // source_repo
+                "abc123",                      // source_commit
             ]
         );
     }
@@ -1285,7 +1340,7 @@ mod tests {
         let (key, pem) = test_keypair();
         let mut m = fixture_manifest();
         sign_manifest(&key, &mut m);
-        m.version = "9.9.9".to_string();
+        m.runtime_version = "9.9.9-cn.1".to_string();
         let err = verify_signature_with_key(&m, &pem).unwrap_err();
         assert!(err.contains("Signature verification failed"));
     }

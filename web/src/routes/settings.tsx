@@ -399,7 +399,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     setRuntimeMessage("");
     const result = await installRuntimeUpdate.mutateAsync();
     setRuntimeMessage(result.ok
-      ? `已切换到 runtime ${result.installed?.version ?? ""}`.trim()
+      ? `已切换到 runtime ${result.installed?.runtimeVersion ?? ""}`.trim()
       : result.error ?? "runtime 更新失败");
   };
 
@@ -407,7 +407,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     setRuntimeMessage("");
     const result = await rollbackRuntime.mutateAsync();
     setRuntimeMessage(result.ok
-      ? `已回滚到 runtime ${result.installed?.version ?? ""}`.trim()
+      ? `已回滚到 runtime ${result.installed?.runtimeVersion ?? ""}`.trim()
       : result.error ?? "runtime 回滚失败");
   };
 
@@ -545,12 +545,14 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           {hasRuntimeBridge ? (
             <>
               <div className={s.runtimeGrid}>
-                <RuntimeField label="Runtime 版本" value={info?.current?.version ?? "未安装"} />
+                <RuntimeField label="Runtime 完整版本" value={info?.current?.runtimeVersion ?? "未安装"} />
+                <RuntimeField label="Hermes Agent 内核" value={info?.current?.kernelVersion ?? "—"} />
+                <RuntimeField label="Runtime 修订" value={info?.current ? `${info.current.runtimeFlavor}.${info.current.runtimeRevision}` : "—"} />
                 <RuntimeField label="来源" value={runtimeSourceLabel(info?.current?.source ?? info?.mode)} />
                 <RuntimeField label="平台" value={info ? `${info.platform}-${info.arch}` : "…"} />
                 <RuntimeField label="安装时间" value={formatDateTime(info?.current?.installedAt)} />
-                <RuntimeField label="上游仓库" value={info?.current?.upstreamRepo ?? source?.repo ?? "—"} mono wide />
-                <RuntimeField label="已安装提交" value={shortCommit(info?.current?.upstreamCommit)} mono />
+                <RuntimeField label="源码仓库" value={info?.current?.sourceRepo ?? source?.repo ?? "—"} mono wide />
+                <RuntimeField label="已安装提交" value={shortCommit(info?.current?.sourceCommit)} mono />
                 <RuntimeField label="源码 HEAD" value={shortCommit(source?.headCommit)} mono />
                 <RuntimeField label="源码工作区" value={source?.dirty == null ? "未知" : source.dirty ? "有未提交改动" : "干净"} />
                 <RuntimeField label="本地 dirty hash" value={info?.current?.localDirtyHash ?? "—"} mono />
@@ -602,7 +604,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
                   className={s.btn}
                   type="button"
                   onClick={handleRollbackRuntime}
-                  disabled={!info?.current?.previousVersion || rollingBack}
+                  disabled={!info?.current?.previousRuntimeVersion || rollingBack}
                 >
                   {rollingBack ? "回滚中…" : "回滚 Runtime"}
                 </button>
@@ -646,7 +648,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           {source?.recentCommits.length ? (
             <div className={s.commitList}>
               {source.recentCommits.map((commit) => {
-                const active = commit.hash === info?.current?.upstreamCommit;
+                const active = commit.hash === info?.current?.sourceCommit;
                 return (
                   <div key={commit.hash} className={s.commitItem} data-active={active}>
                     <div className={s.commitHash}>
@@ -673,7 +675,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             <RuntimeField label="gatewayRuntime" value={process?.gatewayRuntimeDir ?? info?.gatewayRuntimeDir ?? "—"} mono wide />
             <RuntimeField label="gatewayLockDir" value={process?.gatewayLockDir ?? "—"} mono wide />
             <RuntimeField label="executablePath" value={info?.current?.executablePath ?? "—"} mono wide />
-            <RuntimeField label="previousVersion" value={info?.current?.previousVersion ?? "—"} wide />
+            <RuntimeField label="previousRuntimeVersion" value={info?.current?.previousRuntimeVersion ?? "—"} wide />
           </div>
         </DebugCard>
       </div>
@@ -758,8 +760,8 @@ function formatDateTime(value: string | undefined): string {
 
 function formatRuntimeUpdateResult(result: RuntimeUpdateCheckResult): string {
   if (!result.ok) return result.error ?? "runtime 更新检查失败";
-  if (!result.updateAvailable) return `已是最新版本 ${result.currentVersion ?? ""}`.trim();
-  return `发现新 runtime ${result.manifest?.version ?? ""}`.trim();
+  if (!result.updateAvailable) return `已是最新版本 ${result.currentRuntimeVersion ?? ""}`.trim();
+  return `发现新 runtime ${result.manifest?.runtimeVersion ?? ""}`.trim();
 }
 
 /* ── Shared Components ───────────────────────────────────────────────── */

@@ -60,7 +60,14 @@ hermes-agent-cn/             ← 实际 agent（fork of NousResearch/hermes-agen
     └── release-runtime.yml      tag runtime-v* → PyInstaller + 签 + 发 Release
 ```
 
-## 三、首次启动时序（桌面端 PROD 模式）
+## 三、Runtime 版本号
+
+Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`。
+`kernelVersion` 对应 hermes-agent-cn 的 `[project].version`，`runtimeRevision` 是同一
+内核版本下中文 runtime 打包修订号，例如 `runtime-v0.14.0-cn.1`、
+`runtime-v0.14.0-cn.2`。完整规范见 `hermes-agent-cn/docs/RUNTIME_VERSIONING.md`。
+
+## 四、首次启动时序（桌面端 PROD 模式）
 
 ```
 用户双击 .msi 装好 → 第一次开桌面端
@@ -95,22 +102,23 @@ hermes-agent-cn/             ← 实际 agent（fork of NousResearch/hermes-agen
       https://github.com/Eynzof/hermes-agent-cn/releases/latest/download/stable-win32-x64.json
    b. reqwest GET → 拿到 manifest JSON
    c. configured_public_key() → baked-in PEM
-   d. verify_signature(manifest) → Ed25519 验证 channel/platform/arch/
-      version/artifact_url/sha256/upstream_repo/upstream_commit 8 字段
-      canonical payload 的签名（src/process/runtime.rs::signature_payload）
+   d. verify_signature(manifest) → Ed25519 验证 schemaVersion/channel/
+      runtimeVersion/kernelVersion/runtimeFlavor/runtimeRevision/platform/arch/
+      artifactUrl/sha256/sourceRepo/sourceCommit 12 字段 canonical payload 的签名
+      （src/process/runtime.rs::signature_payload）
    e. reqwest GET artifact_url (https 强校验) → 拿到 ~35MB zip
    f. sha256(zip) == manifest.sha256 (大小写不敏感)
    g. tempfile::tempdir() 解压（zip-slip 防御 + 5000 文件 + 500MB 上限）
    h. find_executable_in(staging) 找 hermes-agent-cn-runtime-<plat>-<arch>.exe
    i. smoke_check_runtime(exe) 跑 `dashboard --help`，返回码 0
    j. fs::rename(staging, target) 装到
-      %APPDATA%/cn.hermes.agent.desktop/runtime/versions/0.13.0/
+      %APPDATA%/cn.hermes.agent.desktop/runtime/versions/0.14.0-cn.1/
    k. write current.json 指向这个版本
   ↓
 9. emit runtime-status "starting-dashboard"
    dashboard::ensure_hermes_dashboard():
    a. dashboard.rs::resolve_hermes_command() →
-      runtime::read_current_record() 命中 → 返回 versions/0.13.0/exe path
+      runtime::read_current_record() 命中 → 返回 versions/0.14.0-cn.1/exe path
    b. spawn 子进程，传 HERMES_HOME 等 env
    c. wait_for_dashboard 轮询 /api/status 直到 2xx 或 401
   ↓
@@ -170,7 +178,7 @@ hermes-agent-cn/             ← 实际 agent（fork of NousResearch/hermes-agen
     → React 组件更新
 ```
 
-## 四、后续启动（managed runtime 已装）
+## 五、后续启动（managed runtime 已装）
 
 跳过 1-15 大部分：
 
@@ -197,7 +205,7 @@ PATH 里的 `hermes`。脚本会先把相邻 checkout：
 
 ```
 ~/Library/Application Support/cn.hermes.agent.desktop/runtime/
-  versions/dev-local-<version>-<commit>[-dirty-...]/venv/
+  versions/dev-local-<kernelVersion>-<commit>[-dirty-...]/venv/
   current.json
 ```
 
@@ -227,7 +235,7 @@ pnpm tauri:dev:external
 ## 五、Runtime 升级
 
 ```
-fork main 收到 P-009 之后的新代码 → 你 git tag runtime-v0.13.1; git push origin runtime-v0.13.1
+fork main 收到 P-009 之后的新代码 → 你 git tag runtime-v0.14.0-cn.2; git push origin runtime-v0.14.0-cn.2
   ↓
 fork CI release-runtime.yml 触发：
   matrix: win32-x64 / darwin-arm64 / linux-x64
@@ -238,22 +246,22 @@ fork CI release-runtime.yml 触发：
     4. <NAME>.exe dashboard --help（smoke test，验证 PyInstaller 包对了）
     5. zip dist/<NAME>
     6. python scripts/sign_runtime_manifest.py 用 RUNTIME_SIGN_PRIVATE_KEY_PEM
-       签 manifest JSON （channel-platform-arch.json）
+       签 manifest JSON （stable-platform-arch.json）
   release job:
     softprops/action-gh-release → 把 3 zip + 3 manifest 发到
-    releases/runtime-v0.13.1
+    releases/runtime-v0.14.0-cn.2
   ↓
 现在 https://github.com/Eynzof/hermes-agent-cn/releases/latest/download/
-指向 runtime-v0.13.1 这个 Release
+指向 runtime-v0.14.0-cn.2 这个 Release
   ↓
 任何已装桌面端下次启动时：
-  1. 看到 current.json 里是 0.13.0
+  1. 看到 current.json 里是 0.14.0-cn.1
   2. 用户在 UI 里点 "Check for update"，或者首次启动逻辑就会
-     check_runtime_update() → 拿到 0.13.1 manifest → update_available
+     check_runtime_update() → 拿到 0.14.0-cn.2 manifest → update_available
   3. 用户确认升级 → runtime_install_update → 走 first-run 那条
      install 路径
-  4. current.json 改指 0.13.1，previous_version=0.13.0
-  5. 出问题可以 runtime_rollback 回 0.13.0
+  4. current.json 改指 0.14.0-cn.2，previous_runtime_version=0.14.0-cn.1
+  5. 出问题可以 runtime_rollback 回 0.14.0-cn.1
 ```
 
 ## 六、桌面端升级
@@ -300,7 +308,7 @@ Ed25519 验签会失败、SHA-256 校验会失败、桌面端拒绝安装。
 - zip 解压做 zip-slip 防御 + 5000 文件 + 500MB 上限
   （`runtime.rs:722-771`）。
 - 解压后跑 smoke test (`dashboard --help`)，挂了就不切到这个版本。
-- AppState 里 `previous_version` 字段支持一键 rollback。
+- AppState 里 `previous_runtime_version` 字段支持一键 rollback。
 
 ## 八、密钥轮转
 
