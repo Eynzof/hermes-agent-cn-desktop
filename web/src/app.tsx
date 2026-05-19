@@ -13,6 +13,7 @@ import { SkillsRoute } from "@/routes/skills";
 import { ModelsRoute } from "@/routes/models";
 import { McpRoute } from "@/routes/mcp";
 import { ProfilesRoute } from "@/routes/profiles";
+import { MemoryRoute } from "@/routes/memory";
 import { CronRoute } from "@/routes/cron";
 import { HealthRoute } from "@/routes/health";
 import { LogsRoute } from "@/routes/logs";
@@ -46,6 +47,7 @@ export function App() {
           <Route path="/models" element={<ModelsRoute />} />
           <Route path="/mcp" element={<McpRoute />} />
           <Route path="/profiles" element={<ProfilesRoute />} />
+          <Route path="/memory" element={<MemoryRoute />} />
           <Route path="/cron" element={<CronRoute />} />
           <Route path="/health" element={<HealthRoute />} />
           <Route path="/analytics" element={<AnalyticsRoute />} />

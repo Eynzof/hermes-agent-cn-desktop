@@ -124,6 +124,31 @@ const tauriBridge = {
     return inv("switch_profile", { input });
   },
 
+  async readMemory() {
+    const inv = await ensureInvoke();
+    return inv("read_memory");
+  },
+
+  async addMemoryEntry(content: string) {
+    const inv = await ensureInvoke();
+    return inv("add_memory_entry", { content });
+  },
+
+  async updateMemoryEntry(index: number, content: string) {
+    const inv = await ensureInvoke();
+    return inv("update_memory_entry", { index, content });
+  },
+
+  async removeMemoryEntry(index: number) {
+    const inv = await ensureInvoke();
+    return inv("remove_memory_entry", { index });
+  },
+
+  async writeUserProfile(content: string) {
+    const inv = await ensureInvoke();
+    return inv("write_user_profile", { content });
+  },
+
   onSystemResume(handler: () => void): () => void {
     // Initial build: rely on the JS clock-skew watchdog in gateway-client.ts.
     // The watchdog detects sleep/wake within ~5s, which is acceptable.

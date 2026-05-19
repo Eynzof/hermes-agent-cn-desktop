@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Boxes,
+  Brain,
   Cpu,
   Puzzle,
   Sparkles,
@@ -25,6 +26,7 @@ const ITEMS: readonly CapabilityItem[] = [
   { label: "技能", path: "/skills", icon: Sparkles },
   { label: "MCP", path: "/mcp", icon: Puzzle },
   { label: "模型", path: "/models", icon: Cpu },
+  { label: "记忆", path: "/memory", icon: Brain },
 ];
 
 export function CapabilitySidebar() {

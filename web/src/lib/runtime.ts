@@ -30,6 +30,35 @@ export interface ElectronFilePickerResult {
   paths: string[];
 }
 
+export interface MemoryEntry {
+  index: number;
+  content: string;
+}
+
+export interface MemoryInfo {
+  memory: {
+    content: string;
+    exists: boolean;
+    lastModified: number | null;
+    entries: MemoryEntry[];
+    charCount: number;
+    charLimit: number;
+  };
+  user: {
+    content: string;
+    exists: boolean;
+    lastModified: number | null;
+    charCount: number;
+    charLimit: number;
+  };
+  stats: { totalSessions: number; totalMessages: number };
+}
+
+export interface MemoryMutationResult {
+  success: boolean;
+  error?: string | null;
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -58,6 +87,11 @@ declare global {
       installRuntimeUpdate?(): Promise<RuntimeInstallUpdateResult>;
       rollbackRuntime?(): Promise<RuntimeInstallUpdateResult>;
       switchProfile?(input: SwitchProfileInput): Promise<SwitchProfileResult>;
+      readMemory?(): Promise<MemoryInfo>;
+      addMemoryEntry?(content: string): Promise<MemoryMutationResult>;
+      updateMemoryEntry?(index: number, content: string): Promise<MemoryMutationResult>;
+      removeMemoryEntry?(index: number): Promise<boolean>;
+      writeUserProfile?(content: string): Promise<MemoryMutationResult>;
       onSystemResume?(handler: () => void): () => void;
     };
   }
