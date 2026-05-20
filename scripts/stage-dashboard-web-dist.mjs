@@ -56,7 +56,7 @@ const skipBuild = hasFlag("--skip-build") || process.env.HERMES_DASHBOARD_SKIP_B
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     stdio: "inherit",
-    shell: false,
+    shell: process.platform === "win32",
     ...options,
   });
   if (result.error) throw result.error;
