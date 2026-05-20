@@ -12,7 +12,7 @@
 #      production fallbacks. Set them only if you fork the project and
 #      want to point the auto-update at a different runtime release
 #      pipeline.
-#   6. tauri-action uploads .msi / .dmg / .AppImage to the GitHub Release
+#   6. tauri-action uploads .exe / .dmg to the GitHub Release
 #      it creates on first run, or appends to an existing tag's release.
 
 name: release-desktop
@@ -135,7 +135,7 @@ jobs:
             hermes-agent-cn ${{ steps.runtime_manifest.outputs.source_commit }}.
             Windows installers also include the staged hermes-agent-cn runtime
             ${{ steps.runtime_manifest.outputs.runtime_version }}.
-            Other platforms download runtime on first launch from
+            macOS downloads runtime on first launch from
             https://github.com/Eynzof/hermes-agent-cn/releases/latest/download
             (overridable via HERMES_RUNTIME_UPDATE_* env vars).
           releaseDraft: false
