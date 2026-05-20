@@ -6,12 +6,14 @@
 #   1. Installs Node + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
-#   4. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
-#      env vars are NOT set here — src/process/runtime.rs ships hardcoded
+#   4. Stages the bundled dashboard frontend. Windows also stages the bundled
+#      hermes-agent-cn runtime zip + manifest.
+#   5. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
+#      env vars are NOT set here; src/process/runtime.rs ships hardcoded
 #      production fallbacks. Set them only if you fork the project and
 #      want to point the auto-update at a different runtime release
 #      pipeline.
-#   5. tauri-action uploads .msi / .dmg / .AppImage to the GitHub Release
+#   6. tauri-action uploads .msi / .dmg / .AppImage to the GitHub Release
 #      it creates on first run, or appends to an existing tag's release.
 
 name: release-desktop
@@ -86,6 +88,47 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve bundled runtime manifest
+        id: runtime_manifest
+        shell: bash
+        env:
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'latest' }}
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          (async () => {
+            const tag = process.env.BUNDLED_RUNTIME_TAG || "latest";
+            const baseUrl = tag === "latest"
+              ? "https://github.com/Eynzof/hermes-agent-cn/releases/latest/download"
+              : `https://github.com/Eynzof/hermes-agent-cn/releases/download/${encodeURIComponent(tag)}`;
+            const response = await fetch(`${baseUrl}/stable-win32-x64.json`, {
+              headers: { "User-Agent": "hermes-cn-desktop-v2-release-workflow" },
+            });
+            if (!response.ok) {
+              throw new Error(`manifest download failed: HTTP ${response.status}`);
+            }
+            const manifest = await response.json();
+            if (!manifest.sourceCommit) {
+              throw new Error("runtime manifest missing sourceCommit");
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `source_commit=${manifest.sourceCommit}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `runtime_version=${manifest.runtimeVersion}\n`);
+          })().catch((err) => {
+            console.error(err);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Checkout hermes-agent-cn source for dashboard assets
+        uses: actions/checkout@v4
+        with:
+          repository: Eynzof/hermes-agent-cn
+          ref: ${{ steps.runtime_manifest.outputs.source_commit }}
+          path: hermes-agent-cn-source
+
+      - name: Stage bundled dashboard frontend
+        run: node scripts/stage-dashboard-web-dist.mjs --source hermes-agent-cn-source
+
       - name: Stage bundled hermes-agent-cn runtime
         if: matrix.runner == 'windows-latest'
         run: node scripts/stage-bundled-runtime.mjs --tag "${{ github.event.inputs.bundled_runtime_tag || 'latest' }}" --platform win32 --arch x64
@@ -102,7 +145,10 @@ jobs:
           releaseName: "Hermes Agent CN ${{ github.event.inputs.tag || github.ref_name }}"
           releaseBody: |
             Auto-built desktop installer.
-            Windows installers include the staged hermes-agent-cn runtime.
+            Installers include the staged dashboard frontend from
+            hermes-agent-cn ${{ steps.runtime_manifest.outputs.source_commit }}.
+            Windows installers also include the staged hermes-agent-cn runtime
+            ${{ steps.runtime_manifest.outputs.runtime_version }}.
             Other platforms download runtime on first launch from
             https://github.com/Eynzof/hermes-agent-cn/releases/latest/download
             (overridable via HERMES_RUNTIME_UPDATE_* env vars).

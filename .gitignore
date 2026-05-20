@@ -20,10 +20,11 @@ Thumbs.db
 *.swo
 
 # Build artifacts
-static/dashboard/
 static/runtime/
 static/bundled-runtime/*
 !static/bundled-runtime/.gitkeep
+static/dashboard/*
+!static/dashboard/.gitkeep
 
 # Local logs
 .codex-logs/
