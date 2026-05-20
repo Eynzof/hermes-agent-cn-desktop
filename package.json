@@ -16,7 +16,8 @@
     "tauri:build:debug": "pnpm exec tauri build --debug",
     "tauri:run": "cargo run",
     "typecheck": "pnpm -r run typecheck",
-    "test:unit": "pnpm -r --workspace-concurrency=1 test:unit"
+    "test:unit": "pnpm -r --workspace-concurrency=1 test:unit",
+    "runtime:stage-bundled-windows": "node scripts/stage-bundled-runtime.mjs --platform win32 --arch x64"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"

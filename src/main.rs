@@ -28,6 +28,43 @@ fn emit_runtime_status(app: &tauri::AppHandle, phase: &str, message: &str) {
     );
 }
 
+async fn install_bundled_runtime_for_bootstrap(
+    app: &tauri::AppHandle,
+    resource_dir: Option<&Path>,
+) -> bool {
+    if !runtime::bundled_runtime_available(resource_dir) {
+        return true;
+    }
+
+    emit_runtime_status(app, "installing", "正在安装内置 hermes-agent-cn runtime...");
+    log::info!("Bootstrap: install bundled runtime");
+    let install = runtime::install_bundled_runtime_if_needed(resource_dir).await;
+    if !install.ok {
+        let msg = install
+            .error
+            .clone()
+            .unwrap_or_else(|| "unknown bundled runtime install error".into());
+        log::error!("Bundled runtime install failed: {}", msg);
+        {
+            use tauri::Manager;
+            let state = app.state::<AppState>();
+            if let Ok(mut inner) = state.inner.lock() {
+                inner.last_runtime_error = Some(format!("内置 runtime 安装失败: {}", msg));
+            };
+        }
+        emit_runtime_status(app, "error", &format!("内置 runtime 安装失败: {}", msg));
+        return false;
+    }
+
+    if let Some(installed) = &install.installed {
+        log::info!(
+            "Installed bundled managed runtime v{}",
+            installed.runtime_version
+        );
+    }
+    true
+}
+
 fn create_and_return(path: PathBuf) -> PathBuf {
     let _ = fs::create_dir_all(&path);
     path
@@ -66,6 +103,7 @@ fn main() {
         .setup(|app| {
             use tauri::Manager;
             let state = app.state::<AppState>();
+            let bundled_resource_dir = app.path().resource_dir().ok();
 
             // 1. Resolve HERMES_HOME
             let hermes_home_base = resolve_hermes_home();
@@ -117,6 +155,7 @@ fn main() {
                 let boot_home_for_task = boot_home_str.clone();
                 let base_for_task = base_str.clone();
                 let profile_for_task = current_profile.clone();
+                let resource_dir_for_task = bundled_resource_dir.clone();
 
                 tauri::async_runtime::spawn(async move {
                     let handle = if external_dev_dashboard {
@@ -137,6 +176,15 @@ fn main() {
                             child: None,
                         }
                     } else {
+                        if !install_bundled_runtime_for_bootstrap(
+                            &app_handle,
+                            resource_dir_for_task.as_deref(),
+                        )
+                        .await
+                        {
+                            return;
+                        }
+
                         let info = runtime::get_runtime_info(None);
                         let needs_install = info.current.is_none() && info.updates_configured;
 
@@ -277,6 +325,13 @@ fn main() {
                         child: None,
                     }
                 } else {
+                    if !tauri::async_runtime::block_on(install_bundled_runtime_for_bootstrap(
+                        app.handle(),
+                        bundled_resource_dir.as_deref(),
+                    )) {
+                        return Ok(());
+                    }
+
                     let info = runtime::get_runtime_info(None);
                     let needs_install = info.current.is_none() && info.updates_configured;
 

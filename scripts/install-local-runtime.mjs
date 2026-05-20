@@ -164,15 +164,62 @@ const runtimeVersion = `dev-local-${kernelVersion}-${shortCommit}${dirtySuffix}`
 const target = join(versionsRoot, runtimeVersion);
 const executable = hermesExecutable(join(target, "venv"));
 const current = readCurrent(currentPath);
+const currentSourceCommit = current?.sourceCommit ?? current?.upstreamCommit;
+const currentRuntimeVersion = current?.runtimeVersion ?? current?.version;
+const currentPreviousRuntimeVersion = current?.previousRuntimeVersion ?? current?.previousVersion ?? null;
+const currentMatchesSource =
+  current?.source === "local-source"
+  && currentSourceCommit === commit
+  && (current?.localDirtyHash ?? null) === dirtyHash
+  && current.executablePath
+  && existsSync(current.executablePath);
+
+function currentRecordIsV2(record) {
+  return record?.schemaVersion === 2
+    && record?.runtimeVersion === runtimeVersion
+    && record?.kernelVersion === kernelVersion
+    && record?.runtimeFlavor
+    && record?.executablePath
+    && existsSync(record.executablePath);
+}
+
+function writeCurrentRecord(installedExecutable, installedAt = new Date().toISOString()) {
+  const record = {
+    schemaVersion: 2,
+    runtimeVersion,
+    kernelVersion,
+    runtimeFlavor: "cn-local",
+    runtimeRevision: 0,
+    platform: platformName(),
+    arch: archName(),
+    path: target,
+    executablePath: installedExecutable,
+    source: "local-source",
+    installedAt,
+    sourceRepo: sourceRoot,
+    sourceCommit: commit,
+    localDirtyHash: dirtyHash,
+    artifactSha256: null,
+    previousRuntimeVersion:
+      currentRuntimeVersion && currentRuntimeVersion !== runtimeVersion
+        ? currentRuntimeVersion
+        : currentPreviousRuntimeVersion,
+  };
+  mkdirSync(dirname(currentPath), { recursive: true });
+  writeFileSync(currentPath, `${JSON.stringify(record, null, 2)}\n`);
+  return record;
+}
 
 if (
   !force
-  && current?.source === "local-source"
-  && current?.sourceCommit === commit
-  && (current?.localDirtyHash ?? null) === dirtyHash
-  && existsSync(current.executablePath)
+  && currentMatchesSource
 ) {
-  console.log(`managed runtime already points at local ${kernelVersion} ${shortCommit}: ${current.executablePath}`);
+  if (!currentRecordIsV2(current)) {
+    writeCurrentRecord(current.executablePath, current.installedAt ?? new Date().toISOString());
+    console.log(`migrated managed runtime pointer to schema v2: ${current.executablePath}`);
+  } else {
+    console.log(`managed runtime already points at local ${kernelVersion} ${shortCommit}: ${current.executablePath}`);
+  }
   process.exit(0);
 }
 
@@ -210,24 +257,7 @@ run(hermesExecutable(venv), ["dashboard", "--help"], {
 });
 
 const installedExecutable = hermesExecutable(join(target, "venv"));
-const record = {
-  schemaVersion: 2,
-  runtimeVersion,
-  kernelVersion,
-  runtimeFlavor: "cn-local",
-  runtimeRevision: 0,
-  platform: platformName(),
-  arch: archName(),
-  path: target,
-  executablePath: installedExecutable,
-  source: "local-source",
-  installedAt: new Date().toISOString(),
-  sourceRepo: sourceRoot,
-  sourceCommit: commit,
-  localDirtyHash: dirtyHash,
-  artifactSha256: null,
-  previousRuntimeVersion: current?.runtimeVersion ?? null,
-};
+const record = writeCurrentRecord(installedExecutable);
 
 writeFileSync(join(target, "manifest.json"), `${JSON.stringify({
   kind: "local-source-runtime",
@@ -239,8 +269,6 @@ writeFileSync(join(target, "manifest.json"), `${JSON.stringify({
   dirtyHash,
   createdAt: record.installedAt,
 }, null, 2)}\n`);
-mkdirSync(dirname(currentPath), { recursive: true });
-writeFileSync(currentPath, `${JSON.stringify(record, null, 2)}\n`);
 
 console.log(`wrote ${currentPath}`);
 console.log(`managed runtime executable: ${installedExecutable}`);

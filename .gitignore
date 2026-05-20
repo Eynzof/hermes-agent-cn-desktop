@@ -22,10 +22,11 @@ Thumbs.db
 # Build artifacts
 static/dashboard/
 static/runtime/
+static/bundled-runtime/*
+!static/bundled-runtime/.gitkeep
 
 # Local logs
 .codex-logs/
 
 # Runtime release signing private key (gh secret RUNTIME_SIGN_PRIVATE_KEY_PEM)
 .runtime-keys/
-

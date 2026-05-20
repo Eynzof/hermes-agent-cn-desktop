@@ -52,6 +52,28 @@ pub struct RuntimeInstallRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct LegacyRuntimeInstallRecord {
+    pub version: String,
+    pub platform: String,
+    pub arch: String,
+    pub path: String,
+    pub executable_path: String,
+    pub source: String,
+    pub installed_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upstream_repo: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upstream_commit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_dirty_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RuntimeUpdateManifest {
     pub schema_version: u32,
     pub channel: String,
@@ -324,8 +346,71 @@ fn find_executable_in(dir: &Path, max_depth: u32) -> Option<PathBuf> {
     None
 }
 
+fn infer_kernel_version_from_runtime_version(runtime_version: &str) -> String {
+    if let Some(rest) = runtime_version.strip_prefix("dev-local-") {
+        if let Some((kernel, _)) = rest.split_once('-') {
+            if !kernel.is_empty() {
+                return kernel.to_string();
+            }
+        }
+    }
+    if let Some((kernel, _)) = runtime_version.split_once("-cn") {
+        if !kernel.is_empty() {
+            return kernel.to_string();
+        }
+    }
+    runtime_version.to_string()
+}
+
+fn infer_kernel_version_from_local_manifest(runtime_dir: &Path, runtime_version: &str) -> String {
+    let manifest: Option<serde_json::Value> = read_json_file(&runtime_dir.join(MANIFEST_FILE));
+    manifest
+        .as_ref()
+        .and_then(|value| {
+            value
+                .get("kernelVersion")
+                .or_else(|| value.get("projectVersion"))
+                .and_then(|v| v.as_str())
+        })
+        .map(ToString::to_string)
+        .unwrap_or_else(|| infer_kernel_version_from_runtime_version(runtime_version))
+}
+
+fn read_legacy_current_record(path: &Path) -> Option<RuntimeInstallRecord> {
+    let legacy: LegacyRuntimeInstallRecord = read_json_file(path)?;
+    let runtime_dir = PathBuf::from(&legacy.path);
+    let kernel_version = infer_kernel_version_from_local_manifest(&runtime_dir, &legacy.version);
+    Some(RuntimeInstallRecord {
+        schema_version: MANIFEST_SCHEMA_VERSION,
+        runtime_version: legacy.version,
+        kernel_version,
+        runtime_flavor: if legacy.source == "local-source" {
+            "cn-local".to_string()
+        } else {
+            "cn".to_string()
+        },
+        runtime_revision: 0,
+        platform: legacy.platform,
+        arch: legacy.arch,
+        path: legacy.path,
+        executable_path: legacy.executable_path,
+        source: legacy.source,
+        installed_at: legacy.installed_at,
+        source_repo: legacy.upstream_repo,
+        source_commit: legacy.upstream_commit,
+        local_dirty_hash: legacy.local_dirty_hash,
+        artifact_sha256: legacy.artifact_sha256,
+        previous_runtime_version: legacy.previous_version,
+    })
+}
+
 pub fn read_current_record() -> Option<RuntimeInstallRecord> {
-    let record: RuntimeInstallRecord = read_json_file(&current_record_path())?;
+    let path = current_record_path();
+    let (record, migrated) = if let Some(record) = read_json_file::<RuntimeInstallRecord>(&path) {
+        (record, false)
+    } else {
+        (read_legacy_current_record(&path)?, true)
+    };
     if record.schema_version != MANIFEST_SCHEMA_VERSION {
         return None;
     }
@@ -334,6 +419,9 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
     }
     if !Path::new(&record.executable_path).is_file() {
         return None;
+    }
+    if migrated {
+        let _ = write_json_file(&path, &record);
     }
     Some(record)
 }
@@ -480,6 +568,61 @@ fn file_sha256(path: &Path) -> Option<String> {
         hasher.update(&buf[..n]);
     }
     Some(format!("{:x}", hasher.finalize()))
+}
+
+fn bundled_runtime_dir(resource_dir: Option<&Path>) -> Option<PathBuf> {
+    if let Ok(override_path) = std::env::var("HERMES_DESKTOP_BUNDLED_RUNTIME_DIR") {
+        let trimmed = override_path.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+
+    resource_dir.map(|dir| dir.join("bundled-runtime"))
+}
+
+fn bundled_manifest_path(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join(format!(
+        "{}-{}-{}.json",
+        DEFAULT_CHANNEL,
+        current_platform(),
+        current_arch()
+    ))
+}
+
+fn bundled_artifact_path(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join(format!(
+        "{}-{}-{}.zip",
+        RUNTIME_BASENAME,
+        current_platform(),
+        current_arch()
+    ))
+}
+
+pub fn bundled_runtime_available(resource_dir: Option<&Path>) -> bool {
+    let Some(runtime_dir) = bundled_runtime_dir(resource_dir) else {
+        return false;
+    };
+    bundled_manifest_path(&runtime_dir).is_file() && bundled_artifact_path(&runtime_dir).is_file()
+}
+
+fn validate_manifest_for_current_platform(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
+    if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
+        return Err(format!(
+            "Manifest schemaVersion is {}, expected {}",
+            manifest.schema_version, MANIFEST_SCHEMA_VERSION
+        ));
+    }
+    if manifest.platform != current_platform() || manifest.arch != current_arch() {
+        return Err(format!(
+            "Manifest is for {}-{}, not {}-{}",
+            manifest.platform,
+            manifest.arch,
+            current_platform(),
+            current_arch()
+        ));
+    }
+    Ok(())
 }
 
 fn runtime_source_info(record: &RuntimeInstallRecord) -> Option<RuntimeSourceInfo> {
@@ -639,6 +782,7 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
     }
 }
 
+#[cfg(test)]
 fn sha256_hex(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
@@ -754,6 +898,244 @@ async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
     wait_for_smoke_child(child, SMOKE_TIMEOUT).await
 }
 
+async fn install_runtime_zip(
+    resolved: RuntimeUpdateManifest,
+    zip_path: &Path,
+    source: &str,
+) -> RuntimeInstallUpdateResult {
+    if let Err(e) = validate_manifest_for_current_platform(&resolved) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
+
+    let digest = match file_sha256(zip_path) {
+        Some(digest) => digest,
+        None => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!(
+                    "Runtime artifact not readable: {}",
+                    zip_path.display()
+                )),
+            };
+        }
+    };
+    if digest != resolved.sha256.to_lowercase() {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!(
+                "SHA-256 mismatch: expected {}, got {}",
+                resolved.sha256, digest
+            )),
+        };
+    }
+
+    // Extract to staging directory.
+    let staging = match tempfile::tempdir() {
+        Ok(d) => d,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!("Failed to create temp dir: {}", e)),
+            };
+        }
+    };
+
+    let _ = fs::create_dir_all(downloads_root());
+    let _ = fs::create_dir_all(versions_root());
+    let cached_zip_path = downloads_root().join(format!("{}.zip", resolved.runtime_version));
+    if zip_path != cached_zip_path {
+        if let Err(e) = fs::copy(zip_path, &cached_zip_path) {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!("Failed to cache zip: {}", e)),
+            };
+        }
+    }
+
+    if let Err(e) = extract_zip(&cached_zip_path, staging.path()) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!("Failed to extract: {}", e)),
+        };
+    }
+
+    let executable = match find_executable_in(staging.path(), 2) {
+        Some(e) => e,
+        None => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some("No runtime executable found in artifact".to_string()),
+            };
+        }
+    };
+
+    if let Err(e) = smoke_check_runtime(&executable).await {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!("Smoke check failed: {}", e)),
+        };
+    }
+
+    let target = versions_root().join(safe_version_segment(&resolved.runtime_version));
+    let _ = fs::remove_dir_all(&target);
+    if let Err(e) = fs::rename(staging.path(), &target) {
+        if let Err(e2) = copy_dir_all(staging.path(), &target) {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!("Failed to install: rename={}, copy={}", e, e2)),
+            };
+        }
+    }
+
+    let target_executable = match find_executable_in(&target, 2) {
+        Some(e) => e,
+        None => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some("Executable disappeared after install".to_string()),
+            };
+        }
+    };
+
+    let previous = read_current_record();
+    let installed = RuntimeInstallRecord {
+        schema_version: MANIFEST_SCHEMA_VERSION,
+        runtime_version: resolved.runtime_version.clone(),
+        kernel_version: resolved.kernel_version.clone(),
+        runtime_flavor: resolved.runtime_flavor.clone(),
+        runtime_revision: resolved.runtime_revision,
+        platform: current_platform().to_string(),
+        arch: current_arch().to_string(),
+        path: target.to_string_lossy().to_string(),
+        executable_path: target_executable.to_string_lossy().to_string(),
+        source: source.to_string(),
+        installed_at: chrono_now(),
+        source_repo: Some(resolved.source_repo.clone()),
+        source_commit: Some(resolved.source_commit.clone()),
+        local_dirty_hash: None,
+        artifact_sha256: Some(resolved.sha256.clone()),
+        previous_runtime_version: previous.as_ref().map(|p| p.runtime_version.clone()),
+    };
+
+    let _ = write_json_file(&target.join(MANIFEST_FILE), &resolved);
+    let _ = write_json_file(&current_record_path(), &installed);
+
+    RuntimeInstallUpdateResult {
+        ok: true,
+        installed: Some(installed),
+        previous,
+        error: None,
+    }
+}
+
+/// Install the runtime bundled inside the desktop installer, if present.
+///
+/// This is used for Windows test builds that should work without a first-run
+/// network download. If no bundled files are present, it is a no-op and the
+/// normal update-download path remains responsible for first-run bootstrap.
+pub async fn install_bundled_runtime_if_needed(
+    resource_dir: Option<&Path>,
+) -> RuntimeInstallUpdateResult {
+    let Some(runtime_dir) = bundled_runtime_dir(resource_dir) else {
+        return RuntimeInstallUpdateResult {
+            ok: true,
+            installed: None,
+            previous: None,
+            error: None,
+        };
+    };
+    let manifest_path = bundled_manifest_path(&runtime_dir);
+    if !manifest_path.is_file() {
+        return RuntimeInstallUpdateResult {
+            ok: true,
+            installed: None,
+            previous: None,
+            error: None,
+        };
+    }
+    let artifact_path = bundled_artifact_path(&runtime_dir);
+    if !artifact_path.is_file() {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!(
+                "Bundled runtime manifest exists but artifact is missing: {}",
+                artifact_path.display()
+            )),
+        };
+    }
+
+    let manifest: RuntimeUpdateManifest = match read_json_file(&manifest_path) {
+        Some(manifest) => manifest,
+        None => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!(
+                    "Failed to parse bundled runtime manifest: {}",
+                    manifest_path.display()
+                )),
+            };
+        }
+    };
+
+    if let Err(e) = validate_manifest_for_current_platform(&manifest) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
+
+    if let Some(current) = read_current_record() {
+        if current.runtime_version == manifest.runtime_version {
+            return RuntimeInstallUpdateResult {
+                ok: true,
+                installed: None,
+                previous: Some(current),
+                error: None,
+            };
+        }
+    }
+
+    if let Err(e) = verify_signature(&manifest) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!("Bundled runtime signature check failed: {}", e)),
+        };
+    }
+
+    install_runtime_zip(manifest, &artifact_path, "bundled").await
+}
+
 /// Download, verify, and install a runtime update.
 pub async fn install_runtime_update(
     manifest: Option<RuntimeUpdateManifest>,
@@ -841,34 +1223,8 @@ pub async fn install_runtime_update(
         }
     };
 
-    // SHA-256 verify
-    let digest = sha256_hex(&artifact);
-    if digest != resolved.sha256.to_lowercase() {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(format!(
-                "SHA-256 mismatch: expected {}, got {}",
-                resolved.sha256, digest
-            )),
-        };
-    }
-
-    // Extract to staging directory
-    let staging = match tempfile::tempdir() {
-        Ok(d) => d,
-        Err(e) => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(format!("Failed to create temp dir: {}", e)),
-            };
-        }
-    };
-
-    // Write zip to downloads dir, then extract
+    // Write zip to downloads dir; the shared installer path verifies,
+    // extracts, smoke-tests, and records it.
     let _ = fs::create_dir_all(downloads_root());
     let _ = fs::create_dir_all(versions_root());
     let zip_path = downloads_root().join(format!("{}.zip", resolved.runtime_version));
@@ -881,95 +1237,7 @@ pub async fn install_runtime_update(
         };
     }
 
-    // Extract zip
-    if let Err(e) = extract_zip(&zip_path, staging.path()) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(format!("Failed to extract: {}", e)),
-        };
-    }
-
-    // Find executable in staging
-    let executable = match find_executable_in(staging.path(), 2) {
-        Some(e) => e,
-        None => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some("No runtime executable found in artifact".to_string()),
-            };
-        }
-    };
-
-    // Smoke test
-    if let Err(e) = smoke_check_runtime(&executable).await {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(format!("Smoke check failed: {}", e)),
-        };
-    }
-
-    // Install: move staging → versions/<version>/
-    let target = versions_root().join(safe_version_segment(&resolved.runtime_version));
-    let _ = fs::remove_dir_all(&target);
-    if let Err(e) = fs::rename(staging.path(), &target) {
-        // rename may fail across filesystems; fall back to copy
-        if let Err(e2) = copy_dir_all(staging.path(), &target) {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(format!("Failed to install: rename={}, copy={}", e, e2)),
-            };
-        }
-    }
-
-    let target_executable = match find_executable_in(&target, 2) {
-        Some(e) => e,
-        None => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some("Executable disappeared after install".to_string()),
-            };
-        }
-    };
-
-    let previous = read_current_record();
-    let installed = RuntimeInstallRecord {
-        schema_version: MANIFEST_SCHEMA_VERSION,
-        runtime_version: resolved.runtime_version.clone(),
-        kernel_version: resolved.kernel_version.clone(),
-        runtime_flavor: resolved.runtime_flavor.clone(),
-        runtime_revision: resolved.runtime_revision,
-        platform: current_platform().to_string(),
-        arch: current_arch().to_string(),
-        path: target.to_string_lossy().to_string(),
-        executable_path: target_executable.to_string_lossy().to_string(),
-        source: "update".to_string(),
-        installed_at: chrono_now(),
-        source_repo: Some(resolved.source_repo.clone()),
-        source_commit: Some(resolved.source_commit.clone()),
-        local_dirty_hash: None,
-        artifact_sha256: Some(resolved.sha256.clone()),
-        previous_runtime_version: previous.as_ref().map(|p| p.runtime_version.clone()),
-    };
-
-    let _ = write_json_file(&target.join(MANIFEST_FILE), &resolved);
-    let _ = write_json_file(&current_record_path(), &installed);
-
-    RuntimeInstallUpdateResult {
-        ok: true,
-        installed: Some(installed),
-        previous,
-        error: None,
-    }
+    install_runtime_zip(resolved, &zip_path, "update").await
 }
 
 /// Rollback to the previous runtime version.
@@ -1263,6 +1531,64 @@ mod tests {
         // After filtering, only nothing remains → timestamp fallback (digits, non-empty)
         assert!(!out.is_empty());
         assert!(out.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    #[serial]
+    fn read_current_record_migrates_legacy_local_source_schema() {
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", tmp.path());
+
+        let runtime_version = "dev-local-0.14.0-abcdef123456-dirty-deadbeef0000";
+        let runtime_dir = tmp.path().join("versions").join(runtime_version);
+        let exe = runtime_dir.join("venv").join("bin").join("hermes");
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        fs::write(&exe, "#!/bin/sh\n").unwrap();
+        fs::write(
+            runtime_dir.join(MANIFEST_FILE),
+            r#"{"kind":"local-source-runtime","projectVersion":"0.14.0"}"#,
+        )
+        .unwrap();
+        fs::write(
+            current_record_path(),
+            format!(
+                r#"{{
+  "version": "{runtime_version}",
+  "platform": "{}",
+  "arch": "{}",
+  "path": "{}",
+  "executablePath": "{}",
+  "source": "local-source",
+  "installedAt": "2026-05-19T00:00:00.000Z",
+  "upstreamRepo": "/repo/hermes-agent-cn",
+  "upstreamCommit": "abcdef1234567890",
+  "localDirtyHash": "deadbeef0000",
+  "artifactSha256": null,
+  "previousVersion": "0.13.0"
+}}"#,
+                current_platform(),
+                current_arch(),
+                runtime_dir.display(),
+                exe.display(),
+            ),
+        )
+        .unwrap();
+
+        let record = read_current_record().expect("legacy record should migrate");
+        assert_eq!(record.schema_version, MANIFEST_SCHEMA_VERSION);
+        assert_eq!(record.runtime_version, runtime_version);
+        assert_eq!(record.kernel_version, "0.14.0");
+        assert_eq!(record.runtime_flavor, "cn-local");
+        assert_eq!(record.source_repo.as_deref(), Some("/repo/hermes-agent-cn"));
+        assert_eq!(record.source_commit.as_deref(), Some("abcdef1234567890"));
+        assert_eq!(record.previous_runtime_version.as_deref(), Some("0.13.0"));
+
+        let rewritten = fs::read_to_string(current_record_path()).unwrap();
+        assert!(rewritten.contains(r#""schemaVersion": 2"#));
+        assert!(rewritten.contains(r#""runtimeVersion": "dev-local-0.14.0"#));
+        assert!(!rewritten.contains(r#""upstreamRepo""#));
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 
     fn long_running_command() -> Command {
