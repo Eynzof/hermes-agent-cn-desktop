@@ -10,6 +10,9 @@ let stopBackendLogTail: (() => void) | null = null;
 const LOG_TAIL_FILES = ["errors", "agent", "gateway"] as const;
 const LOG_TAIL_INTERVAL_MS = 3000;
 const LOG_TAIL_LINES = 50;
+const BENIGN_CONSOLE_WARNINGS = [
+  "IPC custom protocol failed, Tauri will now use the postMessage interface instead",
+] as const;
 const lastSeenLogLine: Partial<Record<string, string>> = {};
 
 function classifyLogLine(line: string): DebugEntryLevel {
@@ -102,6 +105,10 @@ function summarizeArgs(args: unknown[]): string {
     .join(" ");
 }
 
+function isBenignConsoleWarning(summary: string): boolean {
+  return BENIGN_CONSOLE_WARNINGS.some((message) => summary.includes(message));
+}
+
 export function installDebugCapture(): void {
   if (installed) return;
   // Skip in vitest / jsdom — patching console.error/warn breaks vi.spyOn(console, "error")
@@ -144,12 +151,15 @@ export function installDebugCapture(): void {
     originalError.apply(console, args);
   };
   console.warn = (...args: unknown[]) => {
-    debugBus.push({
-      type: "console",
-      level: "warn",
-      summary: summarizeArgs(args).slice(0, 500),
-      payload: args.length === 1 ? args[0] : args,
-    });
+    const summary = summarizeArgs(args).slice(0, 500);
+    if (!isBenignConsoleWarning(summary)) {
+      debugBus.push({
+        type: "console",
+        level: "warn",
+        summary,
+        payload: args.length === 1 ? args[0] : args,
+      });
+    }
     originalWarn.apply(console, args);
   };
 

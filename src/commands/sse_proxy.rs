@@ -2,10 +2,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock};
 
 use futures_util::StreamExt;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use tauri::{Emitter, Listener, State};
 
 use crate::error::AppError;
+use crate::process::dashboard::{build_gateway_url, fetch_session_token};
 use crate::state::AppState;
 
 static SSE_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
@@ -17,11 +19,14 @@ pub struct ConnectGatewayInput {
     pub client_id: Option<String>,
 }
 
-/// Build the SSE endpoint URL with client_id query params.
+/// Build the SSE endpoint URL with token/client_id query params.
 /// Pure function so it can be unit tested without spinning up reqwest.
-pub fn build_sse_url(api_base_url: &str, _token: Option<&str>, client_id: Option<&str>) -> String {
+pub fn build_sse_url(api_base_url: &str, token: Option<&str>, client_id: Option<&str>) -> String {
     let mut url = format!("{}/api/v2/events", api_base_url.trim_end_matches('/'));
     let mut params: Vec<String> = vec![];
+    if let Some(token) = token {
+        params.push(format!("token={}", urlencoding::encode(token)));
+    }
     if let Some(cid) = client_id {
         params.push(format!("client_id={}", urlencoding::encode(cid)));
     }
@@ -59,6 +64,24 @@ pub fn parse_sse_chunk(buffer: &mut Vec<u8>, chunk: &[u8]) -> Vec<String> {
     events
 }
 
+async fn open_sse_response(
+    api_base_url: &str,
+    session_token: Option<&str>,
+    client_id: Option<&str>,
+) -> Result<reqwest::Response, AppError> {
+    let url = build_sse_url(api_base_url, session_token, client_id);
+    let mut req = SSE_HTTP_CLIENT
+        .get(&url)
+        .header("Accept", "text/event-stream");
+    if let Some(token) = session_token {
+        req = req.header("Authorization", format!("Bearer {}", token));
+    }
+
+    req.send()
+        .await
+        .map_err(|e| AppError::SseConnect(e.to_string()))
+}
+
 #[tauri::command]
 pub async fn connect_gateway_sse(
     input: ConnectGatewayInput,
@@ -74,23 +97,30 @@ pub async fn connect_gateway_sse(
         (inner.api_base_url.clone(), inner.session_token.clone())
     };
 
-    let url = build_sse_url(
+    let mut response = open_sse_response(
         &api_base_url,
         session_token.as_deref(),
         input.client_id.as_deref(),
-    );
+    )
+    .await?;
 
-    let mut req = SSE_HTTP_CLIENT
-        .get(&url)
-        .header("Accept", "text/event-stream");
-    if let Some(ref token) = session_token {
-        req = req.header("Authorization", format!("Bearer {}", token));
+    if response.status() == StatusCode::UNAUTHORIZED {
+        if let Some(fresh_token) = fetch_session_token(&api_base_url).await {
+            let fresh_gateway_url = build_gateway_url(&api_base_url, Some(&fresh_token));
+            {
+                let mut inner = state.inner.lock()?;
+                inner.session_token = Some(fresh_token.clone());
+                inner.gateway_url = fresh_gateway_url;
+            }
+            response = open_sse_response(
+                &api_base_url,
+                Some(&fresh_token),
+                input.client_id.as_deref(),
+            )
+            .await?;
+        }
     }
 
-    let response = req
-        .send()
-        .await
-        .map_err(|e| AppError::SseConnect(e.to_string()))?;
     if !response.status().is_success() {
         return Err(AppError::SseConnect(format!("HTTP {}", response.status())));
     }
@@ -156,7 +186,7 @@ mod tests {
     #[test]
     fn build_sse_url_with_token_only() {
         let url = build_sse_url("http://x", Some("tok"), None);
-        assert_eq!(url, "http://x/api/v2/events");
+        assert_eq!(url, "http://x/api/v2/events?token=tok");
     }
 
     #[test]
@@ -168,13 +198,16 @@ mod tests {
     #[test]
     fn build_sse_url_with_both_params() {
         let url = build_sse_url("http://x", Some("tok"), Some("cid-1"));
-        assert_eq!(url, "http://x/api/v2/events?client_id=cid-1");
+        assert_eq!(url, "http://x/api/v2/events?token=tok&client_id=cid-1");
     }
 
     #[test]
     fn build_sse_url_encodes_query_params() {
         let url = build_sse_url("http://x", Some("tok+with space&x=y"), Some("cid/1?x=2"));
-        assert_eq!(url, "http://x/api/v2/events?client_id=cid%2F1%3Fx%3D2");
+        assert_eq!(
+            url,
+            "http://x/api/v2/events?token=tok%2Bwith%20space%26x%3Dy&client_id=cid%2F1%3Fx%3D2"
+        );
     }
 
     // --- parse_sse_chunk --------------------------------------------------

@@ -21,6 +21,8 @@ const CURRENT_FILE: &str = "current.json";
 const MANIFEST_FILE: &str = "manifest.json";
 const DEFAULT_CHANNEL: &str = "stable";
 const MANIFEST_SCHEMA_VERSION: u32 = 2;
+const DASHBOARD_RESOURCE_DIR: &str = "dashboard";
+const DASHBOARD_WEB_DIST_DIR: &str = "web_dist";
 const SMOKE_TIMEOUT: Duration = Duration::from_secs(10);
 static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
@@ -581,6 +583,59 @@ fn bundled_runtime_dir(resource_dir: Option<&Path>) -> Option<PathBuf> {
     resource_dir.map(|dir| dir.join("bundled-runtime"))
 }
 
+fn bundled_dashboard_web_dist_dir(resource_dir: Option<&Path>) -> Option<PathBuf> {
+    if let Ok(override_path) = std::env::var("HERMES_DESKTOP_DASHBOARD_WEB_DIST_DIR") {
+        let trimmed = override_path.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+
+    resource_dir.map(|dir| {
+        dir.join(DASHBOARD_RESOURCE_DIR)
+            .join(DASHBOARD_WEB_DIST_DIR)
+    })
+}
+
+fn runtime_dashboard_web_dist_dir(runtime_dir: &Path) -> PathBuf {
+    runtime_dir
+        .join("_internal")
+        .join("hermes_cli")
+        .join(DASHBOARD_WEB_DIST_DIR)
+}
+
+pub fn current_dashboard_web_dist_dir() -> Option<PathBuf> {
+    let current = read_current_record()?;
+    let dist = runtime_dashboard_web_dist_dir(Path::new(&current.path));
+    if dist.join("index.html").is_file() {
+        Some(dist)
+    } else {
+        None
+    }
+}
+
+fn sync_dashboard_web_dist_from_resource(
+    resource_dir: Option<&Path>,
+    runtime_dir: &Path,
+) -> Result<Option<PathBuf>, String> {
+    let source = bundled_dashboard_web_dist_dir(resource_dir).ok_or_else(|| {
+        "Bundled dashboard web_dist resource directory is unavailable".to_string()
+    })?;
+    if !source.join("index.html").is_file() {
+        return Err(format!(
+            "Bundled dashboard web_dist is missing index.html at {}",
+            source.display()
+        ));
+    }
+
+    let target = runtime_dashboard_web_dist_dir(runtime_dir);
+    if target.exists() {
+        fs::remove_dir_all(&target).map_err(|e| e.to_string())?;
+    }
+    copy_dir_all(&source, &target)?;
+    Ok(Some(target))
+}
+
 fn bundled_manifest_path(runtime_dir: &Path) -> PathBuf {
     runtime_dir.join(format!(
         "{}-{}-{}.json",
@@ -1115,6 +1170,16 @@ pub async fn install_bundled_runtime_if_needed(
 
     if let Some(current) = read_current_record() {
         if current.runtime_version == manifest.runtime_version {
+            if let Err(e) =
+                sync_dashboard_web_dist_from_resource(resource_dir, Path::new(&current.path))
+            {
+                return RuntimeInstallUpdateResult {
+                    ok: false,
+                    installed: None,
+                    previous: Some(current),
+                    error: Some(format!("Bundled dashboard web_dist sync failed: {}", e)),
+                };
+            }
             return RuntimeInstallUpdateResult {
                 ok: true,
                 installed: None,
@@ -1133,7 +1198,18 @@ pub async fn install_bundled_runtime_if_needed(
         };
     }
 
-    install_runtime_zip(manifest, &artifact_path, "bundled").await
+    let mut result = install_runtime_zip(manifest, &artifact_path, "bundled").await;
+    if result.ok {
+        if let Some(installed) = &result.installed {
+            if let Err(e) =
+                sync_dashboard_web_dist_from_resource(resource_dir, Path::new(&installed.path))
+            {
+                result.ok = false;
+                result.error = Some(format!("Bundled dashboard web_dist sync failed: {}", e));
+            }
+        }
+    }
+    result
 }
 
 /// Download, verify, and install a runtime update.

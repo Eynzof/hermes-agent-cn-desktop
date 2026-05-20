@@ -17,7 +17,10 @@
     "tauri:run": "cargo run",
     "typecheck": "pnpm -r run typecheck",
     "test:unit": "pnpm -r --workspace-concurrency=1 test:unit",
-    "runtime:stage-bundled-windows": "node scripts/stage-bundled-runtime.mjs --platform win32 --arch x64"
+    "runtime:stage-bundled-windows": "node scripts/stage-bundled-runtime.mjs --platform win32 --arch x64",
+    "dashboard:stage-web-dist": "node scripts/stage-dashboard-web-dist.mjs",
+    "bundle:stage-windows": "pnpm run runtime:stage-bundled-windows && pnpm run dashboard:stage-web-dist",
+    "tauri:build:bundled-windows": "pnpm run bundle:stage-windows && pnpm exec tauri build --bundles nsis"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"

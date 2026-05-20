@@ -1,4 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const tauriMocks = vi.hoisted(() => ({
+  emit: vi.fn(),
+  invoke: vi.fn(),
+  listen: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: tauriMocks.invoke,
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  emit: tauriMocks.emit,
+  listen: tauriMocks.listen,
+}));
+
 import { GatewaySseClient } from "./gateway-sse-client";
 
 // Minimal EventSource mock that lets us drive open/error/messages
@@ -68,6 +84,11 @@ beforeEach(() => {
   (globalThis as any).EventSource.OPEN = MockEventSource.OPEN;
   (globalThis as any).EventSource.CLOSED = MockEventSource.CLOSED;
   installRuntimeStub();
+  delete (window as any).__TAURI_INTERNALS__;
+  delete (window as any).hermesDesktop;
+  tauriMocks.emit.mockReset();
+  tauriMocks.invoke.mockReset();
+  tauriMocks.listen.mockReset();
   vi.useFakeTimers();
 });
 
@@ -199,6 +220,63 @@ describe("GatewaySseClient", () => {
     ) as any;
 
     await expect(client.request("foo")).rejects.toThrow(/unknown method: foo/);
+  });
+
+  it("uses one Tauri SSE proxy connection across repeated RPC requests", async () => {
+    vi.useRealTimers();
+    const listeners = new Map<string, (event: { payload: string }) => void>();
+    const refreshGatewayUrl = vi.fn(async () => ({
+      gatewayUrl: "ws://127.0.0.1:9119/api/ws?token=fresh-token",
+      sessionToken: "fresh-token",
+    }));
+    const request = vi.fn(async (_input: { headers?: Record<string, string> }) => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      body: JSON.stringify({ jsonrpc: "2.0", id: "ignored", result: { ok: true } }),
+    }));
+
+    (window as any).__TAURI_INTERNALS__ = {};
+    window.__HERMES_RUNTIME__ = {
+      platform: "tauri",
+      apiBaseUrl: "http://127.0.0.1:9119",
+      gatewayUrl: "ws://127.0.0.1:9119/api/ws?token=stale-token",
+      sessionToken: "stale-token",
+      transport: "sse",
+    };
+    window.__HERMES_SESSION_TOKEN__ = "stale-token";
+    window.hermesDesktop = {
+      windowType: "tauri",
+      refreshGatewayUrl,
+      request,
+    };
+
+    tauriMocks.listen.mockImplementation(
+      async (eventName: string, cb: (event: { payload: string }) => void) => {
+        listeners.set(eventName, cb);
+        return vi.fn();
+      },
+    );
+    tauriMocks.invoke.mockResolvedValue(undefined);
+
+    const client = new GatewaySseClient();
+    const connectP = client.connect({ timeoutMs: 5_000 });
+
+    await vi.waitFor(() => expect(tauriMocks.invoke).toHaveBeenCalledOnce());
+    expect(refreshGatewayUrl).toHaveBeenCalledOnce();
+    expect(refreshGatewayUrl.mock.invocationCallOrder[0]).toBeLessThan(
+      tauriMocks.invoke.mock.invocationCallOrder[0],
+    );
+
+    listeners.get("gateway-sse-event")?.({ payload: JSON.stringify({ client_id: "cid-tauri" }) });
+    await connectP;
+
+    await expect(client.request("model.options", {})).resolves.toEqual({ ok: true });
+    expect(tauriMocks.invoke).toHaveBeenCalledOnce();
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[0].headers?.Authorization).toBe("Bearer fresh-token");
+    expect(request.mock.calls[0]?.[0].headers?.["X-Hermes-Client-Id"]).toBe("cid-tauri");
   });
 
   it("close() tears down EventSource and resets state to idle", async () => {

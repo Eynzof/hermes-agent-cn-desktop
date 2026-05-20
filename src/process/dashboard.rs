@@ -275,6 +275,11 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
             "HERMES_DASHBOARD_TUI",
             std::env::var("HERMES_DASHBOARD_TUI").unwrap_or_else(|_| "1".to_string()),
         );
+    if let Some(web_dist) = crate::process::runtime::current_dashboard_web_dist_dir() {
+        cmd.env("HERMES_WEB_DIST", &web_dist);
+    } else {
+        log::warn!("Dashboard web_dist is missing from the managed runtime");
+    }
     cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
         .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());

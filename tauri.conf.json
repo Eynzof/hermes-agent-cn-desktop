@@ -38,7 +38,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "static/bundled-runtime/": "bundled-runtime/"
+      "static/bundled-runtime/": "bundled-runtime/",
+      "static/dashboard/": "dashboard/"
     },
     "windows": {
       "nsis": {

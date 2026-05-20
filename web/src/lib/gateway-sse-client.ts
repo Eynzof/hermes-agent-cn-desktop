@@ -84,6 +84,7 @@ export class GatewaySseClient implements GatewayClientLike {
   private anyListeners = new Set<(ev: GatewayEvent) => void>();
   private autoReconnect = false;
   private intentionalClose = false;
+  private tauriProxyConnected = false;
 
   get state(): ConnectionState {
     return this._state;
@@ -104,7 +105,14 @@ export class GatewaySseClient implements GatewayClientLike {
   // --- connection lifecycle ---
 
   connect(options?: GatewayConnectOptions | number): Promise<void> {
-    if (this.eventSource && this.eventSource.readyState === EventSource.OPEN && this.clientId) {
+    const tauriProduction = isTauriProduction();
+    if (
+      (tauriProduction && this.tauriProxyConnected && this.clientId && this._state === "open") ||
+      (!tauriProduction &&
+        this.eventSource &&
+        this.eventSource.readyState === EventSource.OPEN &&
+        this.clientId)
+    ) {
       return Promise.resolve();
     }
     if (this.connectPromise) return this.connectPromise;
@@ -123,7 +131,7 @@ export class GatewaySseClient implements GatewayClientLike {
 
       // Tauri production: EventSource can't cross-origin from tauri:// to
       // http://127.0.0.1. Use the Rust SSE proxy instead.
-      if (isTauriProduction()) {
+      if (tauriProduction) {
         this.connectViaTauriProxy(connectTimeoutMs, resolve, reject);
         return;
       }
@@ -261,6 +269,7 @@ export class GatewaySseClient implements GatewayClientLike {
     const tauriErrorUnlisten = this.tauriErrorUnlisten;
     this.eventSource = null;
     this.clientId = null;
+    this.tauriProxyConnected = false;
     this.tauriUnlisten = null;
     this.tauriErrorUnlisten = null;
     if (es) {
@@ -449,6 +458,7 @@ export class GatewaySseClient implements GatewayClientLike {
       settled = true;
       window.clearTimeout(timer);
       this.connectPromise = null;
+      this.tauriProxyConnected = ok;
       if (ok) {
         this.setState("open");
         resolve();
@@ -461,9 +471,9 @@ export class GatewaySseClient implements GatewayClientLike {
     Promise.all([
       import("@tauri-apps/api/core"),
       import("@tauri-apps/api/event"),
-    ]).then(([{ invoke }, { listen }]) => {
+    ]).then(async ([{ invoke }, { listen }]) => {
       // Listen for SSE events forwarded by the Rust proxy
-      listen<string>("gateway-sse-event", (event) => {
+      this.tauriUnlisten = await listen<string>("gateway-sse-event", (event) => {
         try {
           const parsed = JSON.parse(event.payload);
           if (parsed.client_id && !this.clientId) {
@@ -476,23 +486,32 @@ export class GatewaySseClient implements GatewayClientLike {
           }
           this.handleFrame(parsed);
         } catch {}
-      }).then((unlisten) => {
-        this.tauriUnlisten = unlisten;
       });
 
-      listen<string>("gateway-sse-error", (event) => {
+      this.tauriErrorUnlisten = await listen<string>("gateway-sse-error", (event) => {
         if (!settled) {
           settle(false, new Error(event.payload));
         } else {
+          this.tauriProxyConnected = false;
+          this.clientId = null;
+          try {
+            this.tauriUnlisten?.();
+          } catch {}
+          try {
+            this.tauriErrorUnlisten?.();
+          } catch {}
+          this.tauriUnlisten = null;
+          this.tauriErrorUnlisten = null;
           this.setState("closed");
           this.emitDisconnect();
           if (this.autoReconnect && !this.intentionalClose) {
             window.setTimeout(() => this.connect().catch(() => {}), 1000);
           }
         }
-      }).then((unlisten) => {
-        this.tauriErrorUnlisten = unlisten;
       });
+
+      await runtime.refreshGatewayUrl();
+      if (settled || this.intentionalClose) return;
 
       // Start the Rust SSE proxy (returns immediately, streams in background)
       invoke("connect_gateway_sse", {
@@ -500,6 +519,8 @@ export class GatewaySseClient implements GatewayClientLike {
       }).catch((err) => {
         settle(false, new Error(String(err)));
       });
+    }).catch((err) => {
+      settle(false, err instanceof Error ? err : new Error(String(err)));
     });
   }
 
