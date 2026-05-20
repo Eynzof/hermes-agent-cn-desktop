@@ -128,6 +128,8 @@
 }
 
 .messageText {
+  -webkit-user-select: text;
+  user-select: text;
   overflow-wrap: anywhere;
   word-break: normal;
   line-break: strict;
@@ -136,6 +138,25 @@
   hanging-punctuation: first allow-end last;
   font-kerning: normal;
   font-variant-east-asian: proportional-width;
+}
+
+/* global.css disables selection across the app to keep desktop chrome from
+   feeling like a web page. Conversation content is the important exception:
+   users need to drag-select assistant/user text, code, reasoning, and visible
+   error output directly from the session detail timeline. Include #root so
+   this scoped exception wins over the global "#root *" rule. */
+:global(#root) .messageText,
+:global(#root) .messageText *,
+:global(#root) .systemNoticeText,
+:global(#root) .systemNoticeText *,
+:global(#root) .reasoningBody,
+:global(#root) .reasoningBody *,
+:global(#root) .toolBody pre,
+:global(#root) .toolBody pre *,
+:global(#root) .toolActivityError,
+:global(#root) .toolActivityError * {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .messageText h1,
