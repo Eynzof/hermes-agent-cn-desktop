@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
-  "productName": "Hermes Agent CN",
+  "productName": "Hermes Agent 中文社区桌面版",
   "version": "0.1.0",
   "identifier": "cn.hermes.agent.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Hermes Agent CN",
+        "title": "Hermes Agent 中文社区桌面版",
         "width": 1240,
         "height": 820,
         "minWidth": 960,
@@ -37,6 +37,7 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
+    "licenseFile": "legal/EULA.zh-CN.txt",
     "resources": {
       "static/bundled-runtime/": "bundled-runtime/",
       "static/dashboard/": "dashboard/",
@@ -44,7 +45,14 @@
     },
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "languages": [
+          "SimpChinese"
+        ],
+        "customLanguageFiles": {
+          "SimpChinese": "installer/nsis/SimpChinese.nsh"
+        },
+        "displayLanguageSelector": false
       },
       "webviewInstallMode": {
         "type": "downloadBootstrapper"

@@ -16,7 +16,7 @@ export function AppTopBar() {
 
   return (
     <header className={s.topbar} data-window-drag data-tauri-drag-region="deep">
-      <div className={s.brand} aria-label="Hermes Agent CN">
+      <div className={s.brand} aria-label="Hermes Agent 中文社区桌面版">
         <HermesLogoMark
           className={s.brandMark}
           size={22}

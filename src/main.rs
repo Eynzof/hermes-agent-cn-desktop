@@ -1,4 +1,4 @@
-// Hermes Agent CN Desktop — Tauri v2 entry point.
+// Hermes Agent 中文社区桌面版 — Tauri v2 entry point.
 //
 // Equivalent of hermes-cn-ui-v1/apps/desktop/src/main/bootstrap.ts + main.ts.
 // Resolves HERMES_HOME, reads sticky profile, ensures dashboard subprocess,
@@ -299,10 +299,10 @@ fn main() {
                     }
 
                     emit_runtime_status(&app_handle, "ready", "");
-                    log::info!("Hermes Agent CN desktop ready");
+                    log::info!("Hermes Agent 中文社区桌面版 ready");
                 });
 
-                log::info!("Hermes Agent CN desktop bootstrapping in background");
+                log::info!("Hermes Agent 中文社区桌面版 bootstrapping in background");
                 Ok(())
             } else {
                 let handle = if external_dev_dashboard {
@@ -455,7 +455,7 @@ fn main() {
                             }
 
                             emit_runtime_status(&app_handle, "ready", "");
-                            log::info!("Hermes Agent CN desktop ready (after background install)");
+                            log::info!("Hermes Agent 中文社区桌面版 ready (after background install)");
                         });
 
                         // Seed AppState with what the UI needs while it waits. The
@@ -469,7 +469,7 @@ fn main() {
                             inner.hermes_home_base = base_str;
                             inner.current_profile = current_profile;
                         }
-                        log::info!("Hermes Agent CN desktop bootstrapping in background");
+                        log::info!("Hermes Agent 中文社区桌面版 bootstrapping in background");
                         return Ok(());
                     }
 
@@ -553,7 +553,7 @@ fn main() {
                 // the "installing" phase.
                 emit_runtime_status(app.handle(), "ready", "");
 
-                log::info!("Hermes Agent CN desktop ready");
+                log::info!("Hermes Agent 中文社区桌面版 ready");
                 Ok(())
             }
         })
@@ -586,5 +586,5 @@ fn main() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running Hermes Agent CN");
+        .expect("error while running Hermes Agent 中文社区桌面版");
 }

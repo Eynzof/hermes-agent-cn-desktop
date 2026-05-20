@@ -469,7 +469,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
       <div className={s.aboutHero} data-ok={isolationOk}>
         <div className={s.aboutHeroMark}>{isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}</div>
         <div className={s.aboutHeroBody}>
-          <div className={s.aboutEyebrow}>Hermes Agent CN Desktop Kernel</div>
+          <div className={s.aboutEyebrow}>Hermes Agent 中文社区桌面版内核</div>
           <h3>{isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}</h3>
           <p>
             {isolationOk && process?.ownsProcess

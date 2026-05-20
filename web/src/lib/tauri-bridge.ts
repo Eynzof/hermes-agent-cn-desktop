@@ -217,7 +217,7 @@ function showBootstrapOverlay(initialMessage: string): {
     "font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;" +
       "color:rgba(255,255,255,0.45);letter-spacing:0.06em;text-transform:uppercase;",
   );
-  sub.textContent = "Hermes Agent CN · 首次启动";
+  sub.textContent = "Hermes Agent 中文社区桌面版 · 首次启动";
   root.appendChild(sub);
 
   document.body.appendChild(root);

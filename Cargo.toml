@@ -2,7 +2,7 @@
 name = "hermes-agent-cn"
 version = "0.1.0"
 edition = "2021"
-description = "Hermes Agent CN Desktop (Tauri)"
+description = "Hermes Agent 中文社区桌面版 (Tauri)"
 authors = ["Hermes"]
 
 [dependencies]
