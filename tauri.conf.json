@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
-  "productName": "Hermes Agent 中文社区桌面版",
+  "productName": "Hermes Agent CN Desktop",
   "version": "0.1.0",
-  "identifier": "cn.hermes.agent.desktop",
+  "identifier": "cn.org.hermesagent.desktop",
   "build": {
     "beforeDevCommand": "pnpm --filter @hermes/web dev",
     "beforeBuildCommand": "pnpm --filter @hermes/web build:desktop",
@@ -37,6 +37,12 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
+    "publisher": "Enzo Li",
+    "homepage": "https://hermesagent.org.cn",
+    "copyright": "Copyright © 2026 Enzo Li",
+    "category": "DeveloperTool",
+    "shortDescription": "Hermes Agent Chinese Community Desktop",
+    "longDescription": "Desktop app for Hermes Agent Chinese Community Edition.",
     "licenseFile": "legal/EULA.zh-CN.txt",
     "resources": {
       "static/bundled-runtime/": "bundled-runtime/",

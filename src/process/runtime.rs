@@ -255,7 +255,7 @@ pub fn runtime_root() -> PathBuf {
     }
 
     let data_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
-    data_dir.join("cn.hermes.agent.desktop").join("runtime")
+    data_dir.join("cn.org.hermesagent.desktop").join("runtime")
 }
 
 pub fn hermes_home_dir() -> PathBuf {

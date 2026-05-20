@@ -1,7 +1,9 @@
 {
-  "name": "hermes-cn-desktop-v2",
+  "name": "hermes-agent-cn-desktop",
   "version": "0.1.0",
   "private": true,
+  "author": "Enzo Li（李嘉乐）",
+  "homepage": "https://hermesagent.org.cn",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "pnpm web:dev",

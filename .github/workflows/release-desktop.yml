@@ -132,6 +132,9 @@ jobs:
           releaseBody: |
             自动构建的 Hermes Agent 中文社区桌面版安装包。
 
+            Windows 系统安装名称、安装目录和卸载注册表项使用英文名
+            Hermes Agent CN Desktop，避免中文路径造成兼容性问题。
+
             安装包已内置来自 hermes-agent-cn
             ${{ steps.runtime_manifest.outputs.source_commit }} 的 Dashboard 前端和内置技能。
 
