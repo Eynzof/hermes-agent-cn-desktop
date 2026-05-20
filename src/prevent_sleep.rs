@@ -22,17 +22,15 @@ mod mac {
 
     impl Guard {
         pub fn new(reason: &str) -> Option<Self> {
-            unsafe {
-                let process_info = NSProcessInfo::processInfo();
-                let reason_str = NSString::from_str(reason);
-                let options =
-                    NSActivityOptions::UserInitiated | NSActivityOptions::IdleSystemSleepDisabled;
-                let token = process_info.beginActivityWithOptions_reason(options, &reason_str);
-                Some(Self {
-                    process_info,
-                    activity_token: token,
-                })
-            }
+            let process_info = NSProcessInfo::processInfo();
+            let reason_str = NSString::from_str(reason);
+            let options =
+                NSActivityOptions::UserInitiated | NSActivityOptions::IdleSystemSleepDisabled;
+            let token = process_info.beginActivityWithOptions_reason(options, &reason_str);
+            Some(Self {
+                process_info,
+                activity_token: token,
+            })
         }
     }
 

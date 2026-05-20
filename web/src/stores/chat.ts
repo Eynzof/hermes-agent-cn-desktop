@@ -162,6 +162,18 @@ function withoutProgressParts(parts: HermesMessagePart[]): HermesMessagePart[] {
   return parts.filter((part) => part.type !== "progress");
 }
 
+function terminateRunningTools(parts: HermesMessagePart[]): HermesMessagePart[] {
+  let changed = false;
+  const next = parts.map((part) => {
+    if (part.type === "tool" && part.state === "running") {
+      changed = true;
+      return { ...part, state: "error" as const };
+    }
+    return part;
+  });
+  return changed ? next : parts;
+}
+
 function appendTextPart(parts: HermesMessagePart[], text: string): HermesMessagePart[] {
   if (!text) return parts;
   const next = withoutProgressParts(parts);
@@ -570,6 +582,7 @@ export function reduceGatewayEvent(
     case "message.complete": {
       const id = activeAssistantId(runtime, now);
       const metadata = completionMetadata(payload, runtime, now);
+      const isErrorCompletion = payload.status === "error";
       let next = updateActiveAssistant(
         {
           ...runtime,
@@ -579,11 +592,12 @@ export function reduceGatewayEvent(
         sessionId,
         now,
         (message) => {
-          const parts = finalizeAssistantParts(message, payload);
+          const finalizedParts = finalizeAssistantParts(message, payload);
+          const parts = isErrorCompletion ? terminateRunningTools(finalizedParts) : finalizedParts;
           if (parts.length === 0) return null;
           return {
             ...message,
-            status: payload.status === "error" ? "error" : "complete",
+            status: isErrorCompletion ? "error" : "complete",
             parts,
             metadata: metadata ? { ...message.metadata, ...metadata } : message.metadata,
           };
@@ -597,13 +611,13 @@ export function reduceGatewayEvent(
       if (warningText) {
         next = appendNoticeMessage(next, sessionId, now + 1, warningText, "warning");
       }
-      if (payload.status === "error") {
+      if (isErrorCompletion) {
         next = appendNoticeMessage(next, sessionId, now + 2, pickErrorText(payload), "error");
       }
 
       return {
         ...next,
-        streamStatus: payload.status === "error" ? "error" : "complete",
+        streamStatus: isErrorCompletion ? "error" : "complete",
         statusMessage: warningText ?? "",
         statusKind: warningText ? "warn" : undefined,
         statusUpdatedAt: warningText ? now : undefined,
@@ -722,7 +736,7 @@ export function reduceGatewayEvent(
         ? updateMessage(runtime, runtime.activeAssistantId, (message) => ({
             ...message,
             status: "error",
-            parts: withoutProgressParts(message.parts),
+            parts: terminateRunningTools(withoutProgressParts(message.parts)),
           }))
         : runtime;
       const next = appendNoticeMessage(erroredActive, sessionId, now, text, "error");
@@ -741,7 +755,11 @@ export function reduceGatewayEvent(
       if (!isStreamingStatus(runtime.streamStatus)) return runtime;
       const id = runtime.activeAssistantId;
       const next = id
-        ? updateMessage(runtime, id, (message) => ({ ...message, status: "error" }))
+        ? updateMessage(runtime, id, (message) => ({
+            ...message,
+            status: "error",
+            parts: terminateRunningTools(withoutProgressParts(message.parts)),
+          }))
         : runtime;
       return {
         ...next,
@@ -930,7 +948,7 @@ export const setSessionErrorAtom = atom(
           ? updateMessage(runtime, runtime.activeAssistantId, (message) => ({
               ...message,
               status: "error",
-              parts: withoutProgressParts(message.parts),
+              parts: terminateRunningTools(withoutProgressParts(message.parts)),
             }))
           : runtime;
         return {
@@ -989,7 +1007,11 @@ export const terminateAllStreamsAtom = atom(null, (_get, set) => {
         changed = true;
         const activeId = rt.activeAssistantId;
         const marked = activeId
-          ? updateMessage(rt, activeId, (message) => ({ ...message, status: "error" }))
+          ? updateMessage(rt, activeId, (message) => ({
+              ...message,
+              status: "error",
+              parts: terminateRunningTools(withoutProgressParts(message.parts)),
+            }))
           : rt;
         next[sessionId] = {
           ...marked,

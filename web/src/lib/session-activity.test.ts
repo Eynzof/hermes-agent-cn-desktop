@@ -67,5 +67,32 @@ describe("session activity", () => {
       ),
     ).toBe(true);
   });
-});
 
+  it("does not keep completed or errored runtimes running because of stale live parts", () => {
+    const runtime = {
+      ...createEmptyChatRuntime(1),
+      streamStatus: "complete" as const,
+      pendingApprovals: [{ requestId: "r1", sessionId: "s1", command: "approve" }],
+      messages: [
+        {
+          id: "a1",
+          sessionId: "s1",
+          role: "assistant" as const,
+          createdAt: 1,
+          status: "complete" as const,
+          parts: [
+            {
+              type: "tool" as const,
+              toolCallId: "tool-1",
+              name: "read_file",
+              state: "running" as const,
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(isRuntimeRunning(runtime)).toBe(false);
+    expect(isRuntimeRunning({ ...runtime, streamStatus: "error" })).toBe(false);
+  });
+});

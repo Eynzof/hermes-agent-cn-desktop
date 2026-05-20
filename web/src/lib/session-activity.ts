@@ -4,6 +4,13 @@ import type { ChatRuntimeBySession, ChatSessionRuntime } from "@/stores/chat";
 
 export function isRuntimeRunning(runtime: ChatSessionRuntime | undefined): boolean {
   if (!runtime) return false;
+  if (
+    runtime.streamStatus === "error" ||
+    runtime.streamStatus === "complete" ||
+    runtime.streamStatus === "idle"
+  ) {
+    return false;
+  }
   return (
     runtime.streamStatus === "connecting" ||
     runtime.streamStatus === "streaming" ||

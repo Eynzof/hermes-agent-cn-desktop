@@ -464,6 +464,37 @@ describe("chat runtime reducer", () => {
     expect(assistantMessage(disconnected).status).toBe("error");
   });
 
+  it("gateway.disconnected marks live tool parts as errored", () => {
+    let runtime = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "tool.start",
+        session_id: "s1",
+        payload: { tool_id: "read-1", name: "read_file", context: "app.tsx" },
+      },
+      10,
+    );
+    runtime = reduceGatewayEvent(
+      runtime,
+      {
+        type: "thinking.delta",
+        session_id: "s1",
+        payload: { text: "ಠ_ಠ deliberating..." },
+      },
+      15,
+    );
+
+    const disconnected = reduceGatewayEvent(
+      runtime,
+      { type: "gateway.disconnected", payload: { message: "connection lost" } },
+      20,
+    );
+
+    expect(assistantMessage(disconnected).parts).toEqual([
+      expect.objectContaining({ type: "tool", toolCallId: "read-1", state: "error" }),
+    ]);
+  });
+
   it("gateway.disconnected leaves idle sessions unchanged", () => {
     const idle = createEmptyChatRuntime(1);
     const result = reduceGatewayEvent(
