@@ -6,8 +6,8 @@
 #   1. Installs Node + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
-#   4. Stages the bundled dashboard frontend. Windows also stages the bundled
-#      hermes-agent-cn runtime zip + manifest.
+#   4. Stages the bundled dashboard frontend + bundled skills. Windows also
+#      stages the bundled hermes-agent-cn runtime zip + manifest.
 #   5. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
 #      env vars are NOT set here; src/process/runtime.rs ships hardcoded
 #      production fallbacks. Set them only if you fork the project and
@@ -129,6 +129,9 @@ jobs:
       - name: Stage bundled dashboard frontend
         run: node scripts/stage-dashboard-web-dist.mjs --source hermes-agent-cn-source
 
+      - name: Stage bundled skills
+        run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
+
       - name: Stage bundled hermes-agent-cn runtime
         if: matrix.runner == 'windows-latest'
         run: node scripts/stage-bundled-runtime.mjs --tag "${{ github.event.inputs.bundled_runtime_tag || 'latest' }}" --platform win32 --arch x64
@@ -145,7 +148,7 @@ jobs:
           releaseName: "Hermes Agent CN ${{ github.event.inputs.tag || github.ref_name }}"
           releaseBody: |
             Auto-built desktop installer.
-            Installers include the staged dashboard frontend from
+            Installers include the staged dashboard frontend and bundled skills from
             hermes-agent-cn ${{ steps.runtime_manifest.outputs.source_commit }}.
             Windows installers also include the staged hermes-agent-cn runtime
             ${{ steps.runtime_manifest.outputs.runtime_version }}.

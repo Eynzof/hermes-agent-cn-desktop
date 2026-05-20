@@ -280,6 +280,11 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     } else {
         log::warn!("Dashboard web_dist is missing from the managed runtime");
     }
+    if let Some(skills_dir) = crate::process::runtime::current_bundled_skills_dir() {
+        cmd.env("HERMES_BUNDLED_SKILLS", &skills_dir);
+    } else {
+        log::warn!("Bundled skills are missing from the managed runtime");
+    }
     cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
         .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());

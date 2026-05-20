@@ -25,6 +25,8 @@ static/bundled-runtime/*
 !static/bundled-runtime/.gitkeep
 static/dashboard/*
 !static/dashboard/.gitkeep
+static/bundled-skills/*
+!static/bundled-skills/.gitkeep
 
 # Local logs
 .codex-logs/

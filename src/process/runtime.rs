@@ -23,6 +23,8 @@ const DEFAULT_CHANNEL: &str = "stable";
 const MANIFEST_SCHEMA_VERSION: u32 = 2;
 const DASHBOARD_RESOURCE_DIR: &str = "dashboard";
 const DASHBOARD_WEB_DIST_DIR: &str = "web_dist";
+const BUNDLED_SKILLS_RESOURCE_DIR: &str = "bundled-skills";
+const BUNDLED_SKILLS_DIR: &str = "skills";
 const SMOKE_TIMEOUT: Duration = Duration::from_secs(10);
 static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
@@ -597,6 +599,17 @@ fn bundled_dashboard_web_dist_dir(resource_dir: Option<&Path>) -> Option<PathBuf
     })
 }
 
+fn bundled_skills_dir(resource_dir: Option<&Path>) -> Option<PathBuf> {
+    if let Ok(override_path) = std::env::var("HERMES_DESKTOP_BUNDLED_SKILLS_DIR") {
+        let trimmed = override_path.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+
+    resource_dir.map(|dir| dir.join(BUNDLED_SKILLS_RESOURCE_DIR))
+}
+
 fn runtime_dashboard_web_dist_dir(runtime_dir: &Path) -> PathBuf {
     runtime_dir
         .join("_internal")
@@ -604,11 +617,25 @@ fn runtime_dashboard_web_dist_dir(runtime_dir: &Path) -> PathBuf {
         .join(DASHBOARD_WEB_DIST_DIR)
 }
 
+fn runtime_bundled_skills_dir(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join("_internal").join(BUNDLED_SKILLS_DIR)
+}
+
 pub fn current_dashboard_web_dist_dir() -> Option<PathBuf> {
     let current = read_current_record()?;
     let dist = runtime_dashboard_web_dist_dir(Path::new(&current.path));
     if dist.join("index.html").is_file() {
         Some(dist)
+    } else {
+        None
+    }
+}
+
+pub fn current_bundled_skills_dir() -> Option<PathBuf> {
+    let current = read_current_record()?;
+    let dir = runtime_bundled_skills_dir(Path::new(&current.path));
+    if contains_skill_markdown(&dir) {
+        Some(dir)
     } else {
         None
     }
@@ -634,6 +661,36 @@ fn sync_dashboard_web_dist_from_resource(
     }
     copy_dir_all(&source, &target)?;
     Ok(Some(target))
+}
+
+fn sync_bundled_skills_from_resource(
+    resource_dir: Option<&Path>,
+    runtime_dir: &Path,
+) -> Result<Option<PathBuf>, String> {
+    let source = bundled_skills_dir(resource_dir)
+        .ok_or_else(|| "Bundled skills resource directory is unavailable".to_string())?;
+    if !contains_skill_markdown(&source) {
+        return Err(format!(
+            "Bundled skills resource is missing SKILL.md files at {}",
+            source.display()
+        ));
+    }
+
+    let target = runtime_bundled_skills_dir(runtime_dir);
+    if target.exists() {
+        fs::remove_dir_all(&target).map_err(|e| e.to_string())?;
+    }
+    copy_dir_all(&source, &target)?;
+    Ok(Some(target))
+}
+
+fn sync_runtime_resources_from_resource(
+    resource_dir: Option<&Path>,
+    runtime_dir: &Path,
+) -> Result<(), String> {
+    sync_dashboard_web_dist_from_resource(resource_dir, runtime_dir)?;
+    sync_bundled_skills_from_resource(resource_dir, runtime_dir)?;
+    Ok(())
 }
 
 fn bundled_manifest_path(runtime_dir: &Path) -> PathBuf {
@@ -1171,13 +1228,13 @@ pub async fn install_bundled_runtime_if_needed(
     if let Some(current) = read_current_record() {
         if current.runtime_version == manifest.runtime_version {
             if let Err(e) =
-                sync_dashboard_web_dist_from_resource(resource_dir, Path::new(&current.path))
+                sync_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
             {
                 return RuntimeInstallUpdateResult {
                     ok: false,
                     installed: None,
                     previous: Some(current),
-                    error: Some(format!("Bundled dashboard web_dist sync failed: {}", e)),
+                    error: Some(format!("Bundled runtime resource sync failed: {}", e)),
                 };
             }
             return RuntimeInstallUpdateResult {
@@ -1202,10 +1259,10 @@ pub async fn install_bundled_runtime_if_needed(
     if result.ok {
         if let Some(installed) = &result.installed {
             if let Err(e) =
-                sync_dashboard_web_dist_from_resource(resource_dir, Path::new(&installed.path))
+                sync_runtime_resources_from_resource(resource_dir, Path::new(&installed.path))
             {
                 result.ok = false;
-                result.error = Some(format!("Bundled dashboard web_dist sync failed: {}", e));
+                result.error = Some(format!("Bundled runtime resource sync failed: {}", e));
             }
         }
     }
@@ -1462,6 +1519,30 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn contains_skill_markdown(dir: &Path) -> bool {
+    if !dir.is_dir() {
+        return false;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if contains_skill_markdown(&path) {
+                return true;
+            }
+        } else if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("SKILL.md"))
+        {
+            return true;
+        }
+    }
+    false
 }
 
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
@@ -1921,6 +2002,51 @@ mod tests {
         std::fs::create_dir_all(&src).unwrap();
         copy_dir_all(&src, &dst).unwrap();
         assert!(dst.is_dir());
+    }
+
+    // -------- sync_bundled_skills_from_resource --------
+
+    #[test]
+    fn sync_bundled_skills_from_resource_copies_tree() {
+        let dir = TempDir::new().unwrap();
+        let resource = dir.path().join("resources");
+        let skills = resource
+            .join(BUNDLED_SKILLS_RESOURCE_DIR)
+            .join("creative")
+            .join("demo");
+        let runtime = dir.path().join("runtime");
+        std::fs::create_dir_all(&skills).unwrap();
+        std::fs::write(skills.join("SKILL.md"), b"---\nname: demo\n---\n").unwrap();
+        std::fs::write(skills.join("helper.txt"), b"helper").unwrap();
+
+        let target = sync_bundled_skills_from_resource(Some(&resource), &runtime)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(target, runtime.join("_internal").join("skills"));
+        assert!(target
+            .join("creative")
+            .join("demo")
+            .join("SKILL.md")
+            .is_file());
+        assert_eq!(
+            std::fs::read(target.join("creative").join("demo").join("helper.txt")).unwrap(),
+            b"helper"
+        );
+    }
+
+    #[test]
+    fn sync_bundled_skills_from_resource_requires_skill_markdown() {
+        let dir = TempDir::new().unwrap();
+        let resource = dir.path().join("resources");
+        let skills = resource.join(BUNDLED_SKILLS_RESOURCE_DIR).join("empty");
+        let runtime = dir.path().join("runtime");
+        std::fs::create_dir_all(&skills).unwrap();
+
+        let err = sync_bundled_skills_from_resource(Some(&resource), &runtime).unwrap_err();
+
+        assert!(err.contains("missing SKILL.md"), "unexpected error: {err}");
+        assert!(!runtime.join("_internal").join("skills").exists());
     }
 
     // -------- find_executable_in --------
