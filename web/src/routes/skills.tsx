@@ -287,12 +287,20 @@ function SkillRow({ skill, active, onSelect, onToggle, showBuiltinTag }: SkillRo
   const isTranslated = skill.name in skillTranslations;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className={s.skillRow}
       data-active={active}
       data-disabled={!skill.enabled}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
     >
       <div className={s.skillRowHead}>
         <Dot tone={skill.enabled ? "ok" : "neutral"} />
@@ -313,7 +321,7 @@ function SkillRow({ skill, active, onSelect, onToggle, showBuiltinTag }: SkillRo
       </div>
       {isTranslated && <div className={s.skillRowNameEn}>{skill.name}</div>}
       <div className={s.skillRowDesc}>{tr.description}</div>
-    </button>
+    </div>
   );
 }
 

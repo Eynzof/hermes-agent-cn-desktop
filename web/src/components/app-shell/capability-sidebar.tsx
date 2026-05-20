@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Boxes,
   Brain,
+  Clock,
   Cpu,
   Puzzle,
   Sparkles,
@@ -16,7 +17,7 @@ interface CapabilityItem {
   title?: string;
 }
 
-const ITEMS: readonly CapabilityItem[] = [
+const CONFIG_ITEMS: readonly CapabilityItem[] = [
   {
     label: "Profile",
     path: "/profiles",
@@ -29,6 +30,18 @@ const ITEMS: readonly CapabilityItem[] = [
   { label: "记忆", path: "/memory", icon: Brain },
 ];
 
+const AUTOMATION_ITEMS: readonly CapabilityItem[] = [
+  { label: "定时任务", path: "/cron", icon: Clock },
+];
+
+const SECTIONS: readonly {
+  label: string;
+  items: readonly CapabilityItem[];
+}[] = [
+  { label: "§021 · 配置", items: CONFIG_ITEMS },
+  { label: "§022 · 自动化", items: AUTOMATION_ITEMS },
+];
+
 export function CapabilitySidebar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,31 +52,33 @@ export function CapabilitySidebar() {
   return (
     <aside className={s.sidebar} aria-label="配置侧栏">
       <div className={s.scrollY}>
-        <section className={s.section}>
-          <div className={s.label}>
-            <span>§03 · 配置</span>
-            <span className={s.labelNum}>✕✕</span>
-          </div>
-          {ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.path}
-                type="button"
-                className={s.item}
-                data-active={isActive(item.path) ? "true" : undefined}
-                onClick={() => navigate(item.path)}
-                title={item.title ?? item.path}
-              >
-                <span className={s.itemIcon}>
-                  <Icon size={14} />
-                </span>
-                <span className={s.itemLabel}>{item.label}</span>
-                <span className={s.itemPath}>{item.path}</span>
-              </button>
-            );
-          })}
-        </section>
+        {SECTIONS.map((section) => (
+          <section key={section.label} className={s.section}>
+            <div className={s.label}>
+              <span>{section.label}</span>
+              <span className={s.labelNum}>✕✕</span>
+            </div>
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.path}
+                  type="button"
+                  className={s.item}
+                  data-active={isActive(item.path) ? "true" : undefined}
+                  onClick={() => navigate(item.path)}
+                  title={item.title ?? item.path}
+                >
+                  <span className={s.itemIcon}>
+                    <Icon size={14} />
+                  </span>
+                  <span className={s.itemLabel}>{item.label}</span>
+                  <span className={s.itemPath}>{item.path}</span>
+                </button>
+              );
+            })}
+          </section>
+        ))}
       </div>
     </aside>
   );

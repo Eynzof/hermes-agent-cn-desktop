@@ -1,5 +1,15 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { FileCog, Info, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import {
+  BarChart3,
+  Bug,
+  FileCog,
+  FileText,
+  FlaskConical,
+  HeartPulse,
+  Info,
+  SlidersHorizontal,
+  type LucideIcon,
+} from "lucide-react";
 import s from "./debug-sidebar.module.css";
 
 interface AdvancedItem {
@@ -8,10 +18,34 @@ interface AdvancedItem {
   icon: LucideIcon;
 }
 
-const ITEMS: readonly AdvancedItem[] = [
+const OBSERVABILITY_ITEMS: readonly AdvancedItem[] = [
+  { label: "健康检查", path: "/health", icon: HeartPulse },
+  { label: "数据分析", path: "/analytics", icon: BarChart3 },
+  { label: "日志", path: "/logs", icon: FileText },
+  { label: "Debug", path: "/debug", icon: Bug },
+  ...(import.meta.env.DEV
+    ? [
+        {
+          label: "Dev Primitives",
+          path: "/dev/primitives",
+          icon: FlaskConical,
+        } as AdvancedItem,
+      ]
+    : []),
+];
+
+const ADVANCED_ITEMS: readonly AdvancedItem[] = [
   { label: "常规", path: "/advanced", icon: SlidersHorizontal },
   { label: "配置", path: "/advanced/config", icon: FileCog },
   { label: "关于", path: "/advanced/about", icon: Info },
+];
+
+const SECTIONS: readonly {
+  label: string;
+  items: readonly AdvancedItem[];
+}[] = [
+  { label: "§031 · 可观测", items: OBSERVABILITY_ITEMS },
+  { label: "§032 · 高级", items: ADVANCED_ITEMS },
 ];
 
 export function AdvancedSidebar() {
@@ -26,31 +60,33 @@ export function AdvancedSidebar() {
   return (
     <aside className={s.sidebar} aria-label="高级侧栏">
       <div className={s.scrollY}>
-        <section className={s.section}>
-          <div className={s.label}>
-            <span>§05 · 高级</span>
-            <span className={s.labelNum}>✕✕</span>
-          </div>
-          {ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.path}
-                type="button"
-                className={s.item}
-                data-active={isActive(item.path) ? "true" : undefined}
-                onClick={() => navigate(item.path)}
-                title={item.path}
-              >
-                <span className={s.itemIcon}>
-                  <Icon size={14} />
-                </span>
-                <span className={s.itemLabel}>{item.label}</span>
-                <span className={s.itemPath}>{item.path}</span>
-              </button>
-            );
-          })}
-        </section>
+        {SECTIONS.map((section) => (
+          <section key={section.label} className={s.section}>
+            <div className={s.label}>
+              <span>{section.label}</span>
+              <span className={s.labelNum}>✕✕</span>
+            </div>
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.path}
+                  type="button"
+                  className={s.item}
+                  data-active={isActive(item.path) ? "true" : undefined}
+                  onClick={() => navigate(item.path)}
+                  title={item.path}
+                >
+                  <span className={s.itemIcon}>
+                    <Icon size={14} />
+                  </span>
+                  <span className={s.itemLabel}>{item.label}</span>
+                  <span className={s.itemPath}>{item.path}</span>
+                </button>
+              );
+            })}
+          </section>
+        ))}
       </div>
     </aside>
   );
