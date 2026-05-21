@@ -15,9 +15,9 @@ Hermes Agent CN Desktop is a lightweight desktop client for the Hermes Agent Chi
 
 ### Demo video
 
-<video src="./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4" controls muted width="100%" aria-label="Hermes Agent CN Desktop demo"></video>
+Click the preview image below, or open the [MP4 demo](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4) directly. README renderers do not consistently support local video embeds, so the preview links to the video file instead.
 
-If the embedded player is not available in your Markdown viewer, open the [MP4 demo](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4).
+[<img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent CN Desktop demo video preview" width="100%">](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)
 
 ### Screenshots
 

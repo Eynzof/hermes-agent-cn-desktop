@@ -15,9 +15,9 @@ Hermes Agent CN Desktop 是 Hermes Agent 中文社区版的轻量桌面客户端
 
 ### 演示视频
 
-<video src="./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4" controls muted width="100%" aria-label="Hermes Agent CN Desktop 演示视频"></video>
+点击下方预览图，或直接打开 [MP4 演示视频](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)。README 渲染器对本地视频内嵌播放支持不稳定，因此这里用可点击预览图链接到视频文件。
 
-如果当前 Markdown 渲染器不显示内嵌播放器，可以直接打开 [MP4 演示视频](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)。
+[<img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent 中文社区桌面版演示视频预览" width="100%">](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)
 
 ### 界面截图
 
