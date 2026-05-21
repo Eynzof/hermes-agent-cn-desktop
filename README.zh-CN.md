@@ -11,6 +11,12 @@ Hermes Agent CN Desktop 是 Hermes Agent 中文社区版的轻量桌面客户端
 
 > 当前版本是 `v0.1.0-alpha.1`。项目仍处于 alpha 阶段，API、打包流程、运行时分发策略和界面细节都可能在稳定版发布前继续调整。
 
+## 演示视频
+
+<video src="./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4" controls muted width="100%" aria-label="Hermes Agent CN Desktop 演示视频"></video>
+
+如果当前 Markdown 渲染器不显示内嵌播放器，可以直接打开 [MP4 演示视频](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)。
+
 ## 项目定位
 
 Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外的桌面体验：原生窗口、本地进程管理、文件对话框、托管运行时安装、运行时诊断，以及生产模式下更安全的 REST 和 SSE 代理层。

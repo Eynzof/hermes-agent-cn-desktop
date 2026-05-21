@@ -11,6 +11,12 @@ Hermes Agent CN Desktop is a lightweight desktop client for the Hermes Agent Chi
 
 > Current release: `v0.1.0-alpha.1`. The project is still in alpha. APIs, packaging, runtime distribution, and UI details may change before the first stable release.
 
+## Demo
+
+<video src="./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4" controls muted width="100%" aria-label="Hermes Agent CN Desktop demo"></video>
+
+If the embedded player is not available in your Markdown viewer, open the [MP4 demo](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4).
+
 ## Why this project exists
 
 Hermes Agent already provides a local Dashboard. This repository focuses on the desktop experience around that Dashboard: native windows, local process management, file dialogs, managed runtime installation, runtime diagnostics, and a safer production transport layer for REST and SSE traffic.
