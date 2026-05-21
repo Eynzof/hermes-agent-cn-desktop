@@ -270,7 +270,7 @@ fn main() {
                              SSE transport will fail; set HERMES_TRANSPORT=ws in the \
                              webview localStorage as a workaround, or upgrade the agent \
                              to a hermes-agent-cn build with the P-009 patch applied. \
-                             See https://github.com/Eynzof/hermes-cn-desktop-v2/issues/10",
+                             See https://github.com/Eynzof/hermes-agent-cn-desktop/blob/main/docs/managed-runtime.md",
                             handle.api_base_url
                         );
                     }
@@ -510,7 +510,7 @@ fn main() {
                 // the UI will hit "SSE closed during connect" the moment it tries
                 // to send a message. Surface a clear warning at startup so users
                 // and bug reports know the root cause rather than chasing the
-                // opaque error. See issue #10 P2.
+                // opaque error. See managed runtime compatibility notes.
                 let supports_sse = tauri::async_runtime::block_on(
                     dashboard::dashboard_supports_sse(&handle.api_base_url),
                 );
@@ -520,7 +520,7 @@ fn main() {
                      SSE transport will fail; set HERMES_TRANSPORT=ws in the \
                      webview localStorage as a workaround, or upgrade the agent \
                      to a hermes-agent-cn build with the P-009 patch applied. \
-                     See https://github.com/Eynzof/hermes-cn-desktop-v2/issues/10",
+                     See https://github.com/Eynzof/hermes-agent-cn-desktop/blob/main/docs/managed-runtime.md",
                         handle.api_base_url
                     );
                 }

@@ -2,9 +2,9 @@
 
 [简体中文](./README.zh-CN.md) · English
 
-[![web-test](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/web-test.yml/badge.svg)](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/web-test.yml)
-[![rust-test](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/rust-test.yml)
-[![release-desktop](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/release-desktop.yml/badge.svg)](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/release-desktop.yml)
+[![web-test](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/web-test.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/web-test.yml)
+[![rust-test](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/rust-test.yml)
+[![release-desktop](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 Hermes Agent CN Desktop is a lightweight desktop client for the Hermes Agent Chinese community edition. It is built with [Tauri v2](https://v2.tauri.app/), Rust, React, and TypeScript, and it wraps the [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) Dashboard with a native desktop shell.
@@ -34,7 +34,7 @@ This repository is the desktop shell. The agent runtime and Dashboard source liv
 
 ## Download
 
-Pre-release builds are published on the [GitHub Releases](https://github.com/Eynzof/hermes-cn-desktop-v2/releases) page.
+Pre-release builds are published on the [GitHub Releases](https://github.com/Eynzof/hermes-agent-cn-desktop/releases) page.
 
 The current alpha release includes:
 

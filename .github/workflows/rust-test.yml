@@ -1,4 +1,4 @@
-# Rust backend test suite for hermes-cn-desktop-v2.
+# Rust backend test suite for hermes-agent-cn-desktop.
 #
 # Runs on every PR and push to main. Separate workflow from
 # release-desktop.yml so a flaky test does not block tagged releases.

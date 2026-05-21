@@ -60,7 +60,7 @@ async function download(url) {
   console.log(`download: ${url}`);
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "hermes-cn-desktop-v2-runtime-stager",
+      "User-Agent": "hermes-agent-cn-desktop-runtime-stager",
     },
   });
   if (!response.ok) {

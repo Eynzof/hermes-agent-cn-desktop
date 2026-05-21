@@ -2,9 +2,9 @@
 
 简体中文 · [English](./README.md)
 
-[![web-test](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/web-test.yml/badge.svg)](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/web-test.yml)
-[![rust-test](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/rust-test.yml)
-[![release-desktop](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/release-desktop.yml/badge.svg)](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/release-desktop.yml)
+[![web-test](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/web-test.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/web-test.yml)
+[![rust-test](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/rust-test.yml)
+[![release-desktop](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 Hermes Agent CN Desktop 是 Hermes Agent 中文社区版的轻量桌面客户端。项目基于 [Tauri v2](https://v2.tauri.app/)、Rust、React 和 TypeScript 构建，用原生桌面壳承载 [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) Dashboard。
@@ -34,7 +34,7 @@ Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外�
 
 ## 下载
 
-预发布安装包会发布在 [GitHub Releases](https://github.com/Eynzof/hermes-cn-desktop-v2/releases) 页面。
+预发布安装包会发布在 [GitHub Releases](https://github.com/Eynzof/hermes-agent-cn-desktop/releases) 页面。
 
 当前 alpha 版本包含：
 

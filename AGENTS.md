@@ -8,7 +8,7 @@ Hermes Agent CN 桌面端 — 用 Tauri v2 + React 构建的独立桌面应用�
 ## 项目结构
 
 ```
-hermes-cn-desktop-v2/
+hermes-agent-cn-desktop/
 ├── src/                    Rust Tauri 后端（~2700 行）
 │   ├── main.rs               入口：解析 HERMES_HOME、启动 dashboard、注册命令
 │   ├── state.rs               AppState（Mutex<AppStateInner>）

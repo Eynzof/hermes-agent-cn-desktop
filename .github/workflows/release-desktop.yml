@@ -1,4 +1,4 @@
-# Build hermes-cn-desktop-v2 installers and attach them to a GitHub
+# Build hermes-agent-cn-desktop installers and attach them to a GitHub
 # Release. Triggers on tags matching `v*` (e.g. `v0.1.0`).
 #
 # Desktop release build runs in parallel for Windows and macOS. Each job:
@@ -85,7 +85,7 @@ jobs:
               ? "https://github.com/Eynzof/hermes-agent-cn/releases/latest/download"
               : `https://github.com/Eynzof/hermes-agent-cn/releases/download/${encodeURIComponent(tag)}`;
             const response = await fetch(`${baseUrl}/stable-win32-x64.json`, {
-              headers: { "User-Agent": "hermes-cn-desktop-v2-release-workflow" },
+              headers: { "User-Agent": "hermes-agent-cn-desktop-release-workflow" },
             });
             if (!response.ok) {
               throw new Error(`manifest download failed: HTTP ${response.status}`);

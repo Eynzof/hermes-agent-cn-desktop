@@ -9,7 +9,7 @@
 > **后端来源**：
 > - REST：`hermes-agent-cn/hermes_cli/web_server.py`
 > - Gateway JSON-RPC + SSE：`hermes-agent-cn/tui_gateway/server.py`
-> - 桌面端调用面：`hermes-cn-desktop-v2/web/src/hooks/*` + `lib/transport.ts`
+> - 桌面端调用面：`hermes-agent-cn-desktop/web/src/hooks/*` + `lib/transport.ts`
 
 ---
 

@@ -1,6 +1,6 @@
 # Managed Runtime — 端到端流程文档
 
-桌面端 (`hermes-cn-desktop-v2`) 是一个 Tauri 壳子，自己不带 agent
+桌面端 (`hermes-agent-cn-desktop`) 是一个 Tauri 壳子，自己不带 agent
 逻辑。所有 RPC / 事件流的另一端是 `hermes-agent-cn`（[fork] of
 NousResearch/hermes-agent）的 dashboard 子进程。
 
@@ -36,7 +36,7 @@ hermes-agent），调用 `subprocess.spawn("hermes", "dashboard")`
 ## 二、组件 + 文件分布
 
 ```
-hermes-cn-desktop-v2/        ← 桌面壳子
+hermes-agent-cn-desktop/        ← 桌面壳子
 ├── src/main.rs                  setup() 触发 bootstrap
 ├── src/process/
 │   ├── runtime.rs               下载 / 签名校验 / 安装 / 回滚
@@ -339,8 +339,6 @@ keypair 同时签的过渡期（这个我们的代码现在不支持，要的话
 
 ## 十、Issue 链接
 
-* [#10] desktop tracking issue — 全链路的"做了什么"
+* 本文档 — desktop/runtime 边界和 managed runtime 全链路说明
 * `hermes-agent-cn` PR #4 — P-009 server-side patch + 发布管线
 * fork 的 `docs/RUNTIME_RELEASES.md` — 签名密钥、发布操作细节
-
-[#10]: https://github.com/Eynzof/hermes-cn-desktop-v2/issues/10

@@ -1,7 +1,7 @@
 # Hermes Agent 中文社区桌面版
 
 > **项目**：Hermes Agent CN 桌面端（Tauri v2 重写版）
-> **仓库**：`hermes-cn-desktop-v2`
+> **仓库**：`hermes-agent-cn-desktop`
 > **后端**：`hermes-agent-cn` Dashboard（桌面端 managed runtime 默认端口 9120）
 > **最后更新**：2026-05-16
 

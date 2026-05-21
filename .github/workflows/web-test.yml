@@ -1,4 +1,4 @@
-# Frontend test suite for hermes-cn-desktop-v2.
+# Frontend test suite for hermes-agent-cn-desktop.
 #
 # Runs typecheck + vitest across the pnpm workspace (web + packages/*).
 # Separate from rust-test.yml so a Rust failure doesn't mask a frontend
