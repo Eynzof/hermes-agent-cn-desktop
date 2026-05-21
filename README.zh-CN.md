@@ -9,7 +9,7 @@
 
 Hermes Agent CN Desktop 是 Hermes Agent 中文社区版的轻量桌面客户端。项目基于 [Tauri v2](https://v2.tauri.app/)、Rust、React 和 TypeScript 构建，用原生桌面壳承载 [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) Dashboard。
 
-> 当前版本是 `v0.1.0-alpha.1`。项目仍处于 alpha 阶段，API、打包流程、运行时分发策略和界面细节都可能在稳定版发布前继续调整。
+> 当前版本是 `v0.1.0-alpha.2`。项目仍处于 alpha 阶段，API、打包流程、运行时分发策略和界面细节都可能在稳定版发布前继续调整。
 
 ## 演示视频
 
