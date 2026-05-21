@@ -32,6 +32,11 @@ pub struct DashboardHandle {
 impl DashboardHandle {
     /// Gracefully stop the dashboard process if we own it.
     pub fn stop(&mut self) {
+        if !self.owns_process {
+            self.child = None;
+            return;
+        }
+
         if let Some(ref mut child) = self.child {
             let _ = child.kill();
             let _ = child.wait();

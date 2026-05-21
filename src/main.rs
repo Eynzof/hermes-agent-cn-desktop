@@ -8,12 +8,13 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
 use hermes_agent_cn::process::{dashboard, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 /// Emit a "runtime-status" event for the frontend overlay to consume.
 /// Phases (in order along the happy path):
@@ -26,6 +27,38 @@ fn emit_runtime_status(app: &tauri::AppHandle, phase: &str, message: &str) {
         "runtime-status",
         serde_json::json!({ "phase": phase, "message": message }),
     );
+}
+
+fn shutdown_owned_runtime(app: &tauri::AppHandle, reason: &str) {
+    let state = app.state::<AppState>();
+    let (sse_stop, mut dashboard_handle) = match state.inner.lock() {
+        Ok(mut inner) => (inner.gateway_sse_stop.take(), inner.dashboard_handle.take()),
+        Err(err) => {
+            log::error!("Failed to lock app state during runtime shutdown: {}", err);
+            return;
+        }
+    };
+
+    if let Some(stop) = sse_stop {
+        stop.store(true, Ordering::Relaxed);
+    }
+
+    if let Some(ref mut handle) = dashboard_handle {
+        if handle.owns_process {
+            log::info!(
+                "Stopping owned Hermes dashboard runtime at {} ({})",
+                handle.api_base_url,
+                reason
+            );
+        } else {
+            log::info!(
+                "Desktop does not own dashboard at {}; skipping process stop ({})",
+                handle.api_base_url,
+                reason
+            );
+        }
+        handle.stop();
+    }
 }
 
 async fn install_bundled_runtime_for_bootstrap(
@@ -587,6 +620,11 @@ fn main() {
                 log::info!("Main window destroyed");
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Hermes Agent 中文社区桌面版");
+        .build(tauri::generate_context!())
+        .expect("error while building Hermes Agent 中文社区桌面版")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                shutdown_owned_runtime(app_handle, "app exit");
+            }
+        });
 }
