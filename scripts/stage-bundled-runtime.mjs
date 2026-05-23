@@ -59,6 +59,7 @@ const outDir = resolve(repoRoot, argValue("--out", "static/bundled-runtime"));
 const expandArtifact = hasFlag("--expand-artifact");
 const keepExisting = hasFlag("--keep-existing");
 const macosFrameworkPayloadSuffix = "__hermes_framework_payload";
+const macosBundleDirPayloadSuffix = "__hermes_bundle_payload";
 
 const runtimeName = `hermes-agent-cn-runtime-${platform}-${arch}`;
 const manifestName = `${channel}-${platform}-${arch}.json`;
@@ -119,9 +120,29 @@ function relocateMacosFrameworksForNotary(dir) {
       rmSync(target, { recursive: true, force: true });
       renameSync(source, target);
       relocated += 1;
+      relocated += relocateMacosBundleLayoutForNotary(target);
       relocated += relocateMacosFrameworksForNotary(target);
     } else {
       relocated += relocateMacosFrameworksForNotary(source);
+    }
+  }
+  return relocated;
+}
+
+function relocateMacosBundleLayoutForNotary(dir) {
+  let relocated = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const source = join(dir, entry.name);
+    const shouldRelocateBundleDir = entry.name === "Versions" || entry.name === "Resources";
+    if (shouldRelocateBundleDir) {
+      const target = join(dir, `${entry.name}${macosBundleDirPayloadSuffix}`);
+      rmSync(target, { recursive: true, force: true });
+      renameSync(source, target);
+      relocated += 1;
+      relocated += relocateMacosBundleLayoutForNotary(target);
+    } else {
+      relocated += relocateMacosBundleLayoutForNotary(source);
     }
   }
   return relocated;
