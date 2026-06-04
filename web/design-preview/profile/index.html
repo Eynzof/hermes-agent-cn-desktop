@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light" data-density="comfortable">
+<head>
+  <meta charset="utf-8" />
+  <title>Profile 改造 · 桌面保真稿 · 索引</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../../../packages/shared-ui/src/tokens/index.css" />
+  <link rel="stylesheet" href="../preview.css" />
+</head>
+<body>
+  <button class="btn themeToggle" onclick="hxTheme()"><i data-lucide="sun-moon"></i> 明/暗</button>
+
+  <div class="idxWrap">
+    <header class="idxHead">
+      <h1 class="idxTitle">Profile 改造 · 桌面保真稿</h1>
+      <p class="idxSub">
+        对齐 <strong>hermes-agent-cn-desktop</strong> 真实设计语言的高保真视觉稿:复用真实
+        <code class="codeChip">--h-*</code> token 与 <code class="codeChip">section-shell</code> /
+        <code class="codeChip">.row</code> / <code class="codeChip">health-grid</code> /
+        <code class="codeChip">Dialog</code> 组件样式。纯无衬线、紧凑密度、字号 ≤14px、单一柿色强调。
+        每屏标注其映射的 React 文件,1:1 可落地。
+      </p>
+      <p class="idxNote">
+        ⚠ 这是放在 <code class="codeChip">web/design-preview/</code> 的静态视觉稿,<strong>不参与 App 构建</strong>
+        (在 tsconfig include 与 vite input 之外)。浏览器直开即可;右上角可切换明/暗。
+      </p>
+    </header>
+
+    <a class="idxRow" href="01-profiles-list.html">
+      <span class="idxRowNum">01</span>
+      <span class="idxRowMain">
+        <span class="idxRowTitle">档案列表 + 切换</span>
+        <span class="idxRowSub">列表 · 头像 · 当前默认 · 元数据/用量 · 切换弹窗 · 新建/克隆</span>
+      </span>
+      <span class="idxRowMap">→ profiles.tsx</span>
+      <i data-lucide="chevron-right"></i>
+    </a>
+
+    <a class="idxRow" href="02-profile-detail.html">
+      <span class="idxRowNum">02</span>
+      <span class="idxRowMain">
+        <span class="idxRowTitle">档案详情与编辑</span>
+        <span class="idxRowSub">头像(生成/上传)· 就地重命名 · 元数据/用量 · 配置摘要 · 危险区(克隆/导出/导入/删除)</span>
+      </span>
+      <span class="idxRowMap">→ profile-detail.tsx</span>
+      <i data-lucide="chevron-right"></i>
+    </a>
+
+    <a class="idxRow" href="03-runtime-health.html">
+      <span class="idxRowNum">03</span>
+      <span class="idxRowMain">
+        <span class="idxRowTitle">运行时健康</span>
+        <span class="idxRowSub">网关 + 桥接状态卡 · 一键重启/恢复(health-grid 卡片范式,非 sparkline)</span>
+      </span>
+      <span class="idxRowMap">→ health.tsx · profile-runtime-grid.tsx</span>
+      <i data-lucide="chevron-right"></i>
+    </a>
+
+    <a class="idxRow" href="04-personal-center.html">
+      <span class="idxRowNum">04</span>
+      <span class="idxRowMain">
+        <span class="idxRowTitle">个人中心</span>
+        <span class="idxRowSub">身份 · 全局偏好 · 跨档案总览 —— 并入设置页作为一个 section</span>
+      </span>
+      <span class="idxRowMap">→ settings.tsx · PersonalCenterSection</span>
+      <i data-lucide="chevron-right"></i>
+    </a>
+  </div>
+
+  <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script>
+    function hxTheme(){var r=document.documentElement;r.dataset.theme=(r.dataset.theme==='dark'?'light':'dark');}
+    document.addEventListener('DOMContentLoaded',function(){window.lucide&&window.lucide.createIcons();});
+  </script>
+</body>
+</html>

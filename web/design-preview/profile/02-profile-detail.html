@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light" data-density="comfortable">
+<head>
+  <meta charset="utf-8" />
+  <title>档案详情与编辑 · 桌面保真稿</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../../../packages/shared-ui/src/tokens/index.css" />
+  <link rel="stylesheet" href="../preview.css" />
+</head>
+<body>
+  <button class="btn themeToggle" onclick="hxTheme()"><i data-lucide="sun-moon"></i> 明/暗</button>
+
+  <div class="shell">
+    <div class="topbarSlot">
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brandMark" width="22" height="22" viewBox="0 0 80 80"><rect width="80" height="80" rx="18" fill="#f6f1e3"/><g transform="translate(-2,2)"><polygon points="58,22 58,58 62,54 62,18" fill="#3a3633"/><path d="M22,22 H30 V36 H50 V22 H58 V58 H50 V44 H30 V58 H22 Z" fill="#0a0908"/><rect x="30" y="36" width="20" height="8" fill="#ff7a3d"/></g></svg>
+          <div class="brandText">
+            <div class="wordmark">Hermes<em>·</em>CN</div>
+            <div class="brandMeta"><span class="edition">桌面端</span><span class="metaDot">·</span><span class="edition">v2</span></div>
+          </div>
+        </div>
+        <nav class="topnav">
+          <a class="topnavLink" href="#"><span class="navNum">01</span>workbench</a>
+          <a class="topnavLink" href="#"><span class="navNum">02</span>skills</a>
+          <a class="topnavLink" href="#"><span class="navNum">03</span>advanced</a>
+          <a class="topnavLink" data-active="true" href="#"><span class="navNum">04</span>settings</a>
+        </nav>
+        <div class="topsearch"><i data-lucide="search"></i><span>搜索…</span><span class="searchKbd">⌘ K</span></div>
+        <div class="topactions">
+          <button class="iconbtn" onclick="hxTheme()" title="切换主题"><i data-lucide="sun-moon"></i></button>
+          <button class="iconbtn"><i data-lucide="settings"></i></button>
+        </div>
+      </header>
+    </div>
+
+    <div class="sidebarSlot">
+      <aside class="sidebar">
+        <button class="pstrigger">
+          <span class="pstriggerLabel">档案</span>
+          <span class="pstriggerName">work</span>
+          <i data-lucide="chevrons-up-down" class="pstriggerChevron"></i>
+        </button>
+        <div class="sideLabel">我</div>
+        <div class="sideNav">
+          <a class="sideItem" data-active="true" href="01-profiles-list.html"><i data-lucide="folder"></i> 档案</a>
+          <a class="sideItem" href="03-runtime-health.html"><i data-lucide="activity"></i> 运行时健康</a>
+          <a class="sideItem" href="04-personal-center.html"><i data-lucide="user-round"></i> 个人中心</a>
+        </div>
+        <div class="sideLabel">会话</div>
+        <div class="sideNav">
+          <a class="sideItem" href="#"><i data-lucide="message-square"></i> 最近会话</a>
+          <a class="sideItem" href="#"><i data-lucide="history"></i> 历史</a>
+        </div>
+      </aside>
+    </div>
+
+    <div class="mainSlot">
+      <div class="secpage">
+        <div class="pageTopBar">
+          <div class="pageTitleGroup">
+            <a class="pageChip" href="01-profiles-list.html" style="border:none;padding:0 4px 0 0;"><i data-lucide="chevron-left"></i></a>
+            <span class="pageTitle">档案详情</span><span class="pageSub">client-atlas</span>
+          </div>
+          <div class="pageSpacer"></div>
+          <button class="pageChip"><i data-lucide="check-check"></i> 设为默认</button>
+        </div>
+
+        <div class="scroll">
+
+          <!-- detail header: avatar + inline rename -->
+          <div class="detailHeader">
+            <span class="detailAvatar" data-tint="moss">c</span>
+            <div style="flex:1; min-width:0;">
+              <span class="detailName" id="nameView">
+                client-atlas
+                <button class="detailNameEdit" onclick="hxRename(true)" title="重命名"><i data-lucide="pencil"></i></button>
+              </span>
+              <span id="nameEdit" style="display:none; align-items:center; gap:8px;">
+                <input class="detailNameInput" value="client-atlas" spellcheck="false" />
+                <button class="btnPrimary btnSm" onclick="hxRename(false)">保存</button>
+                <button class="btn btnSm" onclick="hxRename(false)">取消</button>
+              </span>
+              <div class="detailSub">profile · ~/.hermes/profiles/client-atlas</div>
+            </div>
+          </div>
+
+          <!-- avatar controls -->
+          <div class="srow">
+            <div class="srowLeft">
+              <div class="srowLabel">头像</div>
+              <div class="srowSub">确定性生成(按档案名取种子)或上传图片。上传支持 PNG/JPEG/WebP,客户端自动压缩到 &lt; 500 KB。</div>
+            </div>
+            <div class="srowRight">
+              <button class="btn btnSm"><i data-lucide="dices"></i> 生成</button>
+              <button class="btn btnSm"><i data-lucide="upload"></i> 上传</button>
+              <button class="btnDanger btnSm"><i data-lucide="x"></i> 移除</button>
+            </div>
+          </div>
+
+          <!-- metadata / usage -->
+          <h2 class="heading" style="margin-top:26px;">元数据与用量</h2>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">创建时间</div></div><div class="srowRight"><span class="codeChip">2026-03-18</span></div></div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">最近活跃</div></div><div class="srowRight">2 天前</div></div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">会话数</div></div><div class="srowRight">38</div></div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">7 天消费</div></div><div class="srowRight">$4.80</div></div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">磁盘占用</div></div><div class="srowRight">88 MB · sessions 52 MB</div></div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">HERMES_HOME</div></div><div class="srowRight"><span class="codeChip">~/.hermes/profiles/client-atlas</span></div></div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">凭证 .env</div></div><div class="srowRight"><span class="pill" data-tone="ok"><span class="dot" data-tone="ok"></span> 已配置 · 2 键</span></div></div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">SOUL.md</div></div><div class="srowRight"><span class="pill" data-tone="ok">存在 · 2.4 KB</span></div></div>
+
+          <!-- config summary -->
+          <div class="sectionTitleRow">
+            <h2 class="heading">配置</h2>
+            <button class="btn btnSm"><i data-lucide="settings-2"></i> 在设置中编辑</button>
+          </div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">模型</div></div><div class="srowRight"><span class="codeChip">glm-4.6</span> · 1M 兜底</div></div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">供应商</div></div><div class="srowRight">zhipu</div></div>
+          <div class="srow"><div class="srowLeft"><div class="srowLabel">技能</div></div><div class="srowRight">6 / 12 启用</div></div>
+
+          <!-- danger zone -->
+          <h2 class="heading" style="margin-top:26px;">危险操作</h2>
+          <div class="dangerZone">
+            <div class="dzRow">
+              <div class="dzLeft"><div class="dzLabel">克隆此档案</div><div class="dzSub">复制 config / .env / SOUL.md 到新档案。独占凭据(平台 token)会在克隆时被剥离。</div></div>
+              <div class="dzRight"><button class="btn btnSm" onclick="hxDialog('dlgClone')"><i data-lucide="copy"></i> 克隆…</button></div>
+            </div>
+            <div class="dzRow">
+              <div class="dzLeft"><div class="dzLabel">导出为 .tar.gz</div><div class="dzSub">打包整个档案目录用于备份或迁移到另一台机器。点击后直接下载。</div></div>
+              <div class="dzRight"><button class="btn btnSm"><i data-lucide="download"></i> 导出</button></div>
+            </div>
+            <div class="dzRow">
+              <div class="dzLeft"><div class="dzLabel">导入档案</div><div class="dzSub">从 .tar.gz 恢复一个档案。导入前会校验目录结构、防止路径穿越。</div></div>
+              <div class="dzRight"><button class="btn btnSm" onclick="hxDialog('dlgImport')"><i data-lucide="upload"></i> 导入…</button></div>
+            </div>
+            <div class="dzRow">
+              <div class="dzLeft"><div class="dzLabel" style="color:var(--h-err);">删除此档案</div><div class="dzSub">永久删除该档案的全部会话、记忆与配置。默认档案与使用中的档案不可删除。</div></div>
+              <div class="dzRight"><button class="btnDanger btnSm" onclick="hxDialog('dlgDelete')"><i data-lucide="trash-2"></i> 删除</button></div>
+            </div>
+          </div>
+
+          <div style="height:24px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="statusbarSlot">
+      <footer class="statusbar">
+        <span class="stat"><span class="sbDot"></span><span class="lbl">网关</span><span class="val">9120</span></span>
+        <span class="sep"></span>
+        <span class="stat"><span class="lbl">编辑中</span><span class="val">client-atlas</span></span>
+        <span class="right"><span class="stat"><span class="lbl">保存</span><span class="val">即时 · 防抖 300ms</span></span></span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ── Dialogs (shared-ui Dialog) ───────────────────────────────────────── -->
+  <!-- clone: shown open by default to demonstrate the modal style -->
+  <div class="hx-modal" id="dlgClone">
+    <div class="overlay" onclick="hxClose()"></div>
+    <div class="dialog" role="dialog">
+      <div class="dialogHead">
+        <span class="dialogTitle">克隆 client-atlas</span>
+        <button class="dialogClose" onclick="hxClose()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="dialogBody">
+        <div class="pfieldRow">
+          <label class="pfieldLabel">新档案名</label>
+          <input class="pfieldInput" value="client-atlas-copy" spellcheck="false" />
+        </div>
+        <div class="dialogText">克隆会<strong>剥离</strong>以下独占凭据,避免身份串味 —— 创建后在新档案里重新授权即可:</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <span class="pill pillSm" data-tone="warn">strippedCredentials · 2</span>
+          <span class="pill pillSm" data-tone="warn">disabledPlatforms · 飞书/微信</span>
+          <span class="pill pillSm" data-tone="warn">configCredentials · 1</span>
+        </div>
+      </div>
+      <div class="dialogFoot">
+        <button class="btn" onclick="hxClose()">取消</button>
+        <button class="btnPrimary"><i data-lucide="copy"></i> 克隆创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- import -->
+  <div class="hx-modal" id="dlgImport" style="display:none;">
+    <div class="overlay" onclick="hxClose()"></div>
+    <div class="dialog" role="dialog">
+      <div class="dialogHead">
+        <span class="dialogTitle">导入档案</span>
+        <button class="dialogClose" onclick="hxClose()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="dialogBody">
+        <div class="dropzone">
+          <i data-lucide="upload-cloud" style="width:22px;height:22px;"></i>
+          <span>拖拽 <span class="codeChip">.tar.gz</span> 到这里,或点击选择文件</span>
+        </div>
+        <div class="dialogText">导入前会校验目录结构并防止路径穿越;同名档案会提示是否覆盖。</div>
+      </div>
+      <div class="dialogFoot">
+        <button class="btn" onclick="hxClose()">取消</button>
+        <button class="btnPrimary" disabled style="opacity:.55;cursor:not-allowed;">导入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- delete -->
+  <div class="hx-modal" id="dlgDelete" style="display:none;">
+    <div class="overlay" onclick="hxClose()"></div>
+    <div class="dialog" role="dialog">
+      <div class="dialogHead">
+        <span class="dialogTitle">删除 client-atlas?</span>
+        <button class="dialogClose" onclick="hxClose()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="dialogBody">
+        <div class="dialogText">
+          这会<strong>永久删除</strong>该档案目录 <span class="codeChip">~/.hermes/profiles/client-atlas</span>
+          下的全部会话、记忆与配置,<strong>不可恢复</strong>。建议先导出备份。
+        </div>
+      </div>
+      <div class="dialogFoot">
+        <button class="btn" onclick="hxClose()">取消</button>
+        <button class="btnDanger"><i data-lucide="trash-2"></i> 确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script>
+    function hxTheme(){var r=document.documentElement;r.dataset.theme=(r.dataset.theme==='dark'?'light':'dark');}
+    function hxRename(on){document.getElementById('nameView').style.display=on?'none':'inline-flex';document.getElementById('nameEdit').style.display=on?'inline-flex':'none';}
+    function hxDialog(id){document.querySelectorAll('.hx-modal').forEach(function(m){m.style.display='none';});var el=document.getElementById(id);if(el)el.style.display='block';}
+    function hxClose(){document.querySelectorAll('.hx-modal').forEach(function(m){m.style.display='none';});}
+    document.addEventListener('DOMContentLoaded',function(){window.lucide&&window.lucide.createIcons();});
+  </script>
+</body>
+</html>

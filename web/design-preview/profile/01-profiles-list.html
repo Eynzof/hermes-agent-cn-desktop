@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light" data-density="comfortable">
+<head>
+  <meta charset="utf-8" />
+  <title>档案列表 + 切换 · 桌面保真稿</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../../../packages/shared-ui/src/tokens/index.css" />
+  <link rel="stylesheet" href="../preview.css" />
+</head>
+<body>
+  <button class="btn themeToggle" onclick="hxTheme()"><i data-lucide="sun-moon"></i> 明/暗</button>
+
+  <div class="shell">
+    <!-- top bar -->
+    <div class="topbarSlot">
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brandMark" width="22" height="22" viewBox="0 0 80 80"><rect width="80" height="80" rx="18" fill="#f6f1e3"/><g transform="translate(-2,2)"><polygon points="58,22 58,58 62,54 62,18" fill="#3a3633"/><path d="M22,22 H30 V36 H50 V22 H58 V58 H50 V44 H30 V58 H22 Z" fill="#0a0908"/><rect x="30" y="36" width="20" height="8" fill="#ff7a3d"/></g></svg>
+          <div class="brandText">
+            <div class="wordmark">Hermes<em>·</em>CN</div>
+            <div class="brandMeta"><span class="edition">桌面端</span><span class="metaDot">·</span><span class="edition">v2</span></div>
+          </div>
+        </div>
+        <nav class="topnav">
+          <a class="topnavLink" href="#"><span class="navNum">01</span>workbench</a>
+          <a class="topnavLink" href="#"><span class="navNum">02</span>skills</a>
+          <a class="topnavLink" href="#"><span class="navNum">03</span>advanced</a>
+          <a class="topnavLink" data-active="true" href="#"><span class="navNum">04</span>settings</a>
+        </nav>
+        <div class="topsearch"><i data-lucide="search"></i><span>搜索…</span><span class="searchKbd">⌘ K</span></div>
+        <div class="topactions">
+          <button class="iconbtn" onclick="hxTheme()" title="切换主题"><i data-lucide="sun-moon"></i></button>
+          <button class="iconbtn"><i data-lucide="settings"></i></button>
+        </div>
+      </header>
+    </div>
+
+    <!-- sidebar -->
+    <div class="sidebarSlot">
+      <aside class="sidebar">
+        <button class="pstrigger" onclick="hxToggleMenu()">
+          <span class="pstriggerLabel">档案</span>
+          <span class="pstriggerName">work</span>
+          <i data-lucide="chevrons-up-down" class="pstriggerChevron"></i>
+        </button>
+        <div class="sideLabel">我</div>
+        <div class="sideNav">
+          <a class="sideItem" data-active="true" href="01-profiles-list.html"><i data-lucide="folder"></i> 档案</a>
+          <a class="sideItem" href="03-runtime-health.html"><i data-lucide="activity"></i> 运行时健康</a>
+          <a class="sideItem" href="04-personal-center.html"><i data-lucide="user-round"></i> 个人中心</a>
+        </div>
+        <div class="sideLabel">会话</div>
+        <div class="sideNav">
+          <a class="sideItem" href="#"><i data-lucide="message-square"></i> 最近会话</a>
+          <a class="sideItem" href="#"><i data-lucide="history"></i> 历史</a>
+        </div>
+
+        <!-- switch popover (profile-selector menu) — shown open as demo -->
+        <div class="psmenu" id="switchMenu" style="position:absolute; top:46px; left:6px; z-index:40; display:none;">
+          <div class="psmenuTitle">切换档案</div>
+          <button class="psmenuItem" data-active="true"><span class="psmenuItemName">work</span><span class="psmenuItemBadge">default</span><i data-lucide="check" class="psmenuCheck"></i></button>
+          <button class="psmenuItem"><span class="psmenuItemName">client-atlas</span></button>
+          <button class="psmenuItem"><span class="psmenuItemName">demo</span></button>
+          <div class="psmenuFoot"><button class="psmenuFootLink">管理档案…</button></div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- main -->
+    <div class="mainSlot">
+      <div class="secpage">
+        <div class="pageTopBar">
+          <div class="pageTitleGroup"><span class="pageTitle">档案</span><span class="pageSub">3 个档案 · 当前 work</span></div>
+          <div class="pageSpacer"></div>
+          <button class="pageChip"><i data-lucide="rotate-cw"></i> 刷新</button>
+        </div>
+
+        <div class="scroll">
+          <p class="pdesc">每个档案是一套隔离的 Agent 环境 —— 独立的 config / .env / SOUL.md / sessions / memory。切换即时、可逆,上下文不跨档案泄漏。</p>
+
+          <div class="pwarning">
+            <strong>切换档案会重启 dashboard 子进程</strong>
+            <span>桌面端为热切换(约 2–3 秒,自动重连并保留 5 分钟回滚指针);Web 模式仅写 sticky,需手动重启生效。</span>
+          </div>
+
+          <div class="ptoolbar">
+            <span class="pdesc" style="margin:0;">共 3 个档案 · 1 个使用中</span>
+            <button class="pnewBtn" onclick="hxToggleCreate()"><i data-lucide="plus"></i> 新建档案</button>
+          </div>
+
+          <!-- create / clone inline card -->
+          <div class="pcreateCard" id="createCard" style="display:none;">
+            <div class="pcreateTitle">新建档案</div>
+            <div class="pfieldRow">
+              <label class="pfieldLabel">档案名 <span style="color:var(--h-text-4)">允许 A–Z a–z 0–9 _ -</span></label>
+              <input class="pfieldInput" value="atlas-q3" spellcheck="false" />
+            </div>
+            <div class="pfieldRow">
+              <label class="pfieldLabel">初始化</label>
+              <div class="pfieldRadios">
+                <label><input type="radio" name="init" /> 空白</label>
+                <label><input type="radio" name="init" checked /> 从档案克隆</label>
+                <select class="select" style="margin-left:4px;"><option>work</option><option>client-atlas</option><option>demo</option></select>
+              </div>
+            </div>
+            <div class="pformActions">
+              <button class="btn" onclick="hxToggleCreate()">取消</button>
+              <button class="btnPrimary">创建</button>
+            </div>
+          </div>
+
+          <div class="plist">
+
+            <!-- active / default profile -->
+            <div class="prow" data-active="true">
+              <span class="pAvatar" data-tint="persimmon">w</span>
+              <div class="prowMain">
+                <div class="prowHead">
+                  <span class="prowName">work</span>
+                  <span class="ptag">default</span>
+                  <span class="pactiveBadge"><i data-lucide="check"></i> 当前默认</span>
+                </div>
+                <div class="prowMeta">
+                  <span class="pmetaCell">模型 <code class="codeChip">glm-4.6</code> · zhipu</span>
+                  <span class="pmetaCell">12 个技能</span>
+                  <span class="pmetaCell">会话 48</span>
+                  <span class="pmetaCell">7d $2.41</span>
+                  <span class="pmetaCell">磁盘 312 MB</span>
+                </div>
+              </div>
+              <div class="prowActions">
+                <a class="pactionBtn" href="02-profile-detail.html"><i data-lucide="pencil"></i> 编辑</a>
+                <span class="pactionPlaceholder">—</span>
+              </div>
+            </div>
+
+            <!-- client-atlas -->
+            <div class="prow">
+              <span class="pAvatar" data-tint="moss">c</span>
+              <div class="prowMain">
+                <div class="prowHead">
+                  <span class="prowName">client-atlas</span>
+                </div>
+                <div class="prowMeta">
+                  <span class="pmetaCell">模型 <code class="codeChip">glm-4.6</code> · zhipu</span>
+                  <span class="pmetaCell">6 个技能</span>
+                  <span class="pmetaCell">会话 38</span>
+                  <span class="pmetaCell">7d $4.80</span>
+                  <span class="pmetaCell">磁盘 88 MB</span>
+                </div>
+              </div>
+              <div class="prowActions">
+                <button class="pactionBtn"><i data-lucide="check-check"></i> 设为默认</button>
+                <a class="pactionBtn" href="02-profile-detail.html"><i data-lucide="pencil"></i> 编辑</a>
+                <button class="pdeleteBtn">删除</button>
+              </div>
+            </div>
+
+            <!-- demo (no .env) -->
+            <div class="prow">
+              <span class="pAvatar" data-tint="sky">d</span>
+              <div class="prowMain">
+                <div class="prowHead">
+                  <span class="prowName">demo</span>
+                  <span class="ptag">只读演示</span>
+                </div>
+                <div class="prowMeta">
+                  <span class="pmetaCell">模型 <code class="codeChip">glm-4.5-air</code> · zhipu</span>
+                  <span class="pmetaCell">3 个技能</span>
+                  <span class="pmetaCell">会话 2</span>
+                  <span class="pmetaCell" style="color:color-mix(in srgb,var(--h-text-3) 70%,transparent);">无 .env</span>
+                  <span class="pmetaCell">磁盘 24 MB</span>
+                </div>
+              </div>
+              <div class="prowActions">
+                <button class="pactionBtn"><i data-lucide="check-check"></i> 设为默认</button>
+                <a class="pactionBtn" href="02-profile-detail.html"><i data-lucide="pencil"></i> 编辑</a>
+                <button class="pdeleteBtn">删除</button>
+              </div>
+            </div>
+
+          </div>
+
+          <p class="pfootnote">重命名、克隆、导出/导入、头像设置在「编辑」里(档案详情)。曾经只能在 CLI 做的事,现在都搬进了 UI。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- status bar -->
+    <div class="statusbarSlot">
+      <footer class="statusbar">
+        <span class="stat"><span class="sbDot"></span><span class="lbl">网关</span><span class="val">9120</span></span>
+        <span class="sep"></span>
+        <span class="stat"><span class="lbl">档案</span><span class="val">work</span></span>
+        <span class="sep"></span>
+        <span class="stat"><span class="lbl">模型</span><span class="val">glm-4.6</span></span>
+        <span class="right"><span class="stat"><span class="lbl">运行时</span><span class="val">running</span></span></span>
+      </footer>
+    </div>
+  </div>
+
+  <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script>
+    function hxTheme(){var r=document.documentElement;r.dataset.theme=(r.dataset.theme==='dark'?'light':'dark');}
+    function hxToggleMenu(){var m=document.getElementById('switchMenu');m.style.display=(m.style.display==='none'?'block':'none');}
+    function hxToggleCreate(){var c=document.getElementById('createCard');c.style.display=(c.style.display==='none'?'flex':'none');}
+    document.addEventListener('DOMContentLoaded',function(){window.lucide&&window.lucide.createIcons();});
+  </script>
+</body>
+</html>

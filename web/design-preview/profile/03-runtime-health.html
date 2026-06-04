@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light" data-density="comfortable">
+<head>
+  <meta charset="utf-8" />
+  <title>运行时健康 · 桌面保真稿</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../../../packages/shared-ui/src/tokens/index.css" />
+  <link rel="stylesheet" href="../preview.css" />
+</head>
+<body>
+  <button class="btn themeToggle" onclick="hxTheme()"><i data-lucide="sun-moon"></i> 明/暗</button>
+
+  <div class="shell">
+    <div class="topbarSlot">
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brandMark" width="22" height="22" viewBox="0 0 80 80"><rect width="80" height="80" rx="18" fill="#f6f1e3"/><g transform="translate(-2,2)"><polygon points="58,22 58,58 62,54 62,18" fill="#3a3633"/><path d="M22,22 H30 V36 H50 V22 H58 V58 H50 V44 H30 V58 H22 Z" fill="#0a0908"/><rect x="30" y="36" width="20" height="8" fill="#ff7a3d"/></g></svg>
+          <div class="brandText">
+            <div class="wordmark">Hermes<em>·</em>CN</div>
+            <div class="brandMeta"><span class="edition">桌面端</span><span class="metaDot">·</span><span class="edition">v2</span></div>
+          </div>
+        </div>
+        <nav class="topnav">
+          <a class="topnavLink" href="#"><span class="navNum">01</span>workbench</a>
+          <a class="topnavLink" href="#"><span class="navNum">02</span>skills</a>
+          <a class="topnavLink" href="#"><span class="navNum">03</span>advanced</a>
+          <a class="topnavLink" data-active="true" href="#"><span class="navNum">04</span>settings</a>
+        </nav>
+        <div class="topsearch"><i data-lucide="search"></i><span>搜索…</span><span class="searchKbd">⌘ K</span></div>
+        <div class="topactions">
+          <button class="iconbtn" onclick="hxTheme()" title="切换主题"><i data-lucide="sun-moon"></i></button>
+          <button class="iconbtn"><i data-lucide="settings"></i></button>
+        </div>
+      </header>
+    </div>
+
+    <div class="sidebarSlot">
+      <aside class="sidebar">
+        <button class="pstrigger">
+          <span class="pstriggerLabel">档案</span>
+          <span class="pstriggerName">work</span>
+          <i data-lucide="chevrons-up-down" class="pstriggerChevron"></i>
+        </button>
+        <div class="sideLabel">我</div>
+        <div class="sideNav">
+          <a class="sideItem" href="01-profiles-list.html"><i data-lucide="folder"></i> 档案</a>
+          <a class="sideItem" data-active="true" href="03-runtime-health.html"><i data-lucide="activity"></i> 运行时健康</a>
+          <a class="sideItem" href="04-personal-center.html"><i data-lucide="user-round"></i> 个人中心</a>
+        </div>
+        <div class="sideLabel">会话</div>
+        <div class="sideNav">
+          <a class="sideItem" href="#"><i data-lucide="message-square"></i> 最近会话</a>
+          <a class="sideItem" href="#"><i data-lucide="history"></i> 历史</a>
+        </div>
+      </aside>
+    </div>
+
+    <div class="mainSlot">
+      <div class="secpage">
+        <div class="pageTopBar">
+          <div class="pageTitleGroup"><span class="pageTitle">运行时健康</span><span class="pageSub">work · gateway running</span></div>
+          <div class="pageSpacer"></div>
+          <button class="pageChip"><i data-lucide="rotate-cw"></i> 刷新</button>
+        </div>
+
+        <div class="scroll">
+
+          <!-- summary bar -->
+          <button class="hbar" data-tone="ok">
+            <span class="dot" data-tone="ok"></span>
+            <span class="hbarLabel">运行时正常</span>
+            <span class="hbarSummary">网关 + 桥接在线 · 探针 18ms · 24h 0 次失败</span>
+            <span class="hbarChev"><i data-lucide="chevron-down"></i></span>
+          </button>
+
+          <!-- restart / recover actions -->
+          <div class="sectionTitleRow">
+            <h2 class="heading">work · 当前运行时</h2>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btnSm"><i data-lucide="rotate-cw"></i> 重启网关</button>
+              <button class="btn btnSm"><i data-lucide="refresh-cw"></i> 重启运行时</button>
+              <button class="btn btnSm"><i data-lucide="undo-2"></i> 恢复上一个</button>
+            </div>
+          </div>
+
+          <div class="prestartHint" style="margin-bottom:14px;">
+            <strong>已重启网关</strong>
+            <span>14:02 · 健康恢复 18ms · 自动重连成功。回滚指针保留 5 分钟。</span>
+          </div>
+
+          <!-- runtime grid (health-grid .grid/.cell) -->
+          <div class="hgrid">
+            <div class="hcell" data-size="wide">
+              <span class="hlabel"><span class="dot" data-tone="ok"></span> 网关 Gateway</span>
+              <span class="hvalue" data-mono="true">127.0.0.1:9120</span>
+              <span class="hsub">running · pid 48213 · 18ms</span>
+            </div>
+            <div class="hcell" data-size="wide">
+              <span class="hlabel"><span class="dot" data-tone="ok"></span> 桥接 Bridge</span>
+              <span class="hvalue">reachable</span>
+              <span class="hsub">electron · live · 0 err</span>
+            </div>
+            <div class="hcell" data-size="wide">
+              <span class="hlabel"><span class="dot" data-tone="ok"></span> 健康探针</span>
+              <span class="hvalue" data-mono="true">/health</span>
+              <span class="hsub">health_ok=true · 缓存 60s</span>
+            </div>
+
+            <div class="hcell">
+              <span class="hlabel">PID</span>
+              <span class="hvalue" data-mono="true">48213</span>
+            </div>
+            <div class="hcell">
+              <span class="hlabel">端口</span>
+              <span class="hvalue" data-mono="true">9120</span>
+            </div>
+            <div class="hcell">
+              <span class="hlabel">Host</span>
+              <span class="hvalue" data-mono="true">127.0.0.1</span>
+            </div>
+            <div class="hcell">
+              <span class="hlabel">模式</span>
+              <span class="hvalue">electron · live</span>
+            </div>
+            <div class="hcell">
+              <span class="hlabel">在线时长</span>
+              <span class="hvalue">12d 4h</span>
+            </div>
+            <div class="hcell">
+              <span class="hlabel">最近错误</span>
+              <span class="hvalue">—</span>
+            </div>
+          </div>
+
+          <!-- non-active profiles -->
+          <div class="sectionTitleRow">
+            <h2 class="heading">其他档案</h2>
+            <span class="pdesc" style="margin:0;">非活跃档案不运行网关 · 切换后启动</span>
+          </div>
+
+          <div class="hgrid">
+            <div class="hcell" data-size="wide">
+              <span class="hlabel"><span class="dot"></span> client-atlas</span>
+              <span class="hvalue" style="color:var(--h-text-3);">未运行</span>
+              <span class="hsub">上次在线 2 天前</span>
+            </div>
+            <div class="hcell" data-size="wide">
+              <span class="hlabel"><span class="dot"></span> demo</span>
+              <span class="hvalue" style="color:var(--h-text-3);">未运行</span>
+              <span class="hsub">上次在线 12 天前</span>
+            </div>
+            <div class="hcell" data-size="wide" style="justify-content:center;">
+              <span class="hsub" style="white-space:normal;">切到某档案后,Hermes 会启动它的网关与桥接;这里只显示活跃档案的实时运行时。</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="statusbarSlot">
+      <footer class="statusbar">
+        <span class="stat"><span class="sbDot"></span><span class="lbl">网关</span><span class="val">9120 · 18ms</span></span>
+        <span class="sep"></span>
+        <span class="stat"><span class="lbl">桥接</span><span class="val">reachable</span></span>
+        <span class="sep"></span>
+        <span class="stat"><span class="lbl">档案</span><span class="val">work</span></span>
+        <span class="right"><span class="stat"><span class="lbl">下次探测</span><span class="val">in 26s</span></span></span>
+      </footer>
+    </div>
+  </div>
+
+  <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script>
+    function hxTheme(){var r=document.documentElement;r.dataset.theme=(r.dataset.theme==='dark'?'light':'dark');}
+    document.addEventListener('DOMContentLoaded',function(){window.lucide&&window.lucide.createIcons();});
+  </script>
+</body>
+</html>

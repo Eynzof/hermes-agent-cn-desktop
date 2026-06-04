@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light" data-density="comfortable">
+<head>
+  <meta charset="utf-8" />
+  <title>个人中心 · 桌面保真稿</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../../../packages/shared-ui/src/tokens/index.css" />
+  <link rel="stylesheet" href="../preview.css" />
+</head>
+<body>
+  <button class="btn themeToggle" onclick="hxTheme()"><i data-lucide="sun-moon"></i> 明/暗</button>
+
+  <!-- 设置是全屏路由,自带顶栏(带返回),不套 app 外壳 -->
+  <div class="setpage" style="height:100vh;">
+    <div class="pageTopBar">
+      <a class="pageChip" href="01-profiles-list.html" style="border:none;padding:0 4px 0 0;"><i data-lucide="chevron-left"></i></a>
+      <span class="pageTitle">设置</span>
+    </div>
+
+    <div class="setLayout">
+      <!-- internal settings nav (settings.module.css .nav/.navItem) -->
+      <nav class="setNav">
+        <button class="setNavItem">通用</button>
+        <button class="setNavItem">模型</button>
+        <button class="setNavItem">技能</button>
+        <button class="setNavItem" data-active="true">个人中心</button>
+        <button class="setNavItem">隐私</button>
+        <button class="setNavItem">关于</button>
+      </nav>
+
+      <div class="setContent">
+        <h1 class="heading">个人中心</h1>
+        <p class="sdesc">你的本地身份、全局偏好,以及全部档案的总览。本机单用户、离线优先 —— 不涉及账户密码、多用户或登录设备。</p>
+
+        <!-- identity -->
+        <div class="detailHeader">
+          <span class="detailAvatar" data-tint="persimmon">e</span>
+          <div style="flex:1; min-width:0;">
+            <span class="detailName" id="nameView">
+              enzo
+              <button class="detailNameEdit" onclick="hxRename(true)" title="改名"><i data-lucide="pencil"></i></button>
+            </span>
+            <span id="nameEdit" style="display:none; align-items:center; gap:8px;">
+              <input class="detailNameInput" value="enzo" spellcheck="false" />
+              <button class="btnPrimary btnSm" onclick="hxRename(false)">保存</button>
+              <button class="btn btnSm" onclick="hxRename(false)">取消</button>
+            </span>
+            <div class="detailSub">本地账户 · 单用户</div>
+          </div>
+        </div>
+
+        <div class="srow"><div class="srowLeft"><div class="srowLabel">设备</div></div><div class="srowRight">studio · darwin 25.4.0</div></div>
+        <div class="srow"><div class="srowLeft"><div class="srowLabel">时区</div></div><div class="srowRight">Asia/Shanghai (UTC+8)</div></div>
+        <div class="srow"><div class="srowLeft"><div class="srowLabel">HERMES_HOME</div></div><div class="srowRight"><span class="codeChip">~/.hermes</span></div></div>
+        <div class="srow"><div class="srowLeft"><div class="srowLabel">首次使用</div></div><div class="srowRight">2026-01-04 · 152 天</div></div>
+
+        <!-- global preferences -->
+        <h2 class="heading" style="margin-top:28px;">全局偏好</h2>
+        <div class="srow">
+          <div class="srowLeft"><div class="srowLabel">审批模式</div><div class="srowSub">破坏性 shell 与网络写入前 Hermes 先询问</div></div>
+          <div class="srowRight"><button class="toggle" data-on="true"><span class="toggleThumb"></span></button></div>
+        </div>
+        <div class="srow">
+          <div class="srowLeft"><div class="srowLabel">记忆自动保存</div><div class="srowSub">自动保存用户 / 反馈 / 项目相关的记忆</div></div>
+          <div class="srowRight"><button class="toggle" data-on="true"><span class="toggleThumb"></span></button></div>
+        </div>
+        <div class="srow">
+          <div class="srowLeft"><div class="srowLabel">默认进入只读</div><div class="srowSub">已完成的会话首次打开时自动折叠工作区面板</div></div>
+          <div class="srowRight"><button class="toggle" data-on="true"><span class="toggleThumb"></span></button></div>
+        </div>
+        <div class="srow">
+          <div class="srowLeft"><div class="srowLabel">遥测</div><div class="srowSub">仅本地。绝不发到 Anthropic 或外部</div></div>
+          <div class="srowRight"><button class="toggle"><span class="toggleThumb"></span></button></div>
+        </div>
+        <div class="srow">
+          <div class="srowLeft"><div class="srowLabel">主题</div></div>
+          <div class="srowRight"><select class="select"><option>跟随系统</option><option>浅色</option><option>深色</option></select></div>
+        </div>
+        <div class="srow">
+          <div class="srowLeft"><div class="srowLabel">密度</div></div>
+          <div class="srowRight"><select class="select"><option>舒适</option><option>紧凑</option></select></div>
+        </div>
+
+        <!-- cross-profile overview -->
+        <h2 class="heading" style="margin-top:28px;">档案总览</h2>
+        <div class="hgrid" style="margin-bottom:14px;">
+          <div class="hcell" data-size="wide"><span class="hlabel">档案数</span><span class="hvalue">3 个 · 1 使用中</span></div>
+          <div class="hcell" data-size="wide"><span class="hlabel">7 天总消费</span><span class="hvalue">$7.21</span></div>
+          <div class="hcell" data-size="wide"><span class="hlabel">当前档案</span><span class="hvalue" data-mono="true">work</span></div>
+        </div>
+
+        <div class="plist">
+          <a class="prow" data-clickable="true" href="02-profile-detail.html" style="text-decoration:none;">
+            <span class="pAvatar" data-tint="persimmon">w</span>
+            <div class="prowMain">
+              <div class="prowHead"><span class="prowName">work</span><span class="ptag">default</span></div>
+              <div class="prowMeta"><span class="pmetaCell">会话 48</span><span class="pmetaCell">7d $2.41</span><span class="pmetaCell">磁盘 312 MB</span></div>
+            </div>
+            <div class="prowActions"><i data-lucide="chevron-right" style="color:var(--h-text-3);"></i></div>
+          </a>
+          <a class="prow" data-clickable="true" href="02-profile-detail.html" style="text-decoration:none;">
+            <span class="pAvatar" data-tint="moss">c</span>
+            <div class="prowMain">
+              <div class="prowHead"><span class="prowName">client-atlas</span></div>
+              <div class="prowMeta"><span class="pmetaCell">会话 38</span><span class="pmetaCell">7d $4.80</span><span class="pmetaCell">磁盘 88 MB</span></div>
+            </div>
+            <div class="prowActions"><i data-lucide="chevron-right" style="color:var(--h-text-3);"></i></div>
+          </a>
+          <a class="prow" data-clickable="true" href="02-profile-detail.html" style="text-decoration:none;">
+            <span class="pAvatar" data-tint="sky">d</span>
+            <div class="prowMain">
+              <div class="prowHead"><span class="prowName">demo</span><span class="ptag">只读演示</span></div>
+              <div class="prowMeta"><span class="pmetaCell">会话 2</span><span class="pmetaCell">7d $0.00</span><span class="pmetaCell">磁盘 24 MB</span></div>
+            </div>
+            <div class="prowActions"><i data-lucide="chevron-right" style="color:var(--h-text-3);"></i></div>
+          </a>
+        </div>
+
+        <div style="height:24px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script>
+    function hxTheme(){var r=document.documentElement;r.dataset.theme=(r.dataset.theme==='dark'?'light':'dark');}
+    function hxRename(on){document.getElementById('nameView').style.display=on?'none':'inline-flex';document.getElementById('nameEdit').style.display=on?'inline-flex':'none';}
+    document.addEventListener('DOMContentLoaded',function(){window.lucide&&window.lucide.createIcons();});
+  </script>
+</body>
+</html>
