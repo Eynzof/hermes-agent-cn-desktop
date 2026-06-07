@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
@@ -136,6 +136,17 @@ function LegacyConfigMigrationRoute() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [lastImport, setLastImport] = useState<ConfigMigrationImportResult | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    // StrictMode（dev）会模拟 mount→unmount→remount，卸载时已把 mountedRef 置 false，
+    // 必须在重新挂载时复位为 true，否则后续 scan 完成时会被 `!mountedRef.current` 拦掉，
+    // 页面永远停在“扫描中”。
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const candidates = scanResult?.candidates ?? [];
   const selected = useMemo(
@@ -155,20 +166,22 @@ function LegacyConfigMigrationRoute() {
       const api = window.hermesDesktop?.scanConfigMigration;
       if (!api) throw new Error("当前环境不支持桌面端配置迁移。请在 Tauri 桌面端中使用此功能。");
       const result = await api(manualPath ? { manualPath } : undefined);
+      if (!mountedRef.current) return;
       setScanResult(result);
       setSelectedId(result.candidates[0]?.id ?? null);
       if (result.candidates.length === 0) {
         setMessage("没有自动发现可迁移的 Hermes 配置。可以用“手动选择目录”指定已有 .hermes 目录。");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "扫描失败");
+      if (mountedRef.current) setError(err instanceof Error ? err.message : "扫描失败");
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    void scan();
+    const timer = window.setTimeout(() => void scan(), 250);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const chooseManualDirectory = async () => {
