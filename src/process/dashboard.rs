@@ -571,14 +571,17 @@ fn env_flag(name: &str) -> bool {
 }
 
 fn configured_session_token() -> Option<String> {
-    ["HERMES_DESKTOP_SESSION_TOKEN", "HERMES_DASHBOARD_SESSION_TOKEN"]
-        .iter()
-        .find_map(|name| {
-            std::env::var(name)
-                .ok()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-        })
+    [
+        "HERMES_DESKTOP_SESSION_TOKEN",
+        "HERMES_DASHBOARD_SESSION_TOKEN",
+    ]
+    .iter()
+    .find_map(|name| {
+        std::env::var(name)
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    })
 }
 
 fn generate_session_token() -> Option<String> {
@@ -869,14 +872,17 @@ pub async fn ensure_hermes_dashboard(
     );
     if primary_occupied && primary_marker_state == MarkerOwnerState::StaleDesktopOwner {
         if let Some(marker) = ownership_marker.as_ref() {
-            if dashboard_is_compatible(&api_base_url, &options.hermes_home).await {
+            let stale_dashboard_compatible =
+                dashboard_is_compatible(&api_base_url, &options.hermes_home).await;
+            if stale_dashboard_compatible {
                 if let Some(session_token) = known_session_token_for_existing(&api_base_url).await {
                     log::warn!(
                         "Adopting compatible stale desktop-owned dashboard at {} (orphan pid {})",
                         api_base_url,
                         marker.dashboard_pid
                     );
-                    let adopted_marker = match rewrite_ownership_marker_for_current_desktop(marker) {
+                    let adopted_marker = match rewrite_ownership_marker_for_current_desktop(marker)
+                    {
                         Ok(next) => next,
                         Err(err) => {
                             log::warn!("Failed to refresh dashboard ownership marker: {}", err);
@@ -927,9 +933,14 @@ pub async fn ensure_hermes_dashboard(
             tokio::time::sleep(Duration::from_millis(350)).await;
             primary_occupied = probe_dashboard(&api_base_url).await;
             if primary_occupied {
+                let stale_kind = if stale_dashboard_compatible {
+                    "stale desktop-owned dashboard"
+                } else {
+                    "incompatible dashboard"
+                };
                 return Err(AppError::DashboardStartup(format!(
-                    "{} is still occupied by a stale desktop-owned dashboard after cleanup. Stop the remaining process on port {} and retry.",
-                    api_base_url, options.port
+                    "{} is still occupied by a {} after cleanup. Stop the remaining process on port {} and retry.",
+                    api_base_url, stale_kind, options.port
                 )));
             }
         }
@@ -1210,6 +1221,14 @@ mod tests {
         include_required_routes: bool,
     ) {
         Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"<script>window.__HERMES_SESSION_TOKEN__="test-session-token"</script>"#,
+            ))
+            .mount(server)
+            .await;
+
+        Mock::given(method("GET"))
             .and(path("/api/status"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "hermes_home": hermes_home,
@@ -1317,6 +1336,7 @@ mod tests {
         .expect("compatible stale dashboard should be adopted");
 
         assert_eq!(handle.api_base_url, api_base_url);
+        assert_eq!(handle.session_token.as_deref(), Some("test-session-token"));
         assert!(handle.owns_process);
         assert_eq!(handle.attached_pid, Some(0));
         assert_eq!(
