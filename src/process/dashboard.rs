@@ -468,15 +468,14 @@ pub async fn probe_dashboard(api_base_url: &str) -> bool {
 async fn probe_dashboard_openapi(api_base_url: &str) -> bool {
     let url = format!("{}/openapi.json", api_base_url);
 
-    match PROBE_HTTP_CLIENT
-        .get(&url)
-        .header("Accept", "application/json")
-        .send()
-        .await
-    {
-        Ok(res) if res.status().is_success() => true,
-        _ => false,
-    }
+    matches!(
+        PROBE_HTTP_CLIENT
+            .get(&url)
+            .header("Accept", "application/json")
+            .send()
+            .await,
+        Ok(res) if res.status().is_success()
+    )
 }
 
 /// Check whether a newly spawned dashboard is far enough along to be adopted.
