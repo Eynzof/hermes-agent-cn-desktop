@@ -92,10 +92,10 @@
 | ID | 任务 | 状态 | 负责 | 备注 |
 |---|---|---|---|---|
 | 设置 | worktree + `claude/` 分支 + 计划文档 | ✅ | claude | 本文件;分支 `claude/gateway-connection-overhaul` |
-| P0-1 | WS spike(打包态 webview 直连 `/api/ws`) | ⏸ | 用户 | 需 macOS/Windows 打包态实测;已备服务端验证 + 步骤 |
-| P0-2 | 重连后重发 `session.resume`(断开标记重连中) | 🟡 | claude | 代码+单测完成(typecheck + 335 web 测试通过);**运行时验证待用户实测**(睡眠唤醒 / dashboard 重启) |
+| P0-1 | WS spike(打包态 webview 直连 `/api/ws`) | ✅(被 P1-1 吸收) | claude | 不再是迁移的前置闸门:P1-1 的 auto 协商在运行时**自动探测**,结果即 P0-1 答案(看 `getActiveTransport()` / `HERMES_TRANSPORT_LEARNED`) |
+| P0-2 | 重连后重发 `session.resume`(断开标记重连中) | 🟡 | claude | 代码+单测完成;**运行时验证待用户实测**(睡眠唤醒 / dashboard 重启) |
 | P0-3 | 合并四个修复分支到 main | ⏸ | 用户 | 改 main,需确认后执行;非本 worktree 内改动 |
-| P1-1 | Tauri 默认传输翻 WS | ⬜ | - | 依赖 P0-1 结论 |
+| P1-1 | Tauri 传输翻 WS(WS-first + SSE 自动回退) | 🟡 | claude | 实现+单测(typecheck + 343 web 测试)+ 4 维对抗式审查通过(15 findings → 1 真实潜在缺陷已修);**运行时验证待实测** |
 | P2-1 | 删 SSE 代理 + P-009 客户端 | ⬜ | - | 依赖 P1-1 软化 |
 | P2-2 | Core 退役 P-009 端点 | ⬜ | - | 依赖全量桌面端切 WS |
 
@@ -156,9 +156,37 @@
 **待办**:运行时验证(`pnpm tauri:dev` + 起 dashboard,模拟睡眠唤醒 / `dashboard` 重启,确认中途 turn
 能续上而非冻结);P1 时把 `CLAUDE.md`「Gateway transport」里"WS 被 P-003 闸门阻断"的过时说法一并更正。
 
+## 7b. P1-1 实现说明(已落地)
+
+把 Tauri 默认传输从「强制 SSE」改为 **WS-first + SSE 自动回退**,安全地用上官方原生 `/api/ws`。
+
+- **`web/src/lib/gateway-negotiation.ts`(新)** — `NegotiatingGatewayClient`:首次连接先探测 WS
+  (短超时 4s),`/api/ws` 起得来且稳定(1.2s 内不掉)就用 WS;否则关掉 WS、换成现有 SSE 客户端继续。
+  决策 sticky 持久化到 `HERMES_TRANSPORT_LEARNED`,下次启动跳过探测。监听器在 wrapper 层维护并跨
+  swap 转发,`use-gateway.ts` 桥接对切换无感。**floor 永远是今天能用的 SSE,零回退风险。**
+- **`web/src/lib/gateway-client.ts`** — `pickTransport()` 对未选择的 Tauri 返回 `"auto"`
+  (原来硬编码 `"sse"`,理由是已被证伪的「P-003 闸门」);`getGatewayClient()` 据此构造协商客户端。
+  覆盖优先级:`?transport=` > `HERMES_TRANSPORT`(用户/QA kill-switch) > `HERMES_TRANSPORT_LEARNED`(探测结果) > runtime > env > Tauri auto > web `ws`。
+- **`CLAUDE.md`** — 更正过时的「默认 SSE 因 P-003 闸门」说法。
+
+**为什么不硬切 WS**:打包态 WKWebView(`tauri://`)/ WebView2(`http://tauri.localhost`)能否开
+`ws://127.0.0.1` 离线无法证实;auto 回退让它**逐机自发现**,WS 能用就吃满收益(单条有序 socket、
+不过 Rust 代理、无异步 ack),不能用就退回 SSE。
+
+**对抗式审查**(4 维并行 + 逐条验证,见 workflow `p1-transport-negotiation-review`):15 条 findings 经
+验证 14 条为误报/已处理(含初判 blocking 的 `forceReconnect`、`SSE 继承探测超时` 均确认非 bug),
+1 条真实但潜在缺陷:`close()` 在探测期不阻止 SSE 回退(当前无 UI 调 `disconnect()`,不可触发)。已加
+`intentionalClose` 不变量修复 + 2 个回归测试。
+
+**待办**:运行时验证(打包后看实际走 WS 还是 SSE;若 macOS 打包态 WKWebView 开不了 WS → 实现 Rust 侧
+`tokio-tungstenite` WS 中继作为 P1 的 Plan B,彻底不依赖 webview 跨域能力)。
+
 ## 8. 变更记录
 
 - 2026-06-09 — 建 worktree + `claude/gateway-connection-overhaul` 分支;沉淀本计划文档。
 - 2026-06-09 — **P0-2 实现**:新增 reconnect→`session.resume` 重连恢复 + 断开标记"重连中"(非冻结报错)。
   `gateway-reconnect.ts`(纯函数+单测)、`chat.ts` `markStreamsReconnectingAtom`、`use-gateway.ts` 桥接。
   typecheck 三个 workspace 通过;web 单测 335 全绿。运行时验证待用户实测。
+- 2026-06-09 — **P1-1 实现**:Tauri 传输改为 WS-first + SSE 自动回退(`gateway-negotiation.ts`),
+  `pickTransport()` 返回 `"auto"`。经 4 维对抗式审查(15 findings → 1 真实潜在缺陷,已加 `intentionalClose`
+  修复)。typecheck 通过;web 单测 343 全绿。运行时验证待用户实测。

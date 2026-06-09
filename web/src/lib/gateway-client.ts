@@ -1,6 +1,6 @@
 import { parseGatewayEvent, type GatewayEvent } from "@hermes/protocol";
 import { runtime } from "./runtime";
-import { readUiValue } from "./ui-store";
+import { readUiValue, writeUiValue } from "./ui-store";
 
 export type ConnectionState = "idle" | "connecting" | "open" | "closed" | "error";
 
@@ -550,27 +550,39 @@ export interface GatewayClientLike {
 }
 
 export type GatewayTransport = "ws" | "sse";
+// "auto" = probe WS first, fall back to SSE (NegotiatingGatewayClient). Only the
+// Tauri default resolves to "auto"; web/explicit selections stay concrete.
+type TransportChoice = GatewayTransport | "auto";
+
+// Key the negotiator's sticky decision under so the next launch skips the probe.
+// Distinct from the user/QA override key HERMES_TRANSPORT, which always wins.
+const LEARNED_TRANSPORT_KEY = "HERMES_TRANSPORT_LEARNED";
 
 // Pick the transport once per page load. Precedence (highest first):
 //   1. URL query: ?transport=sse|ws  — for ad-hoc QA without rebuilding
-//   2. UI store HERMES_TRANSPORT  — sticky per-profile
-//   3. window.__HERMES_RUNTIME__.transport — Electron preload injection
-//      (apps/desktop/src/preload/preload.ts), so the desktop bundle can
-//      default to SSE without forcing every web user to opt in
-//   4. Vite build env VITE_HERMES_TRANSPORT  — build-time default
-//   5. default "ws" (preserve existing behavior on un-flagged installs)
-function pickTransport(): GatewayTransport {
+//   2. UI store HERMES_TRANSPORT  — explicit user/QA override (kill-switch)
+//   3. UI store HERMES_TRANSPORT_LEARNED  — sticky result of a prior auto-probe
+//   4. window.__HERMES_RUNTIME__.transport — Electron preload injection
+//   5. Vite build env VITE_HERMES_TRANSPORT  — build-time default
+//   6. Tauri with nothing chosen → "auto" (probe WS, fall back to SSE)
+//   7. default "ws" (web: same-origin WS works directly)
+function pickTransport(): TransportChoice {
   try {
     if (typeof window !== "undefined") {
       const fromQuery = new URLSearchParams(window.location.search).get("transport");
       if (fromQuery === "ws" || fromQuery === "sse") return fromQuery;
       const fromStorage = readUiValue<string | undefined>("HERMES_TRANSPORT", undefined);
       if (fromStorage === "ws" || fromStorage === "sse") return fromStorage;
+      const learned = readUiValue<string | undefined>(LEARNED_TRANSPORT_KEY, undefined);
+      if (learned === "ws" || learned === "sse") return learned;
       const fromRuntime = window.__HERMES_RUNTIME__?.transport;
       if (fromRuntime === "ws" || fromRuntime === "sse") return fromRuntime;
-      // Tauri: default to SSE even if __HERMES_RUNTIME__.transport wasn't set
-      // (dashboard WebSocket may be blocked by the P-003 gate)
-      if (window.__TAURI_INTERNALS__) return "sse";
+      // Tauri with no explicit choice: probe the native /api/ws and fall back to
+      // SSE if the packaged webview can't establish it. The runtime serves WS
+      // natively and the CSP already allows ws://127.0.0.1:* — but a packaged
+      // WKWebView/WebView2 may block it, so we discover per-machine instead of
+      // hard-flipping. See gateway-negotiation.ts.
+      if (window.__TAURI_INTERNALS__) return "auto";
     }
   } catch {
     // UI store / URL access can throw in restricted contexts
@@ -588,15 +600,27 @@ let activeTransport: GatewayTransport | null = null;
 // synchronous so `getGatewayClient()` can be called from constructors /
 // module init that don't accept Promises.
 import { getGatewaySseClient } from "./gateway-sse-client";
+import { NegotiatingGatewayClient } from "./gateway-negotiation";
+
+function persistLearnedTransport(transport: GatewayTransport): void {
+  try { writeUiValue(LEARNED_TRANSPORT_KEY, transport); } catch { /* best-effort */ }
+}
 
 export function getGatewayClient(): GatewayClientLike {
   if (instance) return instance;
-  const transport = pickTransport();
-  activeTransport = transport;
-  if (transport === "sse") {
-    instance = getGatewaySseClient();
+  const choice = pickTransport();
+  if (choice === "auto") {
+    // Decided lazily by the probe; getActiveTransport() stays null until then.
+    activeTransport = null;
+    instance = new NegotiatingGatewayClient({
+      makeWs: () => new GatewayClient(),
+      makeSse: () => getGatewaySseClient(),
+      persist: persistLearnedTransport,
+      onDecision: (transport) => { activeTransport = transport; },
+    });
   } else {
-    instance = new GatewayClient();
+    activeTransport = choice;
+    instance = choice === "sse" ? getGatewaySseClient() : new GatewayClient();
   }
   return instance;
 }

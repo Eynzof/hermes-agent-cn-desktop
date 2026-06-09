@@ -115,8 +115,15 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 
 ### Gateway transport
 
-默认 SSE（`gateway-sse-client.ts`），因为 Dashboard WebSocket 可能被 P-003 闸门阻断。
-生产模式下 SSE 通过 Rust 代理（`sse_proxy.rs`）绕过 CORS。
+Tauri 默认 **auto**（`gateway-negotiation.ts`）：首次连接探测官方原生 `/api/ws`
+（`gateway-client.ts`,JSON-RPC over WebSocket),探测成功就用 WS,失败则自动回退到
+SSE(`gateway-sse-client.ts`)并把结果 sticky 持久化(`HERMES_TRANSPORT_LEARNED`),
+下次启动跳过探测。运行时原生提供 `/api/ws`、`tauri.conf.json` CSP 已放行
+`ws://127.0.0.1:*`;之所以不直接硬切 WS,是因为打包态 WKWebView/WebView2 是否允许
+从 `tauri://` 开 `ws://` 尚未实测,auto 回退保证零回退风险。
+- 强制覆盖(kill-switch):URL `?transport=ws|sse`,或 UI store `HERMES_TRANSPORT`。
+- SSE 生产模式仍通过 Rust 代理(`sse_proxy.rs`)绕过 CORS;WS 路径不经代理(若打包态
+  webview 开不了 WS,后续用 Rust 侧 `tokio-tungstenite` 中继,见 docs/gateway-connection-overhaul.md P1)。
 
 ## 不要做的事
 
