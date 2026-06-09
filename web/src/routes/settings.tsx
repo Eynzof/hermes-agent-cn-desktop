@@ -1085,10 +1085,10 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
             <RuntimeField label="托管方式" value={process ? (process.ownsProcess ? "桌面端独立子进程" : info?.mode === "managed" ? "连接到已存在 managed dashboard" : "复用外部进程") : "—"} />
             <RuntimeField label="PID" value={process?.pid ? String(process.pid) : "—"} mono />
             <RuntimeField label="API Origin" value={process?.apiBaseUrl ?? rendererRuntime?.apiBaseUrl ?? "Vite proxy / relative"} mono wide />
-            <RuntimeField label="Gateway URL" value={process?.gatewayUrl ?? rendererRuntime?.gatewayUrl ?? "relative / SSE proxy"} mono wide />
+            <RuntimeField label="Gateway URL" value={process?.gatewayUrl ?? rendererRuntime?.gatewayUrl ?? "relative / dev proxy"} mono wide />
             <RuntimeField label="档案" value={process?.currentProfile ?? rendererRuntime?.currentProfile ?? "—"} />
             <RuntimeField label="Session Token" value={process?.sessionTokenPresent ? "已注入" : "未注入 / dev proxy"} />
-            <RuntimeField label="SSE 代理" value={process?.gatewaySseProxyActive ? "连接中" : "未连接或浏览器直连"} />
+            <RuntimeField label="WS 中继" value={process?.gatewayWsRelayActive ? "连接中（中继路径）" : "未启用（webview 直连）"} />
             <RuntimeField label="Ownership" value={process?.ownershipState ?? "—"} mono />
             <RuntimeField label="Ownership Marker" value={process?.ownershipMarkerPath ?? "—"} mono wide />
             <RuntimeField label="HERMES_HOME" value={process?.hermesHome || hermesHomePath || "—"} mono wide />

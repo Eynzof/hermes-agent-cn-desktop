@@ -144,9 +144,9 @@ pub struct AppStateInner {
     pub session_token: Option<String>,
     pub current_profile: String,
     pub dashboard_handle: Option<DashboardHandle>,
-    pub gateway_sse_stop: Option<Arc<AtomicBool>>,
-    /// The live Rust→runtime `/api/ws` relay connection, when the desktop is on
-    /// the WebSocket-relay transport. `None` on SSE or before first connect.
+    /// The live Rust→runtime `/api/ws` relay connection, when the webview is
+    /// on the relay socket path. `None` on webview-direct WS or before the
+    /// first relay connect.
     pub gateway_ws: Option<GatewayWsHandle>,
     /// Set while a managed-dashboard restart is in progress (profile switch or
     /// YOLO toggle). Guards against two restarts racing on `dashboard_handle`.
@@ -175,7 +175,6 @@ impl AppState {
                 session_token: None,
                 current_profile: "default".to_string(),
                 dashboard_handle: None,
-                gateway_sse_stop: None,
                 gateway_ws: None,
                 dashboard_restart_in_flight: false,
                 last_runtime_error: None,
