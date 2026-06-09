@@ -569,9 +569,14 @@ export interface GatewayClientLike {
 
 let instance: GatewayClient | null = null;
 
+// The socket factory picks native webview WebSocket vs Rust relay (and flips
+// automatically when a packaged webview blocks ws:// from tauri://); the
+// protocol layer above is identical either way. See gateway-socket-path.ts.
+import { createGatewaySocket } from "./gateway-socket-path";
+
 export function getGatewayClient(): GatewayClientLike {
   if (instance) return instance;
-  instance = new GatewayClient();
+  instance = new GatewayClient(createGatewaySocket);
   return instance;
 }
 
