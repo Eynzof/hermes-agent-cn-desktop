@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAtomValue, useSetAtom } from "jotai";
+import { getDefaultStore, useAtomValue, useSetAtom } from "jotai";
 import {
   ConfigSetResult,
   ImageAttachResult,
@@ -16,18 +16,24 @@ import {
 } from "@hermes/protocol";
 import { CN_BACKEND_PROVIDER_SLUGS } from "@/lib/cn-provider-slugs";
 import { getGatewayClient } from "@/lib/gateway-client";
+import { reattachAfterReconnect } from "@/lib/gateway-reconnect";
 import {
   getCachedModelOptions,
   invalidateModelOptionsCache,
 } from "@/lib/model-options-cache";
 import { buildGatewayModelConfigValue } from "@/lib/provider-id";
-import { rememberSessionMapping, resolveGatewaySessionId } from "@/lib/session-map";
+import {
+  rememberSessionMapping,
+  resolveGatewaySessionId,
+  resolvePersistentSessionId,
+} from "@/lib/session-map";
 import {
   applyGatewayEventAtom,
   chatRuntimeBySessionAtom,
   ensureChatSessionAtom,
   gwConnectionAtom,
   gwSessionIdAtom,
+  markStreamsReconnectingAtom,
   resetChatSessionAtom,
   resetStreamStateAtom,
   setSessionErrorAtom,
@@ -65,6 +71,40 @@ function forEachSubscriber(
   }
 }
 
+let reattachInFlight = false;
+
+// On a transport reconnect, re-pin the active session's live backend turn by
+// re-issuing session.resume (the gateway has no socket-level replay). Runs
+// against the default jotai store so it stays single-owner regardless of how
+// many components call useGateway(); guarded so overlapping reconnects don't
+// fire concurrent resumes. See docs/gateway-connection-overhaul.md (P0-2).
+async function reattachActiveSessionAfterReconnect(): Promise<void> {
+  if (reattachInFlight) return;
+  reattachInFlight = true;
+  const store = getDefaultStore();
+  try {
+    await reattachAfterReconnect({
+      getActiveSessionId: () => store.get(gwSessionIdAtom),
+      resolvePersistentId: (id) => resolvePersistentSessionId(id) ?? id,
+      resume: async (persistentId) =>
+        SessionResumeResult.parse(
+          await getGatewayClient().request("session.resume", { session_id: persistentId }),
+        ),
+      onResumed: (gatewaySessionId, persistentId) => {
+        store.set(gwSessionIdAtom, gatewaySessionId);
+        rememberSessionMapping(gatewaySessionId, persistentId);
+      },
+      onResumeFailed: () => {
+        // The backend session is genuinely gone (reaped / crashed) — escalate
+        // the transient "reconnecting" turns to a real error so the UI is honest.
+        store.set(terminateAllStreamsAtom);
+      },
+    });
+  } finally {
+    reattachInFlight = false;
+  }
+}
+
 function ensureGatewayBridge(): GatewaySubscriptionBridge {
   if (gatewayBridge) return gatewayBridge;
 
@@ -77,13 +117,30 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
   const client = getGatewayClient();
   client.enableAutoReconnect();
 
-  bridge.unsubscribeState = client.onState((state) =>
-    forEachSubscriber(bridge, (sub) => sub.setConnectionState(state)));
+  // Distinguish a first connect from a reconnect by tracking open→…→open
+  // transitions. A reconnect must re-issue session.resume to recover the
+  // in-flight turn (the SSE/WS gateway has no server-side replay buffer).
+  let connectedOnce = false;
+  let lastState: GatewayState = client.state;
+
+  bridge.unsubscribeState = client.onState((state) => {
+    forEachSubscriber(bridge, (sub) => sub.setConnectionState(state));
+    if (state === "open") {
+      if (connectedOnce && lastState !== "open") {
+        void reattachActiveSessionAfterReconnect();
+      }
+      connectedOnce = true;
+    }
+    lastState = state;
+  });
   bridge.unsubscribeAny = client.onAny((event) => {
     primarySubscriber(bridge)?.applyGatewayEvent(event);
   });
-  bridge.unsubscribeDisconnect = client.on("gateway.disconnected", () =>
-    forEachSubscriber(bridge, (sub) => sub.terminateAllStreams()));
+  bridge.unsubscribeDisconnect = client.on("gateway.disconnected", () => {
+    // Transient drop: keep the in-flight turn alive (don't freeze it as an
+    // error) so the reconnect handler above can recover it via session.resume.
+    getDefaultStore().set(markStreamsReconnectingAtom);
+  });
   gatewayBridge = bridge;
   return bridge;
 }
