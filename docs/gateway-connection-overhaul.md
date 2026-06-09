@@ -129,7 +129,7 @@
 | C5 | 删 SSE 全部残留 | ✅ | -1837 行;环境诊断换真实 /api/ws 握手探测;CLAUDE.md/managed-runtime.md 同步 |
 | C6 | 测试重写 + 全量验证 | ✅ | typecheck 3 workspace ✓;web 533 + protocol 23 vitest ✓;cargo test 245+ ✓;clippy 0 警告;fmt ✓ |
 | Core | FORK_NOTES P-009 弃用标记 | ✅ | 分支 `claude/p009-sse-deprecation` 已推送,待开 PR |
-| 验证 | 运行时清单(见 §5) | ⏸ | 打包态需真机实测(macOS/Windows),进行中 |
+| 验证 | 运行时清单(见 §5) | 🟡 | 清单 1 已过:打包态原生 WS 被拦→自动回退 Rust 中继,功能正常;清单 2-6 进行中 |
 
 ---
 
@@ -137,6 +137,9 @@
 
 1. **打包态 macOS WKWebView / Windows WebView2:`tauri://` 能否开 `ws://127.0.0.1:<port>/api/ws`**
    —— 决定 native/relay 默认值的 go/no-go;结果记回本文档。
+   - ✅ **2026-06-09 真机实测(平台一)**:原生 WS 被打包态 webview 拦截,自动回退 **Rust 中继**
+     成功,「WS 中继=连接中(中继路径)」,聊天功能正常。即:该平台上中继是事实默认,
+     符合 §6 风险 1 的预判(协议仍是官方,净胜保留)。具体平台与另一平台结果待补。
 2. `?wspath=relay` 强制中继:完整对话回合、审批、打断。
 3. 睡眠 ≥2min 中途唤醒:≤15s 重连,在途回合续流到同一条消息(不再「切走再切回才可见」)。
 4. dashboard 重启(YOLO 切换 / kill -9):token 轮换后正常重连,无 401 风暴。

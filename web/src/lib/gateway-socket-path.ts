@@ -75,13 +75,17 @@ export function getActiveSocketPath(): GatewaySocketPath {
   return currentPath;
 }
 
-function flipToRelay(): void {
+function flipToRelay(reason: string): void {
+  // Surfaced in the webview console / debug bundle so the field can tell a
+  // genuinely blocked webview from a misconfigured native path.
+  console.warn(`[gateway-socket-path] native WS unavailable (${reason}) — switching to Rust relay`);
   currentPath = "relay";
   relayFailureStreak = 0;
   learn("relay");
 }
 
 function resetToNative(): void {
+  console.warn("[gateway-socket-path] relay keeps failing pre-open — clearing learned path, re-probing native");
   currentPath = "native";
   nativeFailureStreak = 0;
   learn(null);
@@ -101,7 +105,9 @@ function watchNativeAttempt(ws: WebSocket): void {
     if (opened || counted) return;
     counted = true;
     nativeFailureStreak += 1;
-    if (nativeFailureStreak >= NATIVE_FAILURE_FLIP_THRESHOLD) flipToRelay();
+    if (nativeFailureStreak >= NATIVE_FAILURE_FLIP_THRESHOLD) {
+      flipToRelay(`${nativeFailureStreak} consecutive pre-open failures`);
+    }
   };
   ws.addEventListener("open", onOpen, { once: true });
   ws.addEventListener("error", onPreOpenFailure, { once: true });
@@ -144,10 +150,10 @@ export function createGatewaySocket(url: string): WebSocket {
   let ws: WebSocket;
   try {
     ws = new WebSocket(url);
-  } catch {
+  } catch (error) {
     // Synchronous SecurityError — the webview refuses ws:// from this origin.
     // Fall back within the SAME connect attempt so the user never waits.
-    flipToRelay();
+    flipToRelay(`constructor threw: ${error instanceof Error ? error.message : String(error)}`);
     const socket = new GatewayRelaySocket(url);
     queueMicrotask(() => watchRelayAttempt(socket));
     return socket as unknown as WebSocket;
