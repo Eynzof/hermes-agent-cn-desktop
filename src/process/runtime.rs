@@ -284,7 +284,8 @@ pub fn runtime_root() -> PathBuf {
         "无法确定可写的数据目录：系统数据目录与用户主目录都不可用。\
          请设置环境变量 HERMES_DESKTOP_RUNTIME_ROOT 指向一个可写目录后重试。",
     );
-    base.join("cn.org.hermesagent.desktop").join(runtime_subdir_name())
+    base.join("cn.org.hermesagent.desktop")
+        .join(runtime_subdir_name())
 }
 
 fn runtime_subdir_name() -> &'static str {
@@ -1567,10 +1568,7 @@ pub async fn install_bundled_runtime_if_needed(
                     ok: false,
                     installed: None,
                     previous: Some(current),
-                    error: Some(format!(
-                        "failed to clear local-source current.json: {}",
-                        e
-                    )),
+                    error: Some(format!("failed to clear local-source current.json: {}", e)),
                 };
             }
         } else if current.runtime_version == manifest.runtime_version {
