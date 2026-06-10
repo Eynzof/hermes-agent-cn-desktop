@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { fetchJSON, deleteJSON, postJSON } from "@/lib/transport";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import { unpinSessions } from "@/lib/session-ui-state";
@@ -63,6 +63,9 @@ export function useSessions(limit = 50, offset = 0) {
   return useQuery<SessionsResponse>({
     queryKey: ["sessions", profile, limit, offset],
     queryFn: ({ signal }) => fetchJSON(`/api/sessions?limit=${limit}&offset=${offset}`, { signal }, SessionsResponse),
+    placeholderData: keepPreviousData,
+    retry: 3,
+    retryDelay: 500,
   });
 }
 

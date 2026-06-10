@@ -142,7 +142,11 @@ export function useSetActiveProfile() {
       setActive(name);
       // 2) sticky 字段本身刷新
       qc.invalidateQueries({ queryKey: ["profile-active"] });
-      // 3) profile-aware 业务 query 全部失效
+      // 3) 等 dashboard 子进程完成 session 数据加载。
+      //    ensure_hermes_dashboard 返回仅表示 HTTP 200，session 数据可能
+      //    尚未就绪。短暂延迟后再 invalidat，减少首次 refetch 拿到空数据的概率。
+      await new Promise((r) => setTimeout(r, 500));
+      // 4) profile-aware 业务 query 全部失效
       //    Electron 模式下 dashboard 已重启，refetch 真的会拿到新 profile 的
       //    数据；web 模式下 dashboard 仍绑旧 profile，refetch 拉到的还是旧值
       //    （但 cache key 已切换，重启 dashboard 后页面 reload 即生效）。
