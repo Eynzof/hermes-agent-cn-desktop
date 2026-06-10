@@ -3097,8 +3097,13 @@ mod tests {
         let resource = dir.path().join("resources");
         let bundled = resource.join("bundled-runtime");
         let expanded = bundled_expanded_runtime_dir(&bundled);
+        let web_dist = resource
+            .join(DASHBOARD_RESOURCE_DIR)
+            .join(DASHBOARD_WEB_DIST_DIR);
 
         std::fs::create_dir_all(&expanded).unwrap();
+        std::fs::create_dir_all(&web_dist).unwrap();
+        std::fs::write(web_dist.join("index.html"), b"<html></html>").unwrap();
         let bundled_exe = expanded.join(primary_runtime_name());
         std::fs::write(&bundled_exe, b"#!/bin/sh\nexit 0\n").unwrap();
         let mut perms = std::fs::metadata(&bundled_exe).unwrap().permissions();
