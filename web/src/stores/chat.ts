@@ -65,6 +65,7 @@ export interface ChatSessionRuntime {
   turnStartedAt?: number;
   turnFirstTokenAt?: number;
   activeAssistantId?: string;
+  interrupted?: boolean;
 }
 
 export type ChatRuntimeBySession = Record<string, ChatSessionRuntime>;
@@ -518,6 +519,8 @@ export function reduceGatewayEvent(
   const payload = payloadOf(event);
   const sessionId = sessionIdFor(runtime, event);
 
+  if (runtime.interrupted) return runtime;
+
   switch (event.type) {
     case "message.start": {
       const id =
@@ -873,6 +876,7 @@ export const resetStreamStateAtom = atom(null, (_get, set, sessionId: string) =>
     updateSessionRuntime(state, sessionId, (runtime) => ({
       ...resetStream(runtime, now),
       streamStatus: "idle",
+      interrupted: true,
     })),
   );
 });
@@ -974,6 +978,7 @@ export const startPromptAtom = atom(
     set(chatRuntimeBySessionAtom, (state) =>
       updateSessionRuntime(state, params.sessionId, (runtime) => ({
         ...resetStream(runtime, now),
+        interrupted: undefined,
         messages: [
           ...runtime.messages,
           {

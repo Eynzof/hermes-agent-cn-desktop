@@ -472,8 +472,10 @@ export function useGateway() {
         setSessionError({ sessionId: gatewaySessionId, message: errorMessage(error) });
         throw error;
       }
+
+      resetStreamState(gatewaySessionId);
     },
-    [ensureSubscribed, setSessionError],
+    [ensureSubscribed, resetStreamState, setSessionError],
   );
 
   const setSessionTitle = useCallback(
