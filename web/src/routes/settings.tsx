@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import { useNavigate } from "react-router-dom";
+import { COMPLETE_SOUNDS, APPROVAL_SOUNDS, previewSound } from "@/lib/notification-sound";
 import {
   Activity,
   AlertTriangle,
@@ -41,6 +42,9 @@ import {
   CONVERSATION_FONT_SIZE_OPTIONS,
   composerSubmitShortcutAtom,
   conversationFontSizeAtom,
+  notificationApprovalSoundAtom,
+  notificationCompleteSoundAtom,
+  notificationSoundEnabledAtom,
   profileSwitchingAtom,
   showReasoningAtom,
   type ConversationFontSizeMode,
@@ -70,9 +74,28 @@ interface SettingsSectionProps {
   showHeading?: boolean;
 }
 
+function SoundSelector({ type, value, onChange }: { type: "complete" | "approval"; value: string; onChange: (v: string) => void }) {
+  const sounds = type === "complete" ? COMPLETE_SOUNDS : APPROVAL_SOUNDS;
+  return (
+    <span className={s.soundPicker}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={s.soundSelect}>
+        {Object.entries(sounds).map(([key, s]) => (
+          <option key={key} value={key}>{s.label}</option>
+        ))}
+      </select>
+      <button type="button" className={s.soundPreviewBtn} onClick={() => previewSound(type, value)} title="试听">
+        ▶
+      </button>
+    </span>
+  );
+}
+
 export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
   const [composerSubmitShortcut, setComposerSubmitShortcut] = useAtom(composerSubmitShortcutAtom);
+  const [notificationEnabled, setNotificationEnabled] = useAtom(notificationSoundEnabledAtom);
+  const [completeSound, setCompleteSound] = useAtom(notificationCompleteSoundAtom);
+  const [approvalSound, setApprovalSound] = useAtom(notificationApprovalSoundAtom);
 
   return (
     <div>
@@ -83,6 +106,19 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       <Row label="发送快捷键" sub="控制对话输入框的提交方式；未触发发送的 Enter 会保留为换行。" right={
         <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
       } />
+      <Row label="通知提示音" sub="任务完成或需要确认权限时播放提示音" right={
+        <RadioGroup value={notificationEnabled ? "on" : "off"} options={[{ value: "off", label: "关闭" }, { value: "on", label: "开启" }]} onChange={(v) => setNotificationEnabled(v === "on")} />
+      } />
+      {notificationEnabled && (
+        <>
+          <Row label="完成音效" sub="任务执行完成时的提示音" right={
+            <SoundSelector type="complete" value={completeSound} onChange={setCompleteSound} />
+          } />
+          <Row label="确认音效" sub="需要手动确认权限时的提示音" right={
+            <SoundSelector type="approval" value={approvalSound} onChange={setApprovalSound} />
+          } />
+        </>
+      )}
       <ApprovalModeSection />
     </div>
   );

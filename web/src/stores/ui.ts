@@ -103,6 +103,54 @@ export const showReasoningAtom = atom(
   },
 );
 
+const NOTIFICATION_SOUND_KEY = "hermes.notification-sound";
+export const notificationSoundEnabledBaseAtom = atom<boolean>(
+  readUiValue(NOTIFICATION_SOUND_KEY, true),
+);
+export const notificationSoundEnabledAtom = atom(
+  (get) => get(notificationSoundEnabledBaseAtom),
+  (_get, set, next: boolean) => {
+    set(notificationSoundEnabledBaseAtom, next);
+    writeUiValue(NOTIFICATION_SOUND_KEY, next);
+  },
+);
+
+const NOTIFICATION_COMPLETE_SOUND_KEY = "hermes.notification-complete-sound";
+function normalizeCompleteSound(value: unknown): string {
+  return ["correct", "positive", "bell", "happyBells"].includes(value as string)
+    ? (value as string)
+    : "correct";
+}
+const notificationCompleteSoundBaseAtom = atom<string>(
+  normalizeCompleteSound(readUiValue(NOTIFICATION_COMPLETE_SOUND_KEY, "correct")),
+);
+export const notificationCompleteSoundAtom = atom(
+  (get) => get(notificationCompleteSoundBaseAtom),
+  (_get, set, next: string) => {
+    const value = normalizeCompleteSound(next);
+    set(notificationCompleteSoundBaseAtom, value);
+    writeUiValue(NOTIFICATION_COMPLETE_SOUND_KEY, value);
+  },
+);
+
+const NOTIFICATION_APPROVAL_SOUND_KEY = "hermes.notification-approval-sound";
+function normalizeApprovalSound(value: unknown): string {
+  return ["hint", "pop", "bubble", "confirmation"].includes(value as string)
+    ? (value as string)
+    : "hint";
+}
+const notificationApprovalSoundBaseAtom = atom<string>(
+  normalizeApprovalSound(readUiValue(NOTIFICATION_APPROVAL_SOUND_KEY, "hint")),
+);
+export const notificationApprovalSoundAtom = atom(
+  (get) => get(notificationApprovalSoundBaseAtom),
+  (_get, set, next: string) => {
+    const value = normalizeApprovalSound(next);
+    set(notificationApprovalSoundBaseAtom, value);
+    writeUiValue(NOTIFICATION_APPROVAL_SOUND_KEY, value);
+  },
+);
+
 const COMPOSER_SUBMIT_SHORTCUT_KEY = "hermes.composer-submit-shortcut";
 
 function normalizeComposerSubmitShortcut(value: unknown): ComposerSubmitShortcut {

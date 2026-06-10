@@ -3,6 +3,8 @@ import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info } from "lucide-react";
 import { showReasoningAtom } from "@/stores/ui";
+import { notificationSoundEnabledAtom, notificationCompleteSoundAtom, notificationApprovalSoundAtom } from "@/stores/ui";
+import { playNotificationSound } from "@/lib/notification-sound";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
 import { MessageImage } from "./message-image";
 import { MessageText } from "./message-text";
@@ -890,6 +892,25 @@ export function MessageTimeline({
       }, 650);
     }
   }, [clearAutoAnchor, pendingApproval, scrollToBottom, statusMessage, visibleMessages]);
+
+  const notificationSoundEnabled = useAtomValue(notificationSoundEnabledAtom);
+  const completeSoundId = useAtomValue(notificationCompleteSoundAtom);
+  const approvalSoundId = useAtomValue(notificationApprovalSoundAtom);
+  const prevPendingApprovalRef = useRef(pendingApproval);
+  useEffect(() => {
+    if (notificationSoundEnabled && !prevPendingApprovalRef.current && pendingApproval) {
+      playNotificationSound("approval", approvalSoundId);
+    }
+    prevPendingApprovalRef.current = pendingApproval;
+  }, [pendingApproval, notificationSoundEnabled, approvalSoundId]);
+
+  const prevLoadingRef = useRef(loading);
+  useEffect(() => {
+    if (notificationSoundEnabled && prevLoadingRef.current && !loading && visibleMessages.length > 0) {
+      playNotificationSound("complete", completeSoundId);
+    }
+    prevLoadingRef.current = loading;
+  }, [loading, notificationSoundEnabled, completeSoundId, visibleMessages.length]);
 
   useEffect(() => {
     const container = containerRef.current;

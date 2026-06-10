@@ -2846,6 +2846,43 @@
   line-height: 1.5;
 }
 
+/* ── Notification sound picker ────────────────────────── */
+.soundPicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.soundSelect {
+  padding: 4px 8px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm, 6px);
+  background: var(--h-bg-2);
+  color: var(--h-fg);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.soundPreviewBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm, 6px);
+  background: var(--h-bg-2);
+  color: var(--h-fg-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.soundPreviewBtn:hover {
+  background: var(--h-bg-3);
+  color: var(--h-fg);
+}
+
 @media (max-width: 980px) {
   .approvalModeOptions {
     grid-template-columns: 1fr;
