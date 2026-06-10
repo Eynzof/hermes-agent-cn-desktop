@@ -317,6 +317,13 @@ fn main() {
 
             let boot_home_str = boot_home.to_string_lossy().to_string();
 
+            // 2.5. Load .env from boot home so all child processes inherit it
+            let env_file = boot_home.join(".env");
+            if env_file.is_file() {
+                dotenvy::from_path(&env_file).ok();
+                log::info!("Loaded .env from {}", env_file.display());
+            }
+
             // 3. Resolve host/port
             let host = std::env::var("HERMES_DESKTOP_API_HOST")
                 .unwrap_or_else(|_| "127.0.0.1".to_string());
