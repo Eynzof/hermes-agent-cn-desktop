@@ -1088,7 +1088,15 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
             <RuntimeField label="Gateway URL" value={process?.gatewayUrl ?? rendererRuntime?.gatewayUrl ?? "relative / dev proxy"} mono wide />
             <RuntimeField label="档案" value={process?.currentProfile ?? rendererRuntime?.currentProfile ?? "—"} />
             <RuntimeField label="Session Token" value={process?.sessionTokenPresent ? "已注入" : "未注入 / dev proxy"} />
-            <RuntimeField label="WS 中继" value={process?.gatewayWsRelayActive ? "连接中（中继路径）" : "未启用（webview 直连）"} />
+            <RuntimeField
+              label="WS 中继"
+              value={process?.gatewayWsRelayActive ? "连接中（中继路径）" : "未启用（webview 直连）"}
+              title={
+                process?.gatewayWsRelayActive
+                  ? "打包态 webview（如 macOS WKWebView）拦截 ws://127.0.0.1 时自动回退到 Rust 中继，线协议不变，属预期路径"
+                  : "webview 直接连接内核 /api/ws，与官方桌面端一致"
+              }
+            />
             <RuntimeField label="Ownership" value={process?.ownershipState ?? "—"} mono />
             <RuntimeField label="Ownership Marker" value={process?.ownershipMarkerPath ?? "—"} mono wide />
             <RuntimeField label="HERMES_HOME" value={process?.hermesHome || hermesHomePath || "—"} mono wide />
@@ -1422,15 +1430,16 @@ function DebugCard({ icon, title, sub, children, wide }: {
   );
 }
 
-function RuntimeField({ label, value, mono, wide }: {
+function RuntimeField({ label, value, mono, wide, title }: {
   label: string;
   value: string | number | boolean | undefined;
   mono?: boolean;
   wide?: boolean;
+  title?: string;
 }) {
   const display = value === undefined || value === "" ? "—" : String(value);
   return (
-    <div className={s.runtimeField} data-wide={wide ? "true" : undefined}>
+    <div className={s.runtimeField} data-wide={wide ? "true" : undefined} title={title}>
       <span>{label}</span>
       <b data-mono={mono ? "true" : undefined}>{display}</b>
     </div>
