@@ -926,8 +926,11 @@ export function ModelsSection() {
 
   const handleProbe = useCallback(async () => {
     if (!selectedProvider) return;
-    const apiKey = providerForm.apiKey.trim() ||
+    const rawApiKey = providerForm.apiKey.trim() ||
       (typeof selectedProviderEntry.api_key === "string" ? selectedProviderEntry.api_key : "");
+    // Local providers (Ollama, LM Studio, etc.) don't require an API key.
+    // Use a placeholder so the gateway runtime doesn't reject the probe.
+    const apiKey = rawApiKey || (selectedProviderCanOmitApiKey ? "not-needed" : "");
     const baseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
     setProbeState({ providerId: selectedProvider.id, status: "pending" });
     try {
@@ -963,7 +966,7 @@ export function ModelsSection() {
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [probeProvider, providerForm.apiKey, providerForm.baseUrl, providerForm.model, selectedProvider, selectedProviderEntry.api_key]);
+  }, [probeProvider, providerForm.apiKey, providerForm.baseUrl, providerForm.model, selectedProvider, selectedProviderCanOmitApiKey, selectedProviderEntry.api_key]);
 
   const probeForSelected = probeState && selectedProvider && probeState.providerId === selectedProvider.id
     ? probeState
@@ -1151,7 +1154,10 @@ export function ModelsSection() {
   const handleProviderSave = async () => {
     if (!config || !selectedProvider) return;
     const pendingStartedAt = performance.now();
-    const newApiKey = providerForm.apiKey.trim();
+    const rawApiKey = providerForm.apiKey.trim();
+    // Local providers (Ollama, LM Studio, etc.) don't require an API key.
+    // Use a placeholder so the gateway runtime accepts the config.
+    const newApiKey = rawApiKey || (selectedProviderCanOmitApiKey ? "not-needed" : "");
     // Built-in providers (alibaba, deepseek, zai, kimi, ...): hermes-agent
     // only reads their API key from environment variables / ~/.hermes/.env,
     // never from config.yaml's providers.<id>.api_key. Mirror the key into the
@@ -1724,7 +1730,7 @@ export function ModelsSection() {
                       </button>
                     </div>
                     {probeForSelected && probeForSelected.status !== "pending" && (
-                      <ProbeResultRow probe={probeForSelected} />
+                      <ProbeResultRow probe={probeForSelected} isLocal={selectedProviderCanOmitApiKey} />
                     )}
                     {providerSaveError && (
                       <div className={s.modelPickerError} style={{ marginTop: 8 }}>
@@ -2364,7 +2370,7 @@ function ProviderPanelLoading({ providerName }: { providerName: string }) {
   );
 }
 
-function ProbeResultRow({ probe }: { probe: { status: "ok" | "error" | "pending"; result?: ProviderProbeResult; message?: string } }) {
+function ProbeResultRow({ probe, isLocal }: { probe: { status: "ok" | "error" | "pending"; result?: ProviderProbeResult; message?: string }; isLocal?: boolean }) {
   if (probe.status === "pending") return null;
   const result = probe.result;
   if (probe.status === "ok" && result?.ok) {
@@ -2381,16 +2387,17 @@ function ProbeResultRow({ probe }: { probe: { status: "ok" | "error" | "pending"
   }
   const errorText = result?.error || probe.message || "未知错误";
   const kindLabel: Record<string, string> = {
-    auth: "API Key 被拒绝",
+    auth: isLocal ? "连接失败" : "API Key 被拒绝",
     timeout: "请求超时",
     http: "HTTP 错误",
     network: "网络不通",
     unknown: "未知错误",
   };
   const kind = result?.error_kind ? kindLabel[result.error_kind] ?? result.error_kind : "请求失败";
+  const hint = isLocal && result?.error_kind === "auth" ? "（请检查本地服务是否正在运行）" : "";
   return (
     <div className={s.desc} style={{ marginTop: 8, color: "var(--h-danger, #c44)" }}>
-      ✗ {kind} · {errorText}
+      ✗ {kind} · {errorText}{hint}
     </div>
   );
 }
