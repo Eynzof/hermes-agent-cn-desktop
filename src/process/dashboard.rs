@@ -755,6 +755,11 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     prefix_args.extend(api_args);
 
     let mut cmd = Command::new(&program);
+    // The effective PATH (login shell / registry merged) is the lifeline for
+    // the whole runtime tree: dashboard → gateway → MCP stdio servers only
+    // see node/npx/rg through it (#190 #196 #197).
+    let effective_path = crate::path_resolver::effective_path_os();
+    cmd.env("PATH", &effective_path);
     let session_token = session_token_for_spawn();
     let gateway_runtime_dir = crate::process::runtime::gateway_runtime_dir();
     let gateway_lock_dir = gateway_runtime_dir.join("token-locks");
@@ -839,6 +844,7 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     let mut child = cmd
         .spawn()
         .map_err(|e| AppError::DashboardStartup(e.to_string()))?;
+    crate::path_resolver::mark_applied_to_runtime(&effective_path);
     let job_handle = {
         #[cfg(windows)]
         {

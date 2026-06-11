@@ -495,7 +495,10 @@ fn build_terminal_env(
     }
 
     if let Some(summary) = runtime_summary {
-        let existing = env::var("PATH").unwrap_or_default();
+        // Effective PATH so the in-app terminal matches the user's real one.
+        let existing = crate::path_resolver::effective_path_os()
+            .to_string_lossy()
+            .to_string();
         vars.insert(
             "PATH".to_string(),
             prepend_path(&summary.shim_dir, &existing),
