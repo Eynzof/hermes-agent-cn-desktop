@@ -131,10 +131,14 @@ pub fn desktop_notify(
     let foreground = window
         .as_ref()
         .map(|w| {
+            // On a Tauri query error, bias every signal toward "not
+            // foreground" so an uncertain window state still delivers the
+            // notification: missing an approval prompt is the failure this
+            // feature exists to prevent, a redundant toast is harmless.
             is_foreground(
                 w.is_focused().unwrap_or(false),
-                w.is_minimized().unwrap_or(false),
-                w.is_visible().unwrap_or(true),
+                w.is_minimized().unwrap_or(true),
+                w.is_visible().unwrap_or(false),
             )
         })
         .unwrap_or(false);
@@ -244,11 +248,15 @@ mod tests {
 
     #[test]
     fn is_foreground_truth_table() {
+        // Exhaustive: only (focused, !minimized, visible) is foreground.
         assert!(is_foreground(true, false, true));
         assert!(!is_foreground(false, false, true));
         assert!(!is_foreground(true, true, true));
         assert!(!is_foreground(true, false, false));
         assert!(!is_foreground(false, true, false));
+        assert!(!is_foreground(true, true, false));
+        assert!(!is_foreground(false, true, true));
+        assert!(!is_foreground(false, false, false));
     }
 
     #[test]
