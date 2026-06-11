@@ -224,7 +224,10 @@ mod tests {
 
     #[test]
     fn sanitize_text_strips_control_chars_and_trims() {
-        assert_eq!(sanitize_text("  hello\nworld\t!\u{0007} ", 100), "hello world !");
+        assert_eq!(
+            sanitize_text("  hello\nworld\t!\u{0007} ", 100),
+            "hello world !"
+        );
     }
 
     #[test]
