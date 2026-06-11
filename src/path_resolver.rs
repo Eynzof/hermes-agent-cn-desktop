@@ -342,6 +342,14 @@ fn merge_path_entries(
     let mut seen: HashSet<String> = HashSet::new();
     let mut out: Vec<(PathBuf, PathSource)> = Vec::new();
     let mut push = |path: PathBuf, source: PathSource, out: &mut Vec<(PathBuf, PathSource)>| {
+        // Drop relative / empty entries before they reach a spawned child. A
+        // `.` or `./bin` inherited from a user's shell profile would resolve
+        // node/npx/rg against the desktop's GUI-launched working directory
+        // instead of a trusted install dir — a hijack vector once that PATH is
+        // injected into the dashboard / gateway / MCP subprocess tree.
+        if !path.is_absolute() {
+            return;
+        }
         let key = dedupe_key(&path, case_insensitive);
         if key.is_empty() || !seen.insert(key) {
             return;
@@ -551,6 +559,9 @@ mod tests {
         PathBuf::from(s)
     }
 
+    // Uses POSIX-absolute fixtures; `is_absolute()` in merge_path_entries is
+    // platform-specific, so these run on Unix only.
+    #[cfg(unix)]
     #[test]
     fn merge_dedupes_keeping_first_occurrence() {
         let merged = merge_path_entries(
@@ -572,6 +583,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn merge_orders_shell_then_process_then_well_known() {
         let merged = merge_path_entries(
@@ -586,6 +598,31 @@ mod tests {
                 PathSource::LoginShell,
                 PathSource::Process,
                 PathSource::WellKnown
+            ]
+        );
+    }
+
+    // A relative entry (`.`, `./bin`) from a user's shell profile must never
+    // be forwarded to a spawned child: it would resolve tools against the
+    // desktop's working directory rather than a trusted install dir.
+    #[cfg(unix)]
+    #[test]
+    fn merge_drops_relative_entries() {
+        let merged = merge_path_entries(
+            vec![
+                (p("."), PathSource::LoginShell),
+                (p("./bin"), PathSource::LoginShell),
+                (p("/usr/bin"), PathSource::LoginShell),
+            ],
+            vec![p("relative/dir"), p("/sbin")],
+            vec![],
+            false,
+        );
+        assert_eq!(
+            merged,
+            vec![
+                (p("/usr/bin"), PathSource::LoginShell),
+                (p("/sbin"), PathSource::Process),
             ]
         );
     }
