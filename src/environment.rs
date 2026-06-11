@@ -1049,12 +1049,22 @@ mod tests {
     #[test]
     fn find_in_entries_finds_executable_in_given_dirs() {
         let dir = tempfile::tempdir().unwrap();
-        let name = if cfg!(windows) { "mytool.exe" } else { "mytool" };
+        let name = if cfg!(windows) {
+            "mytool.exe"
+        } else {
+            "mytool"
+        };
         fs::write(dir.path().join(name), b"#!/bin/sh\n").unwrap();
 
-        let found = find_in_entries("mytool", &[PathBuf::from("/nonexistent"), dir.path().to_path_buf()]);
+        let found = find_in_entries(
+            "mytool",
+            &[PathBuf::from("/nonexistent"), dir.path().to_path_buf()],
+        );
         assert_eq!(found, Some(dir.path().join(name)));
-        assert_eq!(find_in_entries("missing-tool", &[dir.path().to_path_buf()]), None);
+        assert_eq!(
+            find_in_entries("missing-tool", &[dir.path().to_path_buf()]),
+            None
+        );
     }
 
     #[test]
@@ -1104,7 +1114,11 @@ mod tests {
 
         let stale = effective_path_item(&snapshot, true);
         assert_eq!(stale.status, EnvironmentCheckStatus::Warning);
-        assert!(stale.recommendation.as_deref().unwrap().contains("重启内核"));
+        assert!(stale
+            .recommendation
+            .as_deref()
+            .unwrap()
+            .contains("重启内核"));
     }
 
     #[test]

@@ -16,10 +16,7 @@ pub async fn environment_check(
     // app restart. Non-forced: the resolver throttles the login-shell probe
     // so the page's 60s auto-refetch stays cheap.
     let _ = tauri::async_runtime::spawn_blocking(|| {
-        crate::path_resolver::refresh_blocking(
-            crate::path_resolver::SHELL_PROBE_TIMEOUT,
-            false,
-        )
+        crate::path_resolver::refresh_blocking(crate::path_resolver::SHELL_PROBE_TIMEOUT, false)
     })
     .await;
     Ok(environment::collect_environment_check(input).await)

@@ -755,9 +755,15 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     prefix_args.extend(api_args);
 
     let mut cmd = Command::new(&program);
+    // User-configured $HERMES_HOME/.env goes in first so every explicit
+    // .env(...) below — and the env_remove for HERMES_YOLO_MODE — wins
+    // over file contents. Re-read on every respawn so profile switches and
+    // .env edits take effect without restarting the desktop. See #197.
+    crate::env_file::inject_env_file(&mut cmd, &options.hermes_home, "dashboard");
     // The effective PATH (login shell / registry merged) is the lifeline for
     // the whole runtime tree: dashboard → gateway → MCP stdio servers only
-    // see node/npx/rg through it (#190 #196 #197).
+    // see node/npx/rg through it (#190 #196 #197). env_file treats PATH as a
+    // reserved key, so this explicit set is the single source of child PATH.
     let effective_path = crate::path_resolver::effective_path_os();
     cmd.env("PATH", &effective_path);
     let session_token = session_token_for_spawn();

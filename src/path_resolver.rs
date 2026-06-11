@@ -48,9 +48,16 @@ pub enum PathSource {
 
 #[derive(Debug, Clone)]
 pub enum ShellProbeOutcome {
-    Ok { shell: String },
-    Timeout { shell: String },
-    Failed { shell: String, error: String },
+    Ok {
+        shell: String,
+    },
+    Timeout {
+        shell: String,
+    },
+    Failed {
+        shell: String,
+        error: String,
+    },
     Disabled,
     /// Windows: PATH comes from the registry, not a login shell.
     NotApplicable,
@@ -290,10 +297,7 @@ enum RunError {
 /// Run a command with stdin detached, killing it at the deadline. Polling
 /// `try_wait` keeps this dependency-free; the probe output is far below pipe
 /// buffer capacity, so a successful child never blocks on writes.
-fn run_with_timeout(
-    mut cmd: Command,
-    timeout: Duration,
-) -> Result<std::process::Output, RunError> {
+fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<std::process::Output, RunError> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -360,7 +364,11 @@ fn dedupe_key(path: &Path, case_insensitive: bool) -> String {
     let raw = path.to_string_lossy();
     let trimmed = raw.trim().trim_end_matches(['/', '\\']);
     // Keep filesystem roots ("/", "C:\") that trimming would erase.
-    let kept = if trimmed.is_empty() { raw.trim() } else { trimmed };
+    let kept = if trimmed.is_empty() {
+        raw.trim()
+    } else {
+        trimmed
+    };
     if case_insensitive {
         kept.to_lowercase()
     } else {
@@ -643,10 +651,7 @@ mod tests {
         fs::create_dir_all(&cargo_bin).unwrap();
 
         let dirs = well_known_unix_dirs(home.path());
-        let home_dirs: Vec<&PathBuf> = dirs
-            .iter()
-            .filter(|d| d.starts_with(home.path()))
-            .collect();
+        let home_dirs: Vec<&PathBuf> = dirs.iter().filter(|d| d.starts_with(home.path())).collect();
         assert_eq!(home_dirs, vec![&cargo_bin]);
     }
 
@@ -729,7 +734,10 @@ mod tests {
     fn refresh_is_throttled_then_forced() {
         let first = refresh_blocking(Duration::from_millis(500), true);
         let second = refresh_blocking(Duration::from_millis(500), false);
-        assert!(Arc::ptr_eq(&first, &second), "throttled call must reuse cache");
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "throttled call must reuse cache"
+        );
         let third = refresh_blocking(Duration::from_millis(500), true);
         assert!(!Arc::ptr_eq(&second, &third), "forced call must re-resolve");
     }
