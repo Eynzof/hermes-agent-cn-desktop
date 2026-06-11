@@ -24,6 +24,7 @@ import {
   readPinnedWorkspaceProjectPaths,
   readSessionWorkspaceMap,
   readWorkspaceProjects,
+  restoreWorkspaceForSession,
   subscribeWorkspaceChanges,
   unpinWorkspaceProjects,
   workspaceNameFromPath,
@@ -192,6 +193,7 @@ export function WorkbenchSidebar() {
 
   const goSession = (sess: SessionSummary) => {
     setActiveId(sess.id);
+    restoreWorkspaceForSession(sess.id);
     navigate(`/tasks/${sess.id}`);
   };
 

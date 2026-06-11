@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Lock, Unlock } from "lucide-react";
 import {
   activeSessionIdAtom,
   conversationFontSizeAtom,
@@ -37,7 +37,14 @@ import {
   subscribeSessionUiStateChanges,
 } from "@/lib/session-ui-state";
 import { uploadAttachmentFile } from "@/lib/transport";
-import { rememberSessionWorkspace, rememberWorkspaceProject } from "@/lib/workspaces";
+import {
+  readWorkspacePath,
+  rememberSessionWorkspace,
+  rememberWorkspaceProject,
+  isWorkspaceLocked,
+  toggleWorkspaceLock,
+  subscribeWorkspaceChanges,
+} from "@/lib/workspaces";
 import { TopBar, TopBarActionButton, TopBarActions } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
 import type {
@@ -85,6 +92,7 @@ export function DetailRoute() {
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(null);
   const [sessionIdCopyState, setSessionIdCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [sessionTitleOverrides, setSessionTitleOverrides] = useState(readSessionTitleOverrides);
+  const [workspaceLocked, setWorkspaceLocked] = useState(isWorkspaceLocked());
   const sessionIdCopyTimer = useRef<number | null>(null);
   const recoverCompletedTurnFromStoredMessages = useSetAtom(recoverCompletedTurnFromStoredMessagesAtom);
 
@@ -146,6 +154,12 @@ export function DetailRoute() {
   useEffect(() => {
     return subscribeSessionUiStateChanges(() => {
       setSessionTitleOverrides(readSessionTitleOverrides());
+    });
+  }, []);
+
+  useEffect(() => {
+    return subscribeWorkspaceChanges(() => {
+      setWorkspaceLocked(isWorkspaceLocked());
     });
   }, []);
 
@@ -278,6 +292,11 @@ export function DetailRoute() {
     navigate(`/models#provider-${providerId}`);
   }, [navigate]);
 
+  const toggleWorkspaceLockState = useCallback(() => {
+    const newState = toggleWorkspaceLock();
+    setWorkspaceLocked(newState.enabled);
+  }, []);
+
   const onStop = useCallback(async () => {
     const sessionId = runtimeSessionId ?? taskId;
     if (!sessionId || !runtimeIsBusy) return;
@@ -379,6 +398,19 @@ export function DetailRoute() {
                 </span>
               </TopBarActionButton>
             ) : null}
+            <TopBarActionButton
+              onClick={toggleWorkspaceLockState}
+              title={workspaceLocked ? "工作区已锁定：切换会话时保持当前工作区" : "工作区未锁定：切换会话时自动恢复该会话的工作区"}
+              aria-label={workspaceLocked ? "解锁工作区" : "锁定工作区"}
+              data-active={workspaceLocked ? "true" : undefined}
+            >
+              {workspaceLocked ? (
+                <Lock size={12} aria-hidden="true" />
+              ) : (
+                <Unlock size={12} aria-hidden="true" />
+              )}
+              <span>{workspaceLocked ? "工作区已锁定" : "工作区跟随会话"}</span>
+            </TopBarActionButton>
             <TopBarActions />
           </>
         }
