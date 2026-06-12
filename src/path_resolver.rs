@@ -215,8 +215,7 @@ fn resolve(_timeout: Duration) -> EffectivePath {
         .user_path
         .as_deref()
         .map(|v| expand_windows_placeholders(v, &lookup));
-    let process = env::var("PATH").unwrap_or_default();
-    let primary = merge_windows_paths(machine.as_deref(), user.as_deref(), &process);
+    let primary = merge_windows_paths(machine.as_deref(), user.as_deref());
 
     EffectivePath {
         entries: merge_path_entries(primary, process_path_entries(), Vec::new(), true),
@@ -492,15 +491,11 @@ fn expand_windows_placeholders(value: &str, lookup: &dyn Fn(&str) -> Option<Stri
     out
 }
 
-/// Merge Windows PATH sources in OS semantics order: machine, then user,
-/// then process-only extras (the caller appends process entries through
-/// `merge_path_entries`). Pure and cfg-free for tests.
+/// Merge Windows registry PATH sources in OS semantics order: machine, then
+/// user. Process-only extras are appended by the caller through
+/// `merge_path_entries`. Pure and cfg-free for tests.
 #[allow(dead_code)]
-fn merge_windows_paths(
-    machine: Option<&str>,
-    user: Option<&str>,
-    _process: &str,
-) -> Vec<(PathBuf, PathSource)> {
+fn merge_windows_paths(machine: Option<&str>, user: Option<&str>) -> Vec<(PathBuf, PathSource)> {
     let mut out = Vec::new();
     for (value, source) in [
         (machine, PathSource::RegistryMachine),
@@ -735,7 +730,6 @@ mod tests {
         let merged = merge_windows_paths(
             Some(r"C:\Windows;C:\Windows\System32"),
             Some(r#"C:\Users\me\bin; ;"C:\Quoted""#),
-            r"C:\process-only",
         );
         assert_eq!(
             merged,
