@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Lock, Unlock } from "lucide-react";
 import {
   activeSessionIdAtom,
   conversationFontSizeAtom,
@@ -15,7 +15,7 @@ import {
 } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
-import { useConfig, useModelInfo } from "@/hooks/use-config";
+import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { useComposerTimer } from "@/hooks/use-composer-timer";
 import { useSessionResolution } from "@/hooks/use-session-resolution";
@@ -37,7 +37,15 @@ import {
   subscribeSessionUiStateChanges,
 } from "@/lib/session-ui-state";
 import { uploadAttachmentFile } from "@/lib/transport";
-import { rememberSessionWorkspace, rememberWorkspaceProject } from "@/lib/workspaces";
+import {
+  readWorkspacePath,
+  rememberSessionWorkspace,
+  rememberWorkspaceProject,
+  isWorkspaceLocked,
+  toggleWorkspaceLock,
+  subscribeWorkspaceChanges,
+  restoreWorkspaceForSession,
+} from "@/lib/workspaces";
 import { TopBar, TopBarActionButton, TopBarActions } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
 import type {
@@ -47,6 +55,10 @@ import type {
 } from "@/components/chat/composer-types";
 import { MessageTimeline } from "@/components/chat/message-timeline";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
+import {
+  ReasoningEffortSelector,
+  type ReasoningEffort,
+} from "@/components/settings/reasoning-effort-selector";
 import {
   hermesUIMessagesToChatMessages,
   attachTurnStatsMetadata,
@@ -85,6 +97,8 @@ export function DetailRoute() {
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(null);
   const [sessionIdCopyState, setSessionIdCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [sessionTitleOverrides, setSessionTitleOverrides] = useState(readSessionTitleOverrides);
+  const [workspaceLocked, setWorkspaceLocked] = useState(isWorkspaceLocked());
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(null);
   const sessionIdCopyTimer = useRef<number | null>(null);
   const recoverCompletedTurnFromStoredMessages = useSetAtom(recoverCompletedTurnFromStoredMessagesAtom);
 
@@ -143,11 +157,38 @@ export function DetailRoute() {
     setSessionUsage(null);
   }, [setSessionUsage, taskId]);
 
+  // Restore workspace when switching sessions (e.g., via URL deep link or browser back/forward).
+  // This complements the sidebar's goSession() handler to ensure workspace is restored
+  // regardless of how the navigation happens.
+  useEffect(() => {
+    if (taskId) {
+      restoreWorkspaceForSession(taskId);
+    }
+  }, [taskId]);
+
   useEffect(() => {
     return subscribeSessionUiStateChanges(() => {
       setSessionTitleOverrides(readSessionTitleOverrides());
     });
   }, []);
+
+  useEffect(() => {
+    return subscribeWorkspaceChanges(() => {
+      setWorkspaceLocked(isWorkspaceLocked());
+    });
+  }, []);
+
+  // Read reasoning_effort from config when config changes
+  useEffect(() => {
+    if (config) {
+      const effort = config.agent?.reasoning_effort;
+      if (effort && typeof effort === "string") {
+        setReasoningEffort(effort as ReasoningEffort);
+      } else {
+        setReasoningEffort(null);
+      }
+    }
+  }, [config]);
 
   useEffect(() => {
     return () => {
@@ -278,6 +319,22 @@ export function DetailRoute() {
     navigate(`/models#provider-${providerId}`);
   }, [navigate]);
 
+  const toggleWorkspaceLockState = useCallback(() => {
+    const newState = toggleWorkspaceLock();
+    setWorkspaceLocked(newState.enabled);
+  }, []);
+
+  const saveConfigMutation = useSaveConfig();
+
+  const handleReasoningEffortChange = useCallback((effort: ReasoningEffort) => {
+    setReasoningEffort(effort);
+    saveConfigMutation.mutate({
+      agent: {
+        reasoning_effort: effort,
+      },
+    });
+  }, [saveConfigMutation]);
+
   const onStop = useCallback(async () => {
     const sessionId = runtimeSessionId ?? taskId;
     if (!sessionId || !runtimeIsBusy) return;
@@ -379,6 +436,24 @@ export function DetailRoute() {
                 </span>
               </TopBarActionButton>
             ) : null}
+            <TopBarActionButton
+              onClick={toggleWorkspaceLockState}
+              title={workspaceLocked ? "工作区已锁定：切换会话时保持当前工作区" : "工作区未锁定：切换会话时自动恢复该会话的工作区"}
+              aria-label={workspaceLocked ? "解锁工作区" : "锁定工作区"}
+              data-active={workspaceLocked ? "true" : undefined}
+            >
+              {workspaceLocked ? (
+                <Lock size={12} aria-hidden="true" />
+              ) : (
+                <Unlock size={12} aria-hidden="true" />
+              )}
+              <span>{workspaceLocked ? "工作区已锁定" : "工作区跟随会话"}</span>
+            </TopBarActionButton>
+            <ReasoningEffortSelector
+              value={reasoningEffort}
+              onChange={handleReasoningEffortChange}
+              disabled={runtimeIsBusy}
+            />
             <TopBarActions />
           </>
         }
