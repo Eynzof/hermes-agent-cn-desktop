@@ -377,6 +377,14 @@ const tauriBridge = {
 // because the bridge isn't ready (no apiBaseUrl => API calls would
 // throw). Phase strings match the `runtime-status` event emitted by
 // src/main.rs::emit_runtime_status.
+
+/** Map bootstrap phase to a user-facing subtitle (replaces hardcoded "首次启动"). */
+const BOOTSTRAP_PHASE_SUBTITLE: Record<string, string> = {
+  installing: "正在完成首次环境准备…",
+  "checking-env": "正在检查本机环境…",
+  "starting-dashboard": "正在启动 Agent 内核…",
+  error: "启动失败",
+};
 function showBootstrapOverlay(initialMessage: string): {
   update(phase: string, message: string): void;
   dismiss(): void;
@@ -516,7 +524,7 @@ function showBootstrapOverlay(initialMessage: string): {
     "font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;" +
       "color:rgba(255,255,255,0.45);letter-spacing:0.06em;text-transform:uppercase;",
   );
-  sub.textContent = "Hermes Agent 中文社区桌面版 · 首次启动";
+  sub.textContent = "正在启动…";
   panel.appendChild(sub);
 
   root.appendChild(panel);
@@ -550,6 +558,14 @@ function showBootstrapOverlay(initialMessage: string): {
 
   return {
     update(phase, msg) {
+      // Update subtitle based on phase
+      if (phase && phase in BOOTSTRAP_PHASE_SUBTITLE) {
+        sub.textContent = BOOTSTRAP_PHASE_SUBTITLE[phase];
+      } else if (msg && msg.includes("更新")) {
+        sub.textContent = "正在更新 Agent 内核…";
+      } else if (msg && msg.includes("安装")) {
+        sub.textContent = "正在完成首次环境准备…";
+      }
       if (phase === "error") {
         lastErrorMessage = msg || "未知启动错误";
         root.setAttribute("role", "alert");
@@ -558,7 +574,7 @@ function showBootstrapOverlay(initialMessage: string): {
         errorText.textContent = lastErrorMessage;
         detail.style.display = "block";
         copyButton.disabled = false;
-        sub.textContent = "首次启动失败";
+        sub.textContent = "启动失败";
       } else if (msg) {
         message.textContent = msg;
       }
