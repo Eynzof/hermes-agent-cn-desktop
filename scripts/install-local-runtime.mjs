@@ -67,17 +67,44 @@ function capture(command, args, options = {}) {
   return result.stdout.trim();
 }
 
-function findPython() {
+function parseRequiresPython(sourceRootPath) {
+  try {
+    const pyproject = readFileSync(join(sourceRootPath, "pyproject.toml"), "utf8");
+    const match = pyproject.match(/^requires-python\s*=\s*"([^"]+)"/m);
+    if (!match) return null;
+    // Parse lower and upper bounds, e.g. ">=3.11,<3.14" or ">=3.11"
+    const spec = match[1];
+    const lowerMatch = spec.match(/>=?(\d+)\.(\d+)/);
+    const upperMatch = spec.match(/[<]=?\s*(\d+)\.(\d+)/);
+    return {
+      lower: lowerMatch ? { major: Number(lowerMatch[1]), minor: Number(lowerMatch[2]) } : null,
+      upper: upperMatch ? { major: Number(upperMatch[1]), minor: Number(upperMatch[2]) } : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function findPython(sourceRootPath) {
   const candidates = [
     process.env.PYTHON,
     process.platform === "win32" ? "python" : "python3",
     "python",
   ].filter(Boolean);
+  const req = sourceRootPath ? parseRequiresPython(sourceRootPath) : null;
   for (const candidate of candidates) {
     const version = capture(candidate, ["-c", "import sys; print('.'.join(map(str, sys.version_info[:2])))"]);
     if (!version) continue;
     const [major, minor] = version.split(".").map(Number);
-    if (major > 3 || (major === 3 && minor >= 11)) return candidate;
+    if (major !== 3) continue;
+    // Check lower bound (default: 3.11)
+    const minMinor = req?.lower?.minor ?? 11;
+    if (minor < minMinor) continue;
+    // Check upper bound if specified (e.g. <3.14)
+    if (req?.upper) {
+      if (major > req.upper.major || (major === req.upper.major && minor >= req.upper.minor)) continue;
+    }
+    return candidate;
   }
   throw new Error("Python 3.11+ was not found. Set PYTHON=/path/to/python3.11 and retry.");
 }
@@ -236,7 +263,7 @@ if (force || existsSync(target)) {
 
 mkdirSync(target, { recursive: true });
 
-const python = findPython();
+const python = findPython(sourceRoot);
 const venv = join(target, "venv");
 
 console.log(`Installing local Hermes-CN-Core runtime`);

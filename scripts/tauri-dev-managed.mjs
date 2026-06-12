@@ -46,6 +46,7 @@ const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const child = spawn(pnpm, ["exec", "tauri", "dev"], {
   cwd: repoRoot,
   stdio: "inherit",
+  shell: process.platform === "win32",
   env: {
     ...process.env,
     // Dev kernels live under dev-runtime/ so they never overwrite the packaged
