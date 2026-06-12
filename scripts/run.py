@@ -8,11 +8,11 @@ Usage:
     python scripts/run.py dev [--source PATH] [--force]  完整开发模式 (managed runtime)
     python scripts/run.py web                             仅启动 Web dev server (Vite)
     python scripts/run.py tauri                           仅启动 Tauri 后端 (cargo run)
-    python scripts/run.py dashboard [--port PORT]         仅启动 Hermes Dashboard
+    python scripts/run.py dashboard [--port PORT] [--source PATH]  仅启动 Hermes Dashboard
     python scripts/run.py check                           运行检查 (typecheck + test + cargo check)
 
 Options:
-    --source PATH     Hermes-CN-Core 源码路径 (dev 模式)
+    --source PATH     Hermes-CN-Core 源码路径 (dev / dashboard 模式)
     --force           强制重新安装本地 runtime (dev 模式)
     --port PORT       Dashboard 端口 (默认 9120)
     --no-open         不自动打开浏览器 (dashboard 模式)
@@ -107,18 +107,15 @@ def cmd_tauri():
     sys.exit(r.returncode)
 
 
-def cmd_dashboard(port=9120, no_open=False):
+def cmd_dashboard(port=9120, no_open=False, source=None):
     """
-    启动 Hermes Dashboard (通过 managed runtime)。
-    查找本地安装的 hermes 可执行文件。
+    启动 Hermes Dashboard。
+    优先使用 --source 指定的 Hermes-CN-Core 源码路径 (uv run hermes)；
+    若未指定或路径不存在，则回退到 PATH / dev-runtime 查找 hermes 可执行文件。
     """
     print("=" * 60)
     print(f"  启动 Hermes Dashboard (端口 {port})")
     print("=" * 60)
-
-    # 尝试查找 hermes 可执行文件
-    # 1. 检查 PATH
-    # 2. 检查 dev-runtime
 
     def find_hermes():
         # PATH 查找
@@ -153,10 +150,24 @@ def cmd_dashboard(port=9120, no_open=False):
 
         return None
 
+    # 若 --source 指定且存在 → 使用 uv run hermes
+    hermes_source = Path(source).resolve() if source else None
+    if hermes_source and hermes_source.exists():
+        cmd = ["uv", "run", "hermes", "dashboard", f"--port={port}"]
+        if no_open:
+            cmd.append("--no-open")
+        print(f"> {' '.join(cmd)}")
+        print(f"  (cwd: {hermes_source})")
+        r = subprocess.run(cmd, cwd=str(hermes_source))
+        if r.returncode != 0:
+            print(f"  ❌ Dashboard 退出码: {r.returncode}")
+        sys.exit(r.returncode)
+
+    # 否则回退到 find_hermes
     hermes = find_hermes()
     if not hermes:
         print("  ❌ 未找到 hermes 可执行文件")
-        print("  -> 请先安装 Hermes-CN-Core 或运行 'python scripts/run.py dev'")
+        print("  -> 请先安装 Hermes-CN-Core，或使用 --source 指定源码路径")
         sys.exit(1)
 
     cmd = [hermes, "dashboard", f"--port={port}"]
@@ -193,7 +204,7 @@ def main():
         choices=["dev", "web", "tauri", "dashboard", "check"],
         help="运行模式 (默认: dev)",
     )
-    parser.add_argument("--source", help="Hermes-CN-Core 源码路径 (dev 模式)")
+    parser.add_argument("--source", help="Hermes-CN-Core 源码路径 (dev / dashboard 模式)")
     parser.add_argument("--force", action="store_true", help="强制重新安装本地 runtime (dev 模式)")
     parser.add_argument("--port", type=int, default=9120, help="Dashboard 端口 (默认 9120)")
     parser.add_argument("--no-open", action="store_true", help="不自动打开浏览器 (dashboard 模式)")
@@ -207,7 +218,7 @@ def main():
     elif args.command == "tauri":
         cmd_tauri()
     elif args.command == "dashboard":
-        cmd_dashboard(port=args.port, no_open=args.no_open)
+        cmd_dashboard(port=args.port, no_open=args.no_open, source=args.source)
     elif args.command == "check":
         cmd_check()
     else:
