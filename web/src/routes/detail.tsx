@@ -44,6 +44,7 @@ import {
   isWorkspaceLocked,
   toggleWorkspaceLock,
   subscribeWorkspaceChanges,
+  restoreWorkspaceForSession,
 } from "@/lib/workspaces";
 import { TopBar, TopBarActionButton, TopBarActions } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
@@ -150,6 +151,15 @@ export function DetailRoute() {
     setSelectedModel(override);
     setSessionUsage(null);
   }, [setSessionUsage, taskId]);
+
+  // Restore workspace when switching sessions (e.g., via URL deep link or browser back/forward).
+  // This complements the sidebar's goSession() handler to ensure workspace is restored
+  // regardless of how the navigation happens.
+  useEffect(() => {
+    if (taskId) {
+      restoreWorkspaceForSession(taskId);
+    }
+  }, [taskId]);
 
   useEffect(() => {
     return subscribeSessionUiStateChanges(() => {
