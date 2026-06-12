@@ -640,6 +640,7 @@ export function ModelsSection() {
     apiKey: "",
     baseUrl: initialProvider?.baseUrl ?? "",
     model: initialProvider?.defaultModel ?? "",
+    contextLength: "",
   });
   // Last saved values for the selected provider. Used to compute whether the
   // form is dirty (vs. baseline) so the save button can show an idle "已保存"
@@ -647,6 +648,7 @@ export function ModelsSection() {
   const [savedSnapshot, setSavedSnapshot] = useState<{
     baseUrl: string;
     model: string;
+    contextLength: string;
     providerId: string;
   } | null>(null);
   const [savedFlashFor, setSavedFlashFor] = useState<string | null>(null);
@@ -903,12 +905,16 @@ export function ModelsSection() {
     const baseUrl = typeof selectedProviderEntry.base_url === "string"
       ? selectedProviderEntry.base_url
       : selectedProvider.baseUrl;
-    setProviderForm({ apiKey: "", baseUrl, model });
-    setSavedSnapshot({ baseUrl, model, providerId: selectedProvider.id });
+    const contextLength = typeof selectedProviderEntry.context_length === "number"
+      ? String(selectedProviderEntry.context_length)
+      : "";
+    setProviderForm({ apiKey: "", baseUrl, model, contextLength });
+    setSavedSnapshot({ baseUrl, model, contextLength, providerId: selectedProvider.id });
   }, [
     selectedProvider,
     selectedProviderEntry.base_url,
     selectedProviderEntry.model,
+    selectedProviderEntry.context_length,
   ]);
 
   useEffect(() => {
@@ -973,7 +979,8 @@ export function ModelsSection() {
     selectedProvider &&
     (providerForm.apiKey.trim() !== "" ||
       providerForm.baseUrl !== (savedSnapshot?.baseUrl ?? "") ||
-      providerForm.model !== (savedSnapshot?.model ?? ""))
+      providerForm.model !== (savedSnapshot?.model ?? "") ||
+      providerForm.contextLength !== (savedSnapshot?.contextLength ?? ""))
   );
   const showSavedFlash = !isFormDirty && savedFlashFor === selectedProvider?.id;
   const selectedProviderModel = selectedProvider
@@ -1172,6 +1179,7 @@ export function ModelsSection() {
       setSavedSnapshot({
         baseUrl: savedBaseUrl,
         model: savedModel,
+        contextLength: providerForm.contextLength,
         providerId,
       });
       setSavedFlashFor(providerId);
@@ -1212,6 +1220,7 @@ export function ModelsSection() {
       setSavedSnapshot({
         baseUrl: savedBaseUrl,
         model: savedModel,
+        contextLength: providerForm.contextLength,
         providerId,
       });
       setSavedFlashFor(providerId);
@@ -1277,7 +1286,7 @@ export function ModelsSection() {
         onSuccess: () => {
           selectProvider(candidate);
           closeCustomForm();
-          setProviderForm({ apiKey: "", baseUrl, model });
+          setProviderForm({ apiKey: "", baseUrl, model, contextLength: "" });
         },
       },
     );
@@ -1652,6 +1661,19 @@ export function ModelsSection() {
                         </button>
                       ))}
                     </div>
+
+                    <label className={s.fieldRow}>
+                      <div className={s.fieldLabel}>上下文长度</div>
+                      <input
+                        className={s.fieldInput}
+                        type="number"
+                        min="1"
+                        placeholder="例如：128000，留空使用默认值"
+                        value={providerForm.contextLength}
+                        onChange={(event) => setProviderForm((prev) => ({ ...prev, contextLength: event.target.value }))}
+                      />
+                    </label>
+                    <div className={s.modelPickerHint}>手动设置模型的上下文窗口大小（Token 数），留空则使用服务商预设值</div>
 
                     <div className={s.providerActions}>
                       <button

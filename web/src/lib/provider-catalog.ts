@@ -203,6 +203,7 @@ export interface ProviderConfigInput {
   apiKey: string;
   baseUrl: string;
   model: string;
+  contextLength?: string;
 }
 
 export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.07.1";
@@ -679,6 +680,7 @@ export function buildProviderSettingsUpdate(
     String(existingProvider.api_key || existingModel.api_key || "");
   const baseUrl = input.baseUrl.trim() || preset.baseUrl;
   const model = input.model.trim() || preset.defaultModel;
+  const contextLength = input.contextLength?.trim();
   const providerEntry: Record<string, any> = {
     ...existingProvider,
     name: preset.name,
@@ -691,6 +693,15 @@ export function buildProviderSettingsUpdate(
 
   if (nextApiKey) providerEntry.api_key = nextApiKey;
   else delete providerEntry.api_key;
+
+  if (contextLength) {
+    const parsed = Number(contextLength);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      providerEntry.context_length = parsed;
+    }
+  } else {
+    delete providerEntry.context_length;
+  }
 
   return {
     ...config,
