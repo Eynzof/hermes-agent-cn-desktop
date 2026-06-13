@@ -87,6 +87,8 @@ import {
   modelButtonText,
 } from "./goose-composer-model-picker";
 import { WorkspacePickerModal } from "@/components/composer/workspace-picker";
+import { UrlDialog } from "@/components/composer/url-dialog";
+import { isSingleUrl, urlReferenceText } from "@/lib/composer-url";
 import { ReasoningEffortMenu } from "@/components/composer/reasoning-effort-menu";
 import s from "./goose-composer.module.css";
 
@@ -199,6 +201,7 @@ export function GooseComposer({
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const [mentionLoading, setMentionLoading] = useState(false);
   const [dismissedMentionToken, setDismissedMentionToken] = useState("");
+  const [urlDialog, setUrlDialog] = useState<{ url: string; start: number; end: number } | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const mentionReqIdRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -724,9 +727,40 @@ export function GooseComposer({
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     if (controlsDisabled) return;
     const files = Array.from(event.clipboardData.files);
-    if (!files.length) return;
-    event.preventDefault();
-    addBrowserFiles(files);
+    if (files.length) {
+      event.preventDefault();
+      addBrowserFiles(files);
+      return;
+    }
+    // A bare-URL paste offers to attach it as an `@url:` reference (only where
+    // backend ref expansion is wired, i.e. a mention source is present).
+    if (mentionPicker && !mentionPicker.disabled) {
+      const text = event.clipboardData.getData("text/plain");
+      if (text && isSingleUrl(text)) {
+        event.preventDefault();
+        setUrlDialog({ url: text.trim(), start: selectionStart, end: selectionEnd });
+      }
+    }
+  };
+
+  const applyUrlInsertion = (insertText: string) => {
+    if (!urlDialog) return;
+    const before = value.slice(0, urlDialog.start);
+    const after = value.slice(urlDialog.end);
+    const insertion = after && !/^\s/.test(after) ? `${insertText} ` : insertText;
+    const cursor = before.length + insertion.length;
+    setValue(`${before}${insertion}${after}`);
+    setSelectionStart(cursor);
+    setSelectionEnd(cursor);
+    setUrlDialog(null);
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(cursor, cursor);
+      setSelectionStart(cursor);
+      setSelectionEnd(cursor);
+    });
   };
 
   const hasDroppableData = (event: DragEvent<HTMLDivElement>): boolean => {
@@ -1225,6 +1259,13 @@ export function GooseComposer({
           }}
         />
       ) : null}
+      <UrlDialog
+        open={Boolean(urlDialog)}
+        url={urlDialog?.url ?? ""}
+        onInsertReference={() => applyUrlInsertion(urlReferenceText(urlDialog?.url ?? ""))}
+        onInsertPlain={() => applyUrlInsertion(urlDialog?.url ?? "")}
+        onCancel={() => setUrlDialog(null)}
+      />
     </div>
   );
 }
