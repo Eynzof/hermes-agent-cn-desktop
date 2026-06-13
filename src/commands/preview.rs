@@ -332,7 +332,10 @@ mod tests {
             preview.text.as_ref().map(|t| t.len()),
             Some(TEXT_PREVIEW_MAX_BYTES as usize)
         );
-        assert_eq!(preview.byte_size, (TEXT_PREVIEW_MAX_BYTES as usize + 4096) as u64);
+        assert_eq!(
+            preview.byte_size,
+            (TEXT_PREVIEW_MAX_BYTES as usize + 4096) as u64
+        );
     }
 
     #[test]
