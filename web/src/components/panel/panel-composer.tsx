@@ -159,6 +159,7 @@ export function PanelComposer() {
         ]}
         showMeta={false}
         loading={sending}
+        voiceConfig={config ?? null}
         modelPicker={{
           selected: selectedModel,
           label: modelInfo?.model,

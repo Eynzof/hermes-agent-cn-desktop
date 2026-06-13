@@ -6,9 +6,8 @@ import {
   Brain,
   Clock,
   Ghost,
-  MessageCircle,
-  MessageSquareText,
   Cpu,
+  Mic,
   Puzzle,
   Sparkles,
   TerminalSquare,
@@ -30,8 +29,7 @@ interface CapabilityItem {
 
 export const CONFIG_ITEMS: readonly CapabilityItem[] = [
   { label: "模型", path: "/models", icon: Cpu },
-  { label: "备份恢复", path: "/backup", icon: Archive },
-  { label: "配置迁移", path: "/config-migration", icon: Sparkles, shortcut: "/migration" },
+  { label: "语音", path: "/voice", icon: Mic },
   {
     label: "档案",
     path: "/profiles",
@@ -51,13 +49,13 @@ export const CONFIG_ITEMS: readonly CapabilityItem[] = [
   },
 ];
 
-const AUTOMATION_ITEMS: readonly CapabilityItem[] = [
-  { label: "定时任务", path: "/cron", icon: Clock },
+export const BACKUP_ITEMS: readonly CapabilityItem[] = [
+  { label: "备份恢复", path: "/backup", icon: Archive },
+  { label: "配置迁移", path: "/config-migration", icon: Sparkles, shortcut: "/migration" },
 ];
 
-const IM_ITEMS: readonly CapabilityItem[] = [
-  { label: "飞书接入", path: "/im/feishu", icon: MessageCircle, title: "将飞书消息平台接入中文社区桌面版" },
-  { label: "微信接入", path: "/im/weixin", icon: MessageSquareText, title: "将微信消息平台接入中文社区桌面版" },
+const AUTOMATION_ITEMS: readonly CapabilityItem[] = [
+  { label: "定时任务", path: "/cron", icon: Clock },
 ];
 
 export const CAPABILITY_SECTIONS: readonly {
@@ -66,7 +64,7 @@ export const CAPABILITY_SECTIONS: readonly {
 }[] = [
   { label: "§021 · 配置", items: CONFIG_ITEMS },
   { label: "§022 · 自动化", items: AUTOMATION_ITEMS },
-  { label: "§023 · 消息平台接入", items: IM_ITEMS },
+  { label: "§023 · 备份与恢复", items: BACKUP_ITEMS },
 ];
 
 export function CapabilitySidebar() {

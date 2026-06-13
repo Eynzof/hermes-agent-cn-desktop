@@ -9,6 +9,7 @@ import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { RuntimeUpdateOverlay } from "@/components/runtime-update-overlay";
 import { DesktopUpdateNotifier } from "@/components/desktop-update-notifier";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { CommandPalette } from "@/components/command-palette";
 import { PanelRoute } from "@/routes/panel";
 import { DetailRoute } from "@/routes/detail";
 import { HistoryRoute } from "@/routes/history";
@@ -16,6 +17,7 @@ import { ProjectsRoute } from "@/routes/projects";
 import { ProjectDetailRoute } from "@/routes/project-detail";
 import { SkillsRoute } from "@/routes/skills";
 import { ModelsRoute } from "@/routes/models";
+import { VoiceRoute } from "@/routes/voice";
 import { BackupRoute } from "@/routes/backup";
 import { ConfigMigrationRoute } from "@/routes/config-migration";
 import { McpRoute } from "@/routes/mcp";
@@ -66,6 +68,7 @@ export function App() {
           <Route path="/projects/:workspacePath" element={withBoundary(<ProjectDetailRoute />)} />
           <Route path="/skills" element={withBoundary(<SkillsRoute />)} />
           <Route path="/models" element={withBoundary(<ModelsRoute />)} />
+          <Route path="/voice" element={withBoundary(<VoiceRoute />)} />
           <Route path="/backup" element={withBoundary(<BackupRoute />)} />
           <Route path="/config-migration" element={withBoundary(<ConfigMigrationRoute />)} />
           <Route path="/mcp" element={withBoundary(<McpRoute />)} />
@@ -95,6 +98,7 @@ export function App() {
       <ProfileSwitchOverlay />
       <RuntimeUpdateOverlay />
       <DesktopUpdateNotifier />
+      <CommandPalette />
     </div>
   );
 }

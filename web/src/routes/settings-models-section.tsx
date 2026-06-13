@@ -44,7 +44,16 @@ import { ModelCombobox } from "@/components/settings/model-combobox";
 import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
 import { fetchExternalJSON } from "@/lib/transport";
+import { openExternalUrl } from "@/lib/external-links";
+import {
+  getLocalContextWarning,
+  HERMES_CONTEXT_REQUIREMENTS_URL,
+  HERMES_PROVIDER_CONTEXT_URL,
+  RECOMMENDED_LOCAL_CONTEXT_LENGTH,
+} from "@/lib/local-provider-context";
 import type { EnvVarInfo } from "@hermes/protocol";
+import { CopyButton } from "@/components/ui/copy-button";
+import { Alert, Button, Field, Input, Select, Textarea } from "@hermes/shared-ui";
 import { OAuthProvidersSection } from "./settings-oauth-section";
 import s from "./settings.module.css";
 
@@ -119,6 +128,16 @@ interface LocalProviderPreset {
   baseUrl: string;
   model: string;
   tutorial: string;
+}
+
+function initialCustomProviderForm(mode: CustomProviderMode) {
+  return {
+    name: "",
+    baseUrl: "",
+    apiKey: "",
+    model: "",
+    contextWindow: mode === "local" ? String(RECOMMENDED_LOCAL_CONTEXT_LENGTH) : "",
+  };
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
@@ -297,27 +316,59 @@ const LOCAL_PROVIDER_PRESETS: LocalProviderPreset[] = [
     name: "LM Studio",
     baseUrl: "http://127.0.0.1:1234/v1",
     model: "local-model",
-    tutorial: "打开 Developer / Local Server，加载模型后点击 Start Server；模型名以 /v1/models 返回为准。",
+    tutorial: "打开 Developer / Local Server，模型设置里将 Context Length 调到 ≥65536，重新加载模型后点击 Start Server。",
   },
   {
     name: "Ollama",
     baseUrl: "http://127.0.0.1:11434/v1",
     model: "qwen2.5-coder:7b",
-    tutorial: "先运行 ollama pull qwen2.5-coder:7b，并确认 ollama serve 正在运行；API Key 通常留空。",
+    tutorial: "先运行 ollama pull，并用 ollama run <model> -c 65536 或 Modelfile 设置上下文；API Key 通常留空。",
   },
   {
     name: "vLLM",
     baseUrl: "http://127.0.0.1:8000/v1",
     model: "Qwen/Qwen2.5-Coder-7B-Instruct",
-    tutorial: "启动 OpenAI-compatible server，建议用 --served-model-name 固定一个容易填写的模型名。",
+    tutorial: "启动 OpenAI-compatible server，带上 --max-model-len 64k，并用 --served-model-name 固定模型名。",
   },
   {
     name: "llama.cpp",
     baseUrl: "http://127.0.0.1:8080/v1",
     model: "local-model",
-    tutorial: "启动 llama-server 的 OpenAI 兼容接口；未启用鉴权时 API Key 留空即可。",
+    tutorial: "启动 llama-server 的 OpenAI 兼容接口时使用 --ctx-size 65536；未启用鉴权时 API Key 留空即可。",
   },
 ];
+
+const LOCAL_PROVIDER_DOC_LINKS = [
+  { label: "Quickstart 说明", url: HERMES_CONTEXT_REQUIREMENTS_URL },
+  { label: "Providers 指引", url: HERMES_PROVIDER_CONTEXT_URL },
+] as const;
+
+function LocalProviderDocLinks() {
+  return (
+    <div className={s.localProviderDocLinks}>
+      {LOCAL_PROVIDER_DOC_LINKS.map((item) => (
+        <div key={item.url} className={s.localProviderDocLinkRow}>
+          <a
+            className={s.link}
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => {
+              event.preventDefault();
+              void openExternalUrl(item.url);
+            }}
+          >
+            {item.label} ↗
+          </a>
+          <code className={s.localProviderDocUrl}>{item.url}</code>
+          <CopyButton className={s.localProviderDocCopy} text={item.url} showStatusIcon={false}>
+            复制
+          </CopyButton>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const AUXILIARY_TASK_BY_ID = Object.fromEntries(
   AUXILIARY_TASKS.map((task) => [task.id, task]),
@@ -668,12 +719,7 @@ export function ModelsSection() {
   const [providerSearch, setProviderSearch] = useState("");
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customProviderMode, setCustomProviderMode] = useState<CustomProviderMode>("custom");
-  const [customForm, setCustomForm] = useState({
-    name: "",
-    baseUrl: "",
-    apiKey: "",
-    model: "",
-  });
+  const [customForm, setCustomForm] = useState(() => initialCustomProviderForm("custom"));
   const [selectedAuxTask, setSelectedAuxTask] = useState<AuxiliaryTaskId>("vision");
   const [auxForm, setAuxForm] = useState<AuxiliaryTaskForm>(() =>
     auxiliaryFormFromConfig(config, "vision"));
@@ -705,12 +751,12 @@ export function ModelsSection() {
   const closeCustomForm = useCallback(() => {
     setShowCustomForm(false);
     setCustomProviderMode("custom");
-    setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
+    setCustomForm(initialCustomProviderForm("custom"));
   }, []);
 
   const openCustomProviderForm = useCallback((mode: CustomProviderMode) => {
     setCustomProviderMode(mode);
-    setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
+    setCustomForm(initialCustomProviderForm(mode));
     setShowCustomForm(true);
   }, []);
 
@@ -720,6 +766,7 @@ export function ModelsSection() {
       name: preset.name,
       baseUrl: preset.baseUrl,
       model: preset.model,
+      contextWindow: String(RECOMMENDED_LOCAL_CONTEXT_LENGTH),
     }));
   }, []);
   useEffect(() => {
@@ -825,9 +872,10 @@ export function ModelsSection() {
   const selectedProviderCredentialPreview = selectedProvider
     ? getProviderCredentialPreview(config, resolvedEnvVars, selectedProvider)
     : undefined;
-  const selectedProviderCanOmitApiKey = selectedProvider
+  const selectedProviderIsLocal = selectedProvider
     ? isLocalProviderBaseUrl(providerForm.baseUrl || selectedProvider.baseUrl)
     : false;
+  const selectedProviderCanOmitApiKey = selectedProviderIsLocal;
   const customBaseUrl = customForm.baseUrl.trim();
   const customBaseUrlValid = !customBaseUrl || isValidProviderBaseUrl(customBaseUrl);
   const duplicateBaseUrlProvider = useMemo(() => {
@@ -1003,6 +1051,11 @@ export function ModelsSection() {
     currentProviderId === selectedProvider.id &&
     modelInfo?.model === selectedProviderModel,
   );
+  const selectedLocalContextWarning = getLocalContextWarning({
+    isLocalProvider: selectedProviderIsLocal,
+    configuredContextWindow: providerForm.contextWindow,
+    effectiveContextLength: selectedProviderIsCurrent ? modelInfo?.effective_context_length : undefined,
+  });
 
   // Deep-link from the picker's "去设置" CTA: /models#provider-<slug> selects
   // and scrolls to that provider so the user lands on the right key field.
@@ -1272,6 +1325,7 @@ export function ModelsSection() {
     const baseUrl = customForm.baseUrl.trim();
     const model = customForm.model.trim();
     const apiKey = customForm.apiKey.trim();
+    const contextWindow = customProviderMode === "local" ? customForm.contextWindow.trim() : "";
     if (!name || !baseUrl || !model) return;
     if (!isValidProviderBaseUrl(baseUrl)) {
       setProviderSaveError("Base URL 必须是 http 或 https 地址");
@@ -1299,7 +1353,7 @@ export function ModelsSection() {
       isCustom: true,
     };
     const nextConfig = buildProviderOrderUpdate(
-      buildProviderConfigUpdate(config, preset, { apiKey, baseUrl, model }),
+      buildProviderConfigUpdate(config, preset, { apiKey, baseUrl, model, contextWindow }),
       [candidate, ...orderedProviders.map((provider) => provider.id)],
     );
     saveConfig.mutate(
@@ -1308,7 +1362,7 @@ export function ModelsSection() {
         onSuccess: () => {
           selectProvider(candidate);
           closeCustomForm();
-          setProviderForm({ apiKey: "", baseUrl, model, contextWindow: "" });
+          setProviderForm({ apiKey: "", baseUrl, model, contextWindow });
         },
       },
     );
@@ -1421,11 +1475,14 @@ export function ModelsSection() {
   if (configIsError || !config) {
     const message = configError instanceof Error ? configError.message : "配置加载失败";
     return (
-      <div className={s.modelsLoadError}>
-        <strong>模型配置加载失败</strong>
+      <Alert
+        className={s.modelsLoadError}
+        tone="danger"
+        title="模型配置加载失败"
+        actions={<Button variant="outline" onClick={() => void refetchConfig()}>重试</Button>}
+      >
         <p>{message}</p>
-        <button type="button" className={s.btn} onClick={() => void refetchConfig()}>重试</button>
-      </div>
+      </Alert>
     );
   }
 
@@ -1434,7 +1491,7 @@ export function ModelsSection() {
   const customProviderIsLocal = customProviderMode === "local";
   const customProviderTitle = customProviderIsLocal ? "添加本地部署服务商" : "添加自定义服务商";
   const customProviderHint = customProviderIsLocal
-    ? "适合 LM Studio、Ollama、vLLM、llama.cpp 等本地 OpenAI 兼容服务。先启动本地服务并加载模型，再选择下面的端点或手动填写。"
+    ? "适合 LM Studio、Ollama、vLLM、llama.cpp 等本地 OpenAI 兼容服务。先启动本地服务、加载模型并把上下文窗口设到至少 64K，再选择下面的端点或手动填写。"
     : "添加任意 OpenAI Chat Completions 兼容服务（百度千帆 / 腾讯混元 / SiliconFlow / 私有部署等）。提交后可在左侧列表里随时切换。";
   const customProviderPlaceholders = customProviderIsLocal
     ? {
@@ -1442,13 +1499,19 @@ export function ModelsSection() {
         baseUrl: "http://127.0.0.1:1234/v1",
         model: "qwen2.5-coder:7b",
         apiKey: "本地服务一般可留空，启用鉴权时再填写",
+        contextWindow: String(RECOMMENDED_LOCAL_CONTEXT_LENGTH),
       }
     : {
         name: "例如：Deepseek",
         baseUrl: "https://api.example.com/v1",
         model: "deepseek-v4-flash",
         apiKey: "可选，先建后填也可以",
+        contextWindow: "自动",
       };
+  const customLocalContextWarning = getLocalContextWarning({
+    isLocalProvider: customProviderIsLocal,
+    configuredContextWindow: customForm.contextWindow,
+  });
 
   return (
     <div className={s.modelsSettings}>
@@ -1464,15 +1527,15 @@ export function ModelsSection() {
         </div>
       )}
       {envLoadWarning && (
-        <div className={s.modelsLoadWarning}>
-          <div>
-            <strong>环境变量状态加载失败</strong>
-            <p>{envLoadWarning}。模型页已用空环境变量状态继续渲染，已配置状态可能暂时不准确。</p>
-          </div>
-          <button type="button" className={s.btn} onClick={() => void refetchEnvVars()}>
-            重试
-          </button>
-        </div>
+        <Alert
+          className={s.modelsLoadWarning}
+          tone="warning"
+          title="环境变量状态加载失败"
+          layout="inline"
+          actions={<Button variant="outline" tone="warning" onClick={() => void refetchEnvVars()}>重试</Button>}
+        >
+          <p>{envLoadWarning}。模型页已用空环境变量状态继续渲染，已配置状态可能暂时不准确。</p>
+        </Alert>
       )}
       <div className={s.modelTopTabs} role="tablist" aria-label="模型配置类型">
         <button
@@ -1518,28 +1581,30 @@ export function ModelsSection() {
           <div className={s.providerPresetLayout}>
             <div className={s.providerPresetListPane}>
               <div className={s.providerListToolbar}>
-                <input
+                <Input
                   className={s.providerSearchInput}
                   value={providerSearch}
                   onChange={(event) => setProviderSearch(event.target.value)}
                   placeholder="搜索模型平台..."
                 />
                 <div className={s.providerToolbarActions}>
-                  <button
-                    className={s.btn}
+                  <Button
+                    variant="outline"
+                    fullWidth
                     onClick={() => openCustomProviderForm("custom")}
                     title="添加自定义 OpenAI 兼容服务商"
                   >
                     + 自定义
-                  </button>
-                  <button
-                    className={s.btn}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    fullWidth
                     onClick={() => openCustomProviderForm("local")}
                     title="添加本地部署 OpenAI 兼容服务商"
                   >
                     + 本地部署
-                  </button>
-                  <button className={s.btn} onClick={handleCatalogRefresh}>刷新预设</button>
+                  </Button>
+                  <Button variant="outline" fullWidth onClick={handleCatalogRefresh}>刷新预设</Button>
                 </div>
                 <div className={s.providerListHint}>
                   {providerSearch.trim()
@@ -1597,9 +1662,10 @@ export function ModelsSection() {
                           {selectedHasCredentials ? "已保存密钥" : "未设置"}
                         </span>
                         {selectedProvider.isCustom && (
-                          <button
+                          <Button
                             type="button"
-                            className={s.btnDanger}
+                            variant="outline"
+                            tone="danger"
                             disabled={providerDeletePending || providerSavePending || providerSetCurrentPending}
                             onClick={() => void handleDeleteSelectedProvider()}
                             title={
@@ -1609,17 +1675,15 @@ export function ModelsSection() {
                             }
                           >
                             {providerDeletePending ? "删除中…" : "删除服务商"}
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
 
                     <div className={s.providerFormGrid}>
-                      <label className={s.fieldRow}>
-                        <div className={s.fieldLabel}>{selectedProvider.apiKeyLabel}</div>
-                        <input
-                          className={s.fieldInput}
-                          data-mono="true"
+                      <Field label={selectedProvider.apiKeyLabel} className={s.fieldRow}>
+                        <Input
+                          mono
                           type="password"
                           value={providerForm.apiKey}
                           placeholder={
@@ -1631,16 +1695,14 @@ export function ModelsSection() {
                           }
                           onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
                         />
-                      </label>
-                      <label className={s.fieldRow}>
-                        <div className={s.fieldLabel}>Base URL</div>
-                        <input
-                          className={s.fieldInput}
-                          data-mono="true"
+                      </Field>
+                      <Field label="Base URL" className={s.fieldRow}>
+                        <Input
+                          mono
                           value={providerForm.baseUrl}
                           onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
                         />
-                      </label>
+                      </Field>
                       <label className={s.fieldRow}>
                         <div className={s.fieldLabel}>模型</div>
                         <div className={s.modelPickerRow}>
@@ -1650,15 +1712,15 @@ export function ModelsSection() {
                             options={mergedModelOptions}
                           />
                           {supportsModelListing ? (
-                            <button
+                            <Button
                               type="button"
-                              className={s.btn}
+                              variant="outline"
                               disabled={modelsQuery.isFetching}
                               onClick={() => modelsQuery.refetch()}
                               title={`从 ${providerForm.baseUrl}/models 拉取`}
                             >
                               {refreshLabel}
-                            </button>
+                            </Button>
                           ) : null}
                         </div>
                       </label>
@@ -1668,11 +1730,9 @@ export function ModelsSection() {
                       {refreshErrorText && (
                         <div className={s.modelPickerError}>{refreshErrorText}</div>
                       )}
-                      <label className={s.fieldRow}>
-                        <div className={s.fieldLabel}>上下文窗口</div>
-                        <input
-                          className={s.fieldInput}
-                          data-mono="true"
+                      <Field label="上下文窗口" className={s.fieldRow}>
+                        <Input
+                          mono
                           inputMode="numeric"
                           placeholder={
                             selectedProviderIsCurrent && modelInfo?.effective_context_length
@@ -1684,11 +1744,16 @@ export function ModelsSection() {
                             setProviderForm((prev) => ({ ...prev, contextWindow: event.target.value }))
                           }
                         />
-                      </label>
+                      </Field>
                       <div className={s.modelPickerHint}>
                         留空或填 0 使用该模型自动探测到的上下文窗口；本地 / 自建模型探测不准时可手动指定（单位 token）。
                         {!selectedProviderIsCurrent && " 该值会在「设为当前模型」时生效。"}
                       </div>
+                      {selectedLocalContextWarning && (
+                        <div className={s.localContextWarning} role="alert">
+                          {selectedLocalContextWarning.message}
+                        </div>
+                      )}
                       {selectedProviderIsCurrent && modelInfo && (
                         <div className={s.modelPickerHint}>
                           自动探测 {(modelInfo.auto_context_length ?? 0).toLocaleString()}
@@ -1716,8 +1781,10 @@ export function ModelsSection() {
                     </div>
 
                     <div className={s.providerActions}>
-                      <button
-                        className={s.btnPrimary}
+                      <Button
+                        variant="solid"
+                        tone="accent"
+                        loading={providerSavePending}
                         disabled={
                           providerSavePending ||
                           providerSetCurrentPending ||
@@ -1727,19 +1794,12 @@ export function ModelsSection() {
                         }
                         onClick={() => void handleProviderSave()}
                       >
-                        {providerSavePending
-                          ? (
-                            <>
-                              <span className={s.buttonSpinner} aria-hidden="true" />
-                              保存中…
-                            </>
-                          )
-                          : showSavedFlash
-                            ? "✓ 已保存"
-                            : "保存配置"}
-                      </button>
-                      <button
-                        className={isFormDirty || selectedProviderIsCurrent ? s.btn : s.btnPrimary}
+                        {providerSavePending ? "保存中…" : showSavedFlash ? "✓ 已保存" : "保存配置"}
+                      </Button>
+                      <Button
+                        variant={isFormDirty || selectedProviderIsCurrent ? "outline" : "solid"}
+                        tone={isFormDirty || selectedProviderIsCurrent ? "neutral" : "accent"}
+                        loading={providerSetCurrentPending}
                         disabled={
                           selectedProviderIsCurrent ||
                           providerSavePending ||
@@ -1757,19 +1817,10 @@ export function ModelsSection() {
                               : "请先保存 API Key / provider 配置"
                         }
                       >
-                        {providerSetCurrentPending
-                          ? (
-                            <>
-                              <span className={s.buttonSpinner} aria-hidden="true" />
-                              切换中…
-                            </>
-                          )
-                          : selectedProviderIsCurrent
-                            ? "已是当前模型"
-                            : "设为当前模型"}
-                      </button>
-                      <button
-                        className={s.btn}
+                        {providerSetCurrentPending ? "切换中…" : selectedProviderIsCurrent ? "已是当前模型" : "设为当前模型"}
+                      </Button>
+                      <Button
+                        variant="outline"
                         disabled={
                           probeForSelected?.status === "pending" ||
                           providerDeletePending ||
@@ -1783,7 +1834,7 @@ export function ModelsSection() {
                         }
                       >
                         {probeForSelected?.status === "pending" ? "测试中…" : "测试连接"}
-                      </button>
+                      </Button>
                     </div>
                     {probeForSelected && probeForSelected.status !== "pending" && (
                       <ProbeResultRow probe={probeForSelected} />
@@ -1876,41 +1927,47 @@ export function ModelsSection() {
                 {customProviderHint}
               </p>
               {customProviderIsLocal && (
-                <div className={s.localProviderGuide} aria-label="常用本地部署端点">
-                  {LOCAL_PROVIDER_PRESETS.map((preset) => (
-                    <button
-                      key={preset.name}
-                      type="button"
-                      className={s.localProviderCard}
-                      onClick={() => applyLocalProviderPreset(preset)}
-                    >
-                      <strong>{preset.name}</strong>
-                      <code>{preset.baseUrl}</code>
-                      <span>{preset.tutorial}</span>
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className={s.localProviderContextNotice}>
+                    <strong>本地模型上下文需要 ≥64K</strong>
+                    <p>
+                      Hermes Agent 会拒绝低于 64,000 tokens 的模型上下文。建议在本地运行时和下方「上下文窗口」中都设为{" "}
+                      {RECOMMENDED_LOCAL_CONTEXT_LENGTH.toLocaleString()}，并在 LM Studio / Ollama / vLLM / llama.cpp 中重新加载模型。
+                    </p>
+                    <LocalProviderDocLinks />
+                  </div>
+                  <div className={s.localProviderGuide} aria-label="常用本地部署端点">
+                    {LOCAL_PROVIDER_PRESETS.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        className={s.localProviderCard}
+                        onClick={() => applyLocalProviderPreset(preset)}
+                      >
+                        <strong>{preset.name}</strong>
+                        <code>{preset.baseUrl}</code>
+                        <span>{preset.tutorial}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
-              <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>名称</div>
-                <input
-                  className={s.fieldInput}
+              <Field label="名称" className={s.fieldRow}>
+                <Input
                   value={customForm.name}
                   placeholder={customProviderPlaceholders.name}
                   autoFocus
                   onChange={(e) => setCustomForm((p) => ({ ...p, name: e.target.value }))}
                 />
-              </label>
-              <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>Base URL</div>
-                <input
-                  className={s.fieldInput}
-                  data-mono="true"
+              </Field>
+              <Field label="Base URL" className={s.fieldRow}>
+                <Input
+                  mono
                   value={customForm.baseUrl}
                   placeholder={customProviderPlaceholders.baseUrl}
                   onChange={(e) => setCustomForm((p) => ({ ...p, baseUrl: e.target.value }))}
                 />
-              </label>
+              </Field>
               {!customBaseUrlValid && (
                 <div className={s.modelPickerError}>Base URL 必须是 http 或 https 地址。</div>
               )}
@@ -1919,33 +1976,51 @@ export function ModelsSection() {
                   已存在同 Base URL：{duplicateBaseUrlProvider.name}。如果只是换模型，可以直接编辑现有服务商。
                 </div>
               )}
-              <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>默认模型</div>
-                <input
-                  className={s.fieldInput}
-                  data-mono="true"
+              <Field label="默认模型" className={s.fieldRow}>
+                <Input
+                  mono
                   value={customForm.model}
                   placeholder={customProviderPlaceholders.model}
                   onChange={(e) => setCustomForm((p) => ({ ...p, model: e.target.value }))}
                 />
-              </label>
-              <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>API Key</div>
-                <input
-                  className={s.fieldInput}
-                  data-mono="true"
+              </Field>
+              {customProviderIsLocal && (
+                <>
+                  <Field label="上下文窗口" className={s.fieldRow}>
+                    <Input
+                      mono
+                      inputMode="numeric"
+                      value={customForm.contextWindow}
+                      placeholder={customProviderPlaceholders.contextWindow}
+                      onChange={(e) => setCustomForm((p) => ({ ...p, contextWindow: e.target.value }))}
+                    />
+                  </Field>
+                  <div className={s.modelPickerHint}>
+                    保存时会写入桌面端的模型上下文覆盖；请同步确认本地服务实际加载的模型也已使用同样或更大的上下文。
+                  </div>
+                  {customLocalContextWarning && (
+                    <div className={s.localContextWarning} role="alert">
+                      {customLocalContextWarning.message}
+                    </div>
+                  )}
+                </>
+              )}
+              <Field label="API Key" className={s.fieldRow}>
+                <Input
+                  mono
                   type="password"
                   value={customForm.apiKey}
                   placeholder={customProviderPlaceholders.apiKey}
                   onChange={(e) => setCustomForm((p) => ({ ...p, apiKey: e.target.value }))}
                 />
-              </label>
+              </Field>
             </div>
             <div className={s.customProviderActions}>
-              <button type="button" className={s.btn} onClick={closeCustomForm}>取消</button>
-              <button
+              <Button type="button" variant="outline" onClick={closeCustomForm}>取消</Button>
+              <Button
                 type="button"
-                className={s.btnPrimary}
+                variant="solid"
+                tone="accent"
                 disabled={
                   saveConfig.isPending ||
                   !customForm.name.trim() ||
@@ -1956,7 +2031,7 @@ export function ModelsSection() {
                 onClick={handleAddCustom}
               >
                 {saveConfig.isPending ? "保存中…" : "添加并选中"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>,
@@ -2110,10 +2185,8 @@ function AuxiliaryModelsPanel({
           )}
         </div>
         <div className={s.auxImageModeBox}>
-          <label className={s.fieldRow}>
-            <div className={s.fieldLabel}>图片输入模式</div>
-            <select
-              className={s.select}
+          <Field label="图片输入模式" className={s.fieldRow}>
+            <Select
               value={imageInputMode}
               disabled={savingTask === "image_mode"}
               onChange={(event) =>
@@ -2122,8 +2195,8 @@ function AuxiliaryModelsPanel({
               <option value="auto">自动 · 主模型支持图片时原生，否则走 vision</option>
               <option value="text">文本 · 始终先用 vision 分析成文字</option>
               <option value="native">原生 · 始终尝试原生传图</option>
-            </select>
-          </label>
+            </Select>
+          </Field>
           {savedTask === "image_mode" && <div className={s.auxSavedHint}>✓ 图片输入模式已保存</div>}
         </div>
       </div>
@@ -2132,14 +2205,14 @@ function AuxiliaryModelsPanel({
         <div className={s.desc}>
           常用任务默认展示，高级任务用于 Kanban、档案和 Skill 审查。session_search 已不再使用辅助 LLM，所以这里不展示。
         </div>
-        <button
+        <Button
           type="button"
-          className={s.btn}
+          variant="outline"
           disabled={savingTask === "__all__"}
           onClick={onResetAll}
         >
           {savingTask === "__all__" ? "恢复中…" : "全部恢复为自动"}
-        </button>
+        </Button>
       </div>
 
       <div className={s.auxLayout}>
@@ -2172,10 +2245,8 @@ function AuxiliaryModelsPanel({
           </div>
 
           <div className={s.providerFormGrid}>
-            <label className={s.fieldRow}>
-              <div className={s.fieldLabel}>服务商</div>
-              <select
-                className={s.select}
+            <Field label="服务商" className={s.fieldRow}>
+              <Select
                 value={form.provider}
                 onChange={(event) => updateForm({
                   provider: event.target.value,
@@ -2187,12 +2258,12 @@ function AuxiliaryModelsPanel({
                     {provider.name} · {provider.id}
                   </option>
                 ))}
-              </select>
+              </Select>
               <div className={s.modelPickerHint}>
                 {providerOptions.find((provider) => provider.id === form.provider)?.hint ||
                   "可以直接使用当前配置里的 provider。"}
               </div>
-            </label>
+            </Field>
 
             <label className={s.fieldRow}>
               <div className={s.fieldLabel}>模型</div>
@@ -2205,27 +2276,25 @@ function AuxiliaryModelsPanel({
               />
             </label>
 
-            <label className={s.fieldRow}>
-              <div className={s.fieldLabel}>调用超时（秒）</div>
-              <input
-                className={s.fieldInput}
-                data-mono="true"
+            <Field label="调用超时（秒）" className={s.fieldRow}>
+              <Input
+                mono
                 value={form.timeout}
                 inputMode="numeric"
                 onChange={(event) => updateForm({ timeout: event.target.value })}
               />
-            </label>
+            </Field>
           </div>
 
           {showVisionAutoHint && (
-            <div className={s.auxNotice}>
+            <Alert className={s.auxNotice} tone="neutral" size="sm">
               「自动」会尝试寻找可用视觉后端；如果没有 Anthropic、OpenRouter、Nous 或自定义视觉 endpoint 的可用凭据，主模型是 MiniMax/DeepSeek 这类文本模型时仍然无法真正读图。
-            </div>
+            </Alert>
           )}
           {showVisionWarning && (
-            <div className={s.auxWarning}>
+            <Alert className={s.auxWarning} tone="warning" size="sm">
               当前 provider/model 看起来不像视觉模型。`auxiliary.vision` 必须指向真实支持图片输入的后端，否则附件图片仍会读取失败。
-            </div>
+            </Alert>
           )}
 
           <button
@@ -2238,45 +2307,40 @@ function AuxiliaryModelsPanel({
           </button>
           {advancedOpen && (
             <div className={s.auxAdvancedGrid}>
-              <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>Base URL</div>
-                <input
-                  className={s.fieldInput}
-                  data-mono="true"
+              <Field label="Base URL" className={s.fieldRow}>
+                <Input
+                  mono
                   value={form.baseUrl}
                   placeholder="可选，自定义 OpenAI-compatible endpoint"
                   disabled={isAutoProvider}
                   onChange={(event) => updateForm({ baseUrl: event.target.value })}
                 />
-              </label>
-              <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>内联 API Key</div>
-                <input
-                  className={s.fieldInput}
-                  data-mono="true"
+              </Field>
+              <Field label="内联 API Key" className={s.fieldRow}>
+                <Input
+                  mono
                   type="password"
                   value={form.apiKey}
                   placeholder={hasInlineApiKey ? "已保存，留空则保留" : "可选，优先建议使用全局环境变量"}
                   disabled={isAutoProvider}
                   onChange={(event) => updateForm({ apiKey: event.target.value })}
                 />
-              </label>
+              </Field>
               {selectedTask === "vision" && (
-                <label className={s.fieldRow}>
-                  <div className={s.fieldLabel}>图片下载超时（秒）</div>
-                  <input
-                    className={s.fieldInput}
-                    data-mono="true"
+                <Field label="图片下载超时（秒）" className={s.fieldRow}>
+                  <Input
+                    mono
                     value={form.downloadTimeout}
                     inputMode="numeric"
                     onChange={(event) => updateForm({ downloadTimeout: event.target.value })}
                   />
-                </label>
+                </Field>
               )}
               <label className={`${s.fieldRow} ${s.auxExtraBodyField}`}>
                 <div className={s.fieldLabel}>extra_body JSON</div>
-                <textarea
+                <Textarea
                   className={s.auxJsonArea}
+                  mono
                   value={form.extraBody}
                   placeholder={'例如：{\\n  "provider": { "sort": "throughput" }\\n}'}
                   onChange={(event) => updateForm({ extraBody: event.target.value })}
@@ -2290,30 +2354,31 @@ function AuxiliaryModelsPanel({
           {savedTask === "__all__" && <div className={s.auxSavedHint}>✓ 所有辅助任务已恢复为自动</div>}
 
           <div className={s.providerActions}>
-            <button
+            <Button
               type="button"
-              className={s.btnPrimary}
+              variant="solid"
+              tone="accent"
               disabled={isSavingCurrent}
               onClick={onSaveTask}
             >
               {isSavingCurrent ? "保存中…" : "保存此辅助任务"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={s.btn}
+              variant="outline"
               disabled={savingTask === selectedTask}
               onClick={() => onResetTask(selectedTask)}
             >
               恢复为自动
-            </button>
+            </Button>
             {selectedTask === "approval" && (
-              <button
+              <Button
                 type="button"
-                className={s.btn}
+                variant="outline"
                 onClick={onConfigureApprovalMode}
               >
                 选择审批模式
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -2385,20 +2450,20 @@ function EnvRow({ envKey, info, revealedValue, isEditing, editVal, onEdit, onEdi
       <div className={s.rowRight} style={{ gap: 6, flexWrap: "wrap", minWidth: 200 }}>
         {isEditing ? (
           <>
-            <input className={s.input} data-mono type={info.is_password ? "password" : "text"} value={editVal} onChange={(e) => onEditChange(e.target.value)} placeholder="输入值…" style={{ width: 180 }} autoFocus />
-            <button className={s.btnPrimary} onClick={onSave}>保存</button>
-            <button className={s.btn} onClick={onCancel}>取消</button>
+            <Input mono type={info.is_password ? "password" : "text"} value={editVal} onChange={(e) => onEditChange(e.target.value)} placeholder="输入值…" style={{ width: 180 }} fullWidth={false} autoFocus />
+            <Button variant="solid" tone="accent" onClick={onSave}>保存</Button>
+            <Button variant="outline" onClick={onCancel}>取消</Button>
           </>
         ) : (
           <>
             <span className={`${s.statusBadge} ${s.envStatusBadge}`} data-on={info.is_set}>
               {info.is_set ? (revealedValue ?? info.redacted_value ?? "已设置") : "未设置"}
             </span>
-            <button className={s.btn} onClick={onEdit}>{info.is_set ? "替换" : "设置"}</button>
+            <Button variant="outline" onClick={onEdit}>{info.is_set ? "替换" : "设置"}</Button>
             {info.is_set && info.is_password && (
-              <button className={s.btn} onClick={onReveal}>{revealedValue ? "隐藏" : "查看"}</button>
+              <Button variant="outline" onClick={onReveal}>{revealedValue ? "隐藏" : "查看"}</Button>
             )}
-            {info.is_set && <button className={s.btnDanger} onClick={onDelete}>删除</button>}
+            {info.is_set && <Button variant="outline" tone="danger" onClick={onDelete}>删除</Button>}
           </>
         )}
       </div>

@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 export type TopTab =
   | "workbench"
   | "skills"
+  | "gateway"
   | "advanced";
 
 export interface TopTabDef {
@@ -51,16 +52,23 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/mcp") ||
       path.startsWith("/profiles") ||
       path.startsWith("/models") ||
+      path.startsWith("/voice") ||
       path.startsWith("/config-migration") ||
       path.startsWith("/soul") ||
       path.startsWith("/memory") ||
       path.startsWith("/cron") ||
-      path.startsWith("/im") ||
       path.startsWith("/console"),
   },
   {
-    id: "advanced",
+    id: "gateway",
     num: "03",
+    label: "消息网关",
+    href: "/im/feishu",
+    matches: (path) => path.startsWith("/im"),
+  },
+  {
+    id: "advanced",
+    num: "04",
     label: "高级",
     href: "/health",
     matches: (path) =>

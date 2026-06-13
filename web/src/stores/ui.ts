@@ -4,6 +4,7 @@ import { readUiValue, writeUiValue } from "@/lib/ui-store";
 
 export const activeSessionIdAtom = atom<string | null>(null);
 export const sidebarSearchAtom = atom("");
+export const commandPaletteOpenAtom = atom(false);
 
 export const CONVERSATION_WIDTH_OPTIONS = [
   { value: "small", label: "小", title: "小宽度", maxWidth: "640px" },
@@ -100,6 +101,19 @@ export const showReasoningAtom = atom(
   (_get, set, next: boolean) => {
     set(showReasoningBaseAtom, next);
     writeUiValue("hermes.show-reasoning", next);
+  },
+);
+
+// Task-detail right rail (issue #233): rich preview panel visibility. Persisted
+// so the user's last choice survives reload; ⌘B toggles it. The active tab
+// lives in the `?panel=` query, not here (see lib/preview-rail.ts).
+const RIGHT_RAIL_VISIBLE_KEY = "hermes.right-rail-visible";
+const rightRailVisibleBaseAtom = atom<boolean>(readUiValue<unknown>(RIGHT_RAIL_VISIBLE_KEY, false) === true);
+export const rightRailVisibleAtom = atom(
+  (get) => get(rightRailVisibleBaseAtom),
+  (_get, set, next: boolean) => {
+    set(rightRailVisibleBaseAtom, next === true);
+    writeUiValue(RIGHT_RAIL_VISIBLE_KEY, next === true);
   },
 );
 
