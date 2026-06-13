@@ -56,6 +56,79 @@
   color: var(--h-err);
 }
 
+.sessionRefTray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.sessionRefChip {
+  display: inline-grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  max-width: min(360px, 100%);
+  min-height: 34px;
+  border: 1px solid color-mix(in srgb, var(--h-accent) 32%, var(--h-line));
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--h-accent-soft) 70%, var(--h-bg-input)),
+      color-mix(in srgb, var(--h-bg-chip) 84%, var(--h-accent-soft)));
+  color: var(--h-text);
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 5px 5px 9px;
+}
+
+.sessionRefChip[data-status="processing"] {
+  opacity: 0.7;
+}
+
+.sessionRefChip[data-status="error"] {
+  border-color: var(--h-err);
+  color: var(--h-err);
+}
+
+.sessionRefChip svg {
+  width: 13px;
+  height: 13px;
+  color: var(--h-accent);
+  stroke-width: 2.2;
+}
+
+.sessionRefKicker {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--h-accent) 14%, transparent);
+  color: var(--h-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  text-transform: uppercase;
+}
+
+.sessionRefName,
+.sessionRefDetail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionRefName {
+  color: var(--h-text);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.sessionRefDetail {
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+}
+
 .attachmentIcon,
 .attachmentPreview {
   width: 30px;
@@ -136,6 +209,7 @@
 }
 
 .attachmentChip button,
+.sessionRefChip button,
 .modelClose,
 .modelModalClose {
   display: inline-flex;
@@ -156,7 +230,26 @@
   line-height: 1;
 }
 
-.attachmentChip button:disabled {
+.sessionRefChip button {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  padding: 0;
+}
+
+.sessionRefChip button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--h-accent) 13%, transparent);
+  color: var(--h-text);
+}
+
+.sessionRefChip button svg {
+  width: 13px;
+  height: 13px;
+  color: currentColor;
+}
+
+.attachmentChip button:disabled,
+.sessionRefChip button:disabled {
   cursor: default;
   opacity: 0.45;
 }
@@ -626,6 +719,11 @@
 }
 
 .box[data-variant="big"] .attachmentTray {
+  padding: 12px 18px 0;
+  margin-bottom: 0;
+}
+
+.box[data-variant="big"] .sessionRefTray {
   padding: 12px 18px 0;
   margin-bottom: 0;
 }

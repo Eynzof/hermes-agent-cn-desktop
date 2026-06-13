@@ -27,6 +27,7 @@ import {
   unpinSessions,
 } from "@/lib/session-ui-state";
 import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
+import { writeSessionDrag } from "@/lib/session-inline-ref";
 import {
   SessionDeleteModal,
   SessionRenameModal,
@@ -79,6 +80,7 @@ interface SessionRowProps {
   state: "live" | "ok" | "err" | "idle";
   active: boolean;
   meta: string;
+  profile: string;
   projectName?: string;
   pinned: boolean;
   actions: UseSessionRowActions;
@@ -91,6 +93,7 @@ function SessionRow({
   state,
   active,
   meta,
+  profile,
   projectName,
   pinned,
   actions,
@@ -115,6 +118,16 @@ function SessionRow({
       }}
       onMouseEnter={onHover}
       onFocus={onHover}
+      draggable
+      onDragStart={(event) => {
+        if (!writeSessionDrag(event.dataTransfer, {
+          id: session.id,
+          profile,
+          title,
+        })) {
+          event.preventDefault();
+        }
+      }}
       title={title}
     >
       <div className={s.rowMain}>
@@ -350,6 +363,7 @@ export function WorkbenchSidebar() {
                 state="live"
                 active={sessionIdMatches(sess.id, activeSessionId)}
                 meta={`${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}`}
+                profile={profile}
                 projectName={projectNameBySessionId.get(sess.id)}
                 pinned={pinnedSessionIds.has(sess.id)}
                 actions={rowActions}
@@ -382,6 +396,7 @@ export function WorkbenchSidebar() {
                   state={state}
                   active={sessionIdMatches(sess.id, activeSessionId)}
                   meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : relTime(ts, now)}
+                  profile={profile}
                   projectName={projectNameBySessionId.get(sess.id)}
                   pinned={pinnedSessionIds.has(sess.id)}
                   actions={rowActions}
@@ -450,6 +465,7 @@ export function WorkbenchSidebar() {
                   state={state}
                   active={sessionIdMatches(sess.id, activeSessionId)}
                   meta={meta}
+                  profile={profile}
                   projectName={projectNameBySessionId.get(sess.id)}
                   pinned={pinnedSessionIds.has(sess.id)}
                   actions={rowActions}

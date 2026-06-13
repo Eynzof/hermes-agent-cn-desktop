@@ -150,7 +150,7 @@ export function PanelComposer() {
         headerLabel="新任务"
         hints={[
           { kbd: "/", label: "选择 Skill" },
-          { label: "把文件拖入此处直接附加" },
+          { label: "把文件或侧栏会话拖入此处" },
         ]}
         showMeta={false}
         loading={sending}

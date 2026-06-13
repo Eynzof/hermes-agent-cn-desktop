@@ -311,6 +311,7 @@ export function DetailRoute() {
       detectDroppedPath,
       uploadFile: uploadAttachmentFile,
       onAttachmentUpdate: controls.updateAttachment,
+      onSessionRefUpdate: controls.updateSessionRef,
     });
     await sendPrompt(gatewaySessionId, prepared.promptText, {
       displayText: prepared.displayText,

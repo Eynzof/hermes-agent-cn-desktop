@@ -44,7 +44,9 @@ export function useCreateAndSendSession() {
     const submittedAt = Date.now();
     const workspacePath = payload.workspacePath?.trim() || undefined;
     const sessionId = await (options?.createSession ?? createSession)({ cwd: workspacePath });
-    const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
+    const title = titleFromPrompt(
+      payload.text || payload.attachments[0]?.name || payload.sessionRefs?.[0]?.title || "",
+    );
     const optimisticDisplayText = buildComposerDisplayText(payload);
     const optimisticDisplayImages = payload.attachments
       .filter((attachment) => attachment.kind === "image")
@@ -104,6 +106,7 @@ export function useCreateAndSendSession() {
           detectDroppedPath,
           uploadFile: uploadAttachmentFile,
           onAttachmentUpdate: controls.updateAttachment,
+          onSessionRefUpdate: controls.updateSessionRef,
         }, { transportText });
         await sendPrompt(sessionId, prepared.promptText, {
           displayText: prepared.displayText,

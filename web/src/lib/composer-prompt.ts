@@ -1,8 +1,10 @@
 import {
   ComposerAttachmentError,
   type ComposerAttachment,
+  type ComposerSessionRef,
   type ComposerSubmitPayload,
 } from "@/components/chat/composer-types";
+import { formatSessionInlineRef, sessionRefLabel } from "@/lib/session-inline-ref";
 import type { AttachmentUploadResult, ImageAttachResult, InputDetectDropResult } from "@hermes/protocol";
 
 const WORKSPACE_BLOCK_START = "[Hermes UI Workspace]";
@@ -43,6 +45,10 @@ export function fileNameFromPath(path: string): string {
 
 function attachmentSuffix(labels: string[]): string {
   return `附件：${labels.join("、")}`;
+}
+
+function sessionRefSuffix(labels: string[]): string {
+  return `引用会话：${labels.join("、")}`;
 }
 
 function sanitizeContextValue(value: string): string {
@@ -123,8 +129,13 @@ async function imageDisplayUrl(attachment: ComposerAttachment, path: string): Pr
 export function buildComposerDisplayText(payload: ComposerSubmitPayload): string {
   const text = payload.text.trim();
   const attachments = payload.attachments.map(attachmentDisplayName);
-  if (attachments.length === 0) return text;
-  const suffix = `附件：${attachments.join("、")}`;
+  const sessionRefs = (payload.sessionRefs ?? []).map(sessionRefLabel);
+  const suffixes = [
+    sessionRefs.length ? sessionRefSuffix(sessionRefs) : "",
+    attachments.length ? attachmentSuffix(attachments) : "",
+  ].filter(Boolean);
+  if (suffixes.length === 0) return text;
+  const suffix = suffixes.join("\n");
   return text ? `${text}\n\n${suffix}` : suffix;
 }
 
@@ -140,6 +151,7 @@ export async function prepareComposerPrompt(
     attachImage(sessionId: string, path: string): Promise<ImageAttachResult>;
     detectDroppedPath(sessionId: string, path: string): Promise<InputDetectDropResult>;
     onAttachmentUpdate?(id: string, patch: Partial<ComposerAttachment>): void;
+    onSessionRefUpdate?(id: string, patch: Partial<ComposerSessionRef>): void;
   },
   options: {
     transportText?: string;
@@ -163,6 +175,15 @@ export async function prepareComposerPrompt(
     name?: string;
     mimeType?: string;
   }> = [];
+
+  const sessionRefParts: string[] = [];
+  for (const ref of payload.sessionRefs ?? []) {
+    helpers.onSessionRefUpdate?.(ref.id, { status: "processing", error: undefined });
+    const formatted = formatSessionInlineRef(ref);
+    if (formatted) sessionRefParts.push(formatted);
+    helpers.onSessionRefUpdate?.(ref.id, { status: "done" });
+  }
+  if (sessionRefParts.length) parts.push(sessionRefParts.join(" "));
 
   for (const attachment of payload.attachments) {
     try {
