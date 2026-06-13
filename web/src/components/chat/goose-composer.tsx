@@ -10,7 +10,18 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useAtomValue } from "jotai";
-import { Cpu, Folder, Plus, Sparkles, X } from "lucide-react";
+import {
+  AtSign,
+  Cpu,
+  FileText,
+  GitBranch,
+  Globe,
+  Folder,
+  MessageSquare,
+  Plus,
+  Sparkles,
+  X,
+} from "lucide-react";
 import type { ModelOptionsResult } from "@hermes/protocol";
 import { fileNameFromPath } from "@/lib/composer-prompt";
 import {
@@ -27,6 +38,13 @@ import {
   isBuiltinComposerCommandToken,
   type ComposerCommandCandidate,
 } from "@/lib/builtin-commands";
+import {
+  buildMentionReplacement,
+  getActiveMentionToken,
+  getMentionCandidates,
+  type MentionCandidate,
+  type MentionKind,
+} from "@/lib/composer-mentions";
 import { contextUsageRisk } from "@/lib/context-usage";
 import {
   composerSubmitShortcutHint,
@@ -44,6 +62,7 @@ import {
   ComposerAttachmentError,
   type ComposerAttachment,
   type ComposerContextUsage,
+  type ComposerMentionPickerProps,
   type ComposerModelPickerProps,
   type ComposerModelSelection,
   type ComposerReasoningPickerProps,
@@ -103,12 +122,30 @@ interface GooseComposerProps {
   modelPicker?: ComposerModelPickerProps;
   reasoningPicker?: ComposerReasoningPickerProps;
   skillPicker?: ComposerSkillPickerProps;
+  mentionPicker?: ComposerMentionPickerProps;
   contextUsage?: ComposerContextUsage | null;
   initialWorkspacePath?: string;
 }
 
 function messageFromError(error: unknown): string {
   return error instanceof Error ? error.message : String(error || "发送失败");
+}
+
+function MentionIcon({ kind }: { kind: MentionKind }) {
+  switch (kind) {
+    case "folder":
+      return <Folder aria-hidden="true" />;
+    case "url":
+      return <Globe aria-hidden="true" />;
+    case "git":
+      return <GitBranch aria-hidden="true" />;
+    case "session":
+      return <MessageSquare aria-hidden="true" />;
+    case "file":
+      return <FileText aria-hidden="true" />;
+    default:
+      return <AtSign aria-hidden="true" />;
+  }
 }
 
 export function GooseComposer({
@@ -130,6 +167,7 @@ export function GooseComposer({
   modelPicker,
   reasoningPicker,
   skillPicker,
+  mentionPicker,
   contextUsage,
   initialWorkspacePath = "",
 }: GooseComposerProps) {
@@ -157,7 +195,12 @@ export function GooseComposer({
   const [selectedSkill, setSelectedSkill] = useState<ComposerSkillCandidate | null>(null);
   const [skillActiveIndex, setSkillActiveIndex] = useState(0);
   const [dismissedSlashToken, setDismissedSlashToken] = useState("");
+  const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [dismissedMentionToken, setDismissedMentionToken] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const mentionReqIdRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentsRef = useRef<ComposerAttachment[]>([]);
@@ -221,6 +264,24 @@ export function GooseComposer({
     dismissedSlashToken !== activeToken.token &&
     (commandCandidates.length > 0 || (skillToken && skillsAvailable)),
   );
+
+  // `@` inline references (files / folders / url / past sessions). The token may
+  // appear mid-text, so it is tracked independently of the leading slash command
+  // and stays available even while a skill chip is selected.
+  const mentionToken = useMemo(
+    () => mentionPicker && !mentionPicker.disabled && selectionStart === selectionEnd
+      ? getActiveMentionToken(value, selectionStart)
+      : null,
+    [mentionPicker, selectionEnd, selectionStart, value],
+  );
+  const mentionTokenKey = mentionToken ? `${mentionToken.start}:${mentionToken.query}` : "";
+  const mentionPanelOpen = Boolean(
+    mentionToken &&
+    !controlsDisabled &&
+    dismissedMentionToken !== mentionTokenKey &&
+    (mentionCandidates.length > 0 || mentionLoading),
+  );
+
   const resolvedPlaceholder = selectedSkill
     ? `继续描述给 ${selectedSkill.displayName} 的任务…`
     : placeholder ?? `发送消息，${submitHint}…`;
@@ -284,6 +345,7 @@ export function GooseComposer({
     setWorkspacePickerOpen(false);
     setModelOpen(false);
     setDismissedSlashToken("");
+    setDismissedMentionToken("");
     setDragActive(false);
     dragDepthRef.current = 0;
   }, [controlsDisabled]);
@@ -291,6 +353,42 @@ export function GooseComposer({
   useEffect(() => {
     setSkillActiveIndex(0);
   }, [activeToken?.token, commandCandidates.length, skillCandidates.length]);
+
+  // Keep the latest mentionPicker in a ref so the fetch effect can depend only
+  // on the token (the parent recreates the picker object every render).
+  const mentionPickerRef = useRef(mentionPicker);
+  useEffect(() => {
+    mentionPickerRef.current = mentionPicker;
+  });
+
+  // Fetch `@` completion candidates for the active token (debounced; stale
+  // responses dropped via a monotonically increasing request id).
+  useEffect(() => {
+    setMentionActiveIndex(0);
+    const picker = mentionPickerRef.current;
+    if (!mentionTokenKey || !picker || picker.disabled) {
+      setMentionCandidates([]);
+      setMentionLoading(false);
+      return;
+    }
+    const reqId = (mentionReqIdRef.current += 1);
+    setMentionLoading(true);
+    // mentionTokenKey is `${start}:${query}`; the query may itself contain ":".
+    const query = mentionTokenKey.slice(mentionTokenKey.indexOf(":") + 1);
+    const source = {
+      completePath: picker.completePath,
+      sessions: picker.sessions,
+      profile: picker.profile,
+    };
+    const timer = setTimeout(() => {
+      void getMentionCandidates(query, source).then((candidates) => {
+        if (mentionReqIdRef.current !== reqId) return;
+        setMentionCandidates(candidates);
+        setMentionLoading(false);
+      });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [mentionTokenKey]);
 
   // Picker now groups candidates internally (recent / configured /
   // recommended / more) from the catalog + usage log. Composer just hands it
@@ -459,6 +557,23 @@ export function GooseComposer({
     });
   };
 
+  const commitMentionSelection = (candidate: MentionCandidate) => {
+    if (!mentionToken) return;
+    const next = buildMentionReplacement(value, mentionToken, candidate);
+    setValue(next.text);
+    setSelectionStart(next.cursor);
+    setSelectionEnd(next.cursor);
+    setDismissedMentionToken("");
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(next.cursor, next.cursor);
+      setSelectionStart(next.cursor);
+      setSelectionEnd(next.cursor);
+    });
+  };
+
   const commitCommandSelection = (candidate: ComposerCommandCandidate) => {
     if (!slashToken) return;
     // Fill "/skill " (then the skill sub-picker opens) or "/compress " (then the
@@ -529,6 +644,35 @@ export function GooseComposer({
       event.preventDefault();
       clearSelectedSkill();
       return;
+    }
+
+    if (mentionPanelOpen && !event.nativeEvent.isComposing) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDismissedMentionToken(mentionTokenKey);
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setMentionActiveIndex((current) =>
+          mentionCandidates.length ? (current + 1) % mentionCandidates.length : 0);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setMentionActiveIndex((current) =>
+          mentionCandidates.length
+            ? (current - 1 + mentionCandidates.length) % mentionCandidates.length
+            : 0);
+        return;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && mentionCandidates.length > 0) {
+        event.preventDefault();
+        commitMentionSelection(
+          mentionCandidates[Math.min(mentionActiveIndex, mentionCandidates.length - 1)]!,
+        );
+        return;
+      }
     }
 
     if (skillPanelOpen && !event.nativeEvent.isComposing) {
@@ -795,6 +939,7 @@ export function GooseComposer({
             setSelectionStart(event.target.selectionStart);
             setSelectionEnd(event.target.selectionEnd);
             setDismissedSlashToken("");
+            setDismissedMentionToken("");
           }}
           onKeyDown={handleKeyDown}
           onKeyUp={syncTextareaSelection}
@@ -881,6 +1026,50 @@ export function GooseComposer({
                 })}
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {mentionPanelOpen ? (
+          <div className={s.skillPanel} role="listbox" aria-label="插入引用">
+            <div className={s.skillPanelHead}>
+              <span>
+                <AtSign aria-hidden="true" />
+                插入引用
+              </span>
+              <small>Enter / Tab 选择，Esc 关闭</small>
+            </div>
+            {mentionLoading && mentionCandidates.length === 0 ? (
+              <div className={s.skillPanelState}>正在检索…</div>
+            ) : mentionCandidates.length === 0 ? (
+              <div className={s.skillPanelState}>没有匹配的引用</div>
+            ) : (
+              <div className={s.skillList}>
+                {mentionCandidates.map((candidate, index) => (
+                  <button
+                    key={`${candidate.kind}-${candidate.insertText}-${index}`}
+                    type="button"
+                    className={s.skillOption}
+                    data-active={index === mentionActiveIndex}
+                    data-kind="mention"
+                    role="option"
+                    aria-selected={index === mentionActiveIndex}
+                    onMouseEnter={() => setMentionActiveIndex(index)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => commitMentionSelection(candidate)}
+                  >
+                    <span className={s.skillCommand}>
+                      <MentionIcon kind={candidate.kind} />
+                    </span>
+                    <span className={s.skillMain}>
+                      <span className={s.skillName}>{candidate.display}</span>
+                      {candidate.meta ? (
+                        <span className={s.skillDesc}>{candidate.meta}</span>
+                      ) : null}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
 

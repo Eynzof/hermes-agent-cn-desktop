@@ -16,6 +16,7 @@ import {
 } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
 import { useSkills } from "@/hooks/use-skills";
+import { useActiveProfileName } from "@/hooks/use-profiles";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
@@ -93,6 +94,7 @@ export function DetailRoute() {
     setSessionModel,
     setSessionReasoningEffort,
     dispatchCommand,
+    completePath,
     attachImage,
     detectDroppedPath,
   } = useGateway();
@@ -100,6 +102,7 @@ export function DetailRoute() {
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
   const skillsQuery = useSkills();
+  const activeProfile = useActiveProfileName();
   const enabledSkills = useMemo(
     () => (skillsQuery.data ?? []).filter((skill) => skill.enabled),
     [skillsQuery.data],
@@ -558,6 +561,16 @@ export function DetailRoute() {
                 error: skillsQuery.isError
                   ? (skillsQuery.error instanceof Error ? skillsQuery.error.message : "Skill 加载失败")
                   : undefined,
+                disabled: runtimeIsBusy,
+              }}
+              mentionPicker={{
+                completePath: (word) =>
+                  completePath(word, {
+                    sessionId: runtimeSessionId ?? undefined,
+                    cwd: sessionWorkspace || undefined,
+                  }),
+                sessions: sessionsData?.sessions,
+                profile: activeProfile,
                 disabled: runtimeIsBusy,
               }}
               contextUsage={contextUsage}
