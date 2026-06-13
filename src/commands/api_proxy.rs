@@ -458,7 +458,8 @@ pub async fn api_request_impl_with_home_base(
     } else {
         &*DASHBOARD_PROXY_HTTP_CLIENT
     };
-    let mut req = dashboard_client.request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
+    let mut req =
+        dashboard_client.request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
 
     // Inject auth headers
     if let Some(token) = session_token {
