@@ -52,6 +52,14 @@ import {
 } from "@/lib/workspaces";
 import { TopBar, TopBarActionButton, TopBarActions } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
+import { QueuePanel } from "@/components/composer/queue-panel";
+import {
+  enqueueQueuedPrompt,
+  removeQueuedPrompt,
+  shouldAutoDrainOnSettle,
+  useQueuedPrompts,
+  type QueuedPromptEntry,
+} from "@/stores/composer-queue";
 import type {
   ComposerModelSelection,
   ComposerSubmitControls,
@@ -298,17 +306,12 @@ export function DetailRoute() {
     }
   }, [appendNotice, compressSession, getSessionUsage, setSessionUsage]);
 
-  const onSend = useCallback(async (
+  // The actual send. Shared by direct submits and by draining the queue.
+  const submitPayload = useCallback(async (
     payload: ComposerSubmitPayload,
-    controls: ComposerSubmitControls,
+    updateAttachment: ComposerSubmitControls["updateAttachment"] = () => {},
   ) => {
     if (!taskId) return;
-    const builtin = parseBuiltinComposerCommand(payload.text);
-    if (builtin?.name === "compress") {
-      const sessionId = await ensureGatewaySession();
-      void runManualCompress(sessionId, builtin.arg);
-      return;
-    }
     const gatewaySessionId = await ensureGatewaySession();
     if (payload.workspacePath) {
       rememberWorkspaceProject(payload.workspacePath);
@@ -335,13 +338,102 @@ export function DetailRoute() {
       attachImage,
       detectDroppedPath,
       uploadFile: uploadAttachmentFile,
-      onAttachmentUpdate: controls.updateAttachment,
+      onAttachmentUpdate: updateAttachment,
     }, { transportText });
     await sendPrompt(gatewaySessionId, prepared.promptText, {
       displayText: prepared.displayText,
       displayImages: prepared.displayImages,
     });
-  }, [attachImage, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, runManualCompress, sendPrompt, taskId]);
+  }, [attachImage, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+
+  const onSend = useCallback(async (
+    payload: ComposerSubmitPayload,
+    controls: ComposerSubmitControls,
+  ) => {
+    if (!taskId) return;
+    const builtin = parseBuiltinComposerCommand(payload.text);
+    if (builtin?.name === "compress") {
+      const sessionId = await ensureGatewaySession();
+      void runManualCompress(sessionId, builtin.arg);
+      return;
+    }
+    // Park the submission while the agent is busy; the composer clears on resolve
+    // and the queue drains (auto on settle, or manually) when it frees up.
+    if (runtimeIsBusy) {
+      enqueueQueuedPrompt(taskId, { text: payload.text, attachments: payload.attachments }, Date.now());
+      return;
+    }
+    await submitPayload(payload, controls.updateAttachment);
+  }, [ensureGatewaySession, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
+
+  // ---- Send queue (drain on settle, send-now / edit / delete) --------------
+  const queuedPrompts = useQueuedPrompts(taskId);
+  const [composerPrefill, setComposerPrefill] = useState({ text: "", nonce: 0 });
+  const drainingRef = useRef(false);
+  const previousBusyRef = useRef(runtimeIsBusy);
+  const userInterruptedRef = useRef(false);
+
+  const drainEntry = useCallback(async (entry: QueuedPromptEntry) => {
+    if (!taskId || drainingRef.current) return;
+    drainingRef.current = true;
+    try {
+      await submitPayload({
+        text: entry.text,
+        attachments: entry.attachments,
+        skillCommandNames: enabledSkills.map((skill) => skill.name),
+      });
+      removeQueuedPrompt(taskId, entry.id);
+    } catch (error) {
+      console.error("Failed to drain queued prompt:", error);
+    } finally {
+      drainingRef.current = false;
+    }
+  }, [enabledSkills, submitPayload, taskId]);
+
+  // Auto-drain the next queued prompt when the agent settles (busy → idle),
+  // unless an explicit Stop just interrupted the turn.
+  useEffect(() => {
+    const wasBusy = previousBusyRef.current;
+    previousBusyRef.current = runtimeIsBusy;
+    if (runtimeIsBusy && !wasBusy) {
+      userInterruptedRef.current = false;
+      return;
+    }
+    const interrupted = userInterruptedRef.current;
+    if (!runtimeIsBusy && wasBusy && interrupted) {
+      userInterruptedRef.current = false;
+    }
+    if (shouldAutoDrainOnSettle({
+      isBusy: runtimeIsBusy,
+      wasBusy,
+      queueLength: queuedPrompts.length,
+      userInterrupted: interrupted,
+    })) {
+      void drainEntry(queuedPrompts[0]!);
+    }
+  }, [drainEntry, queuedPrompts, runtimeIsBusy]);
+
+  const onQueueSendNow = useCallback((id: string) => {
+    const entry = queuedPrompts.find((item) => item.id === id);
+    if (entry) void drainEntry(entry);
+  }, [drainEntry, queuedPrompts]);
+
+  const onQueueEdit = useCallback((entry: QueuedPromptEntry) => {
+    setComposerPrefill((prefill) => ({ text: entry.text, nonce: prefill.nonce + 1 }));
+    removeQueuedPrompt(taskId, entry.id);
+  }, [taskId]);
+
+  const onQueueDelete = useCallback((id: string) => {
+    removeQueuedPrompt(taskId, id);
+  }, [taskId]);
+
+  // Switching sessions must not leak one task's edit draft / busy-transition
+  // bookkeeping into another.
+  useEffect(() => {
+    setComposerPrefill({ text: "", nonce: 0 });
+    previousBusyRef.current = false;
+    userInterruptedRef.current = false;
+  }, [taskId]);
 
   // Capability discovery is server-global — don't piggy-back on
   // ensureGatewaySession here. That helper can trigger session.resume, which
@@ -390,6 +482,9 @@ export function DetailRoute() {
   const onStop = useCallback(async () => {
     const sessionId = runtimeSessionId ?? taskId;
     if (!sessionId || !runtimeIsBusy) return;
+    // A deliberate Stop suppresses exactly one auto-drain so the queue doesn't
+    // immediately re-fire the turn the user just halted.
+    userInterruptedRef.current = true;
     await interruptSession(sessionId);
   }, [interruptSession, runtimeIsBusy, runtimeSessionId, taskId]);
 
@@ -533,9 +628,19 @@ export function DetailRoute() {
             {runtimeIsBusy && stall.isStalled ? (
               <StallNotice silenceMs={stall.silenceMs} onInterrupt={onStop} />
             ) : null}
+            <QueuePanel
+              entries={queuedPrompts}
+              busy={runtimeIsBusy}
+              editingId={null}
+              onSendNow={onQueueSendNow}
+              onEdit={onQueueEdit}
+              onDelete={onQueueDelete}
+            />
             <GooseComposer
               key={taskId}
               initialWorkspacePath={sessionWorkspace}
+              initial={composerPrefill.text}
+              initialNonce={composerPrefill.nonce}
               onSend={onSend}
               loadingPlaceholder={composerLoadingPlaceholder}
               showMeta={false}
