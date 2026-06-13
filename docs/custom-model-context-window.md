@@ -180,9 +180,20 @@ useModelInfo() 重新拉取 → effective_context_length 更新 → 上下文用
 | 步骤 | 文件 | 状态 |
 |--|--|--|
 | 方案文档 | `docs/custom-model-context-window.md` | ✅ 完成 |
-| `ProviderConfigInput` + `parseContextWindowInput` | `web/src/lib/provider-catalog.ts` | ⬜ 待办 |
-| `buildCurrentModelConfigUpdate` 写顶层字段 | `web/src/lib/provider-catalog.ts` | ⬜ 待办 |
-| 输入框 + 回填 + dirty 判定 | `web/src/routes/settings-models-section.tsx` | ⬜ 待办 |
-| 三值回显 | `web/src/routes/settings-models-section.tsx` | ⬜ 待办 |
-| 单元测试 | `web/src/lib/provider-catalog.test.ts` | ⬜ 待办 |
-| 冒烟 + `typecheck`/`test:unit` | — | ⬜ 待办 |
+| `ProviderConfigInput` + `parseContextWindowInput` | `web/src/lib/provider-catalog.ts` | ✅ 完成 |
+| `buildCurrentModelConfigUpdate` 写顶层字段 | `web/src/lib/provider-catalog.ts` | ✅ 完成 |
+| 输入框 + 回填 + dirty 判定 | `web/src/routes/settings-models-section.tsx` | ✅ 完成 |
+| 三值回显 | `web/src/routes/settings-models-section.tsx` | ✅ 完成 |
+| 单元测试 | `web/src/lib/provider-catalog.test.ts` | ✅ 完成（新增 9 例，`provider-catalog.test.ts` 共 35 例通过） |
+| `typecheck` / `test:unit` | — | ✅ 通过（full typecheck 绿；web 589 例全过） |
+| 打包态手动冒烟 | — | ⬜ 待办（需 `pnpm tauri:dev`，留给本地验证） |
+
+### 实现细节补记（与方案的差异）
+
+- 「保存配置」路径（`buildProviderSettingsUpdate`，只存 provider 不切模型）原计划完全不写
+  `model_context_length`。实测发现：当所选 provider 已经是当前模型时，「设为当前模型」按钮被禁用
+  （`selectedProviderIsCurrent`），用户将无从修改当前模型的上下文覆盖。故改为：在 `handleProviderSave`
+  里**仅当 `selectedProviderIsCurrent` 为真**时，于保存包里附加 `model_context_length`，避免给非当前
+  provider 写入而误伤真正当前模型的覆盖。
+- 三值回显仅在所选 provider 即当前模型时展示（`/api/model/info` 描述的是当前模型）；非当前 provider
+  下给出「该值会在『设为当前模型』时生效」提示。
