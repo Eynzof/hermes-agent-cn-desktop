@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useAtomValue } from "jotai";
 import { useNavigate } from "react-router-dom";
-import { Cpu, Folder, Loader2, Mic, Plus, Sparkles, Square, X } from "lucide-react";
+import { Cpu, Folder, Loader2, MessageSquare, Mic, Plus, Sparkles, Square, X } from "lucide-react";
 import type { ModelOptionsResult } from "@hermes/protocol";
 import { fileNameFromPath } from "@/lib/composer-prompt";
 import {
@@ -49,12 +49,21 @@ import {
   writeWorkspacePath,
 } from "@/lib/workspaces";
 import {
+  dragHasSession,
+  readSessionDrag,
+  sessionRefIdentity,
+  sessionRefLabel,
+  normalizeSessionProfile,
+  type SessionDragPayload,
+} from "@/lib/session-inline-ref";
+import {
   ComposerAttachmentError,
   type ComposerAttachment,
   type ComposerContextUsage,
   type ComposerModelPickerProps,
   type ComposerModelSelection,
   type ComposerReasoningPickerProps,
+  type ComposerSessionRef,
   type ComposerSkillPickerProps,
   type ComposerSubmitControls,
   type ComposerSubmitPayload,
@@ -147,6 +156,74 @@ export function ComposerErrorMessage({
   );
 }
 
+type ComposerDragKind = "files" | "session" | null;
+
+function createSessionRefId(index: number): string {
+  return `session-ref-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createSessionRef(payload: SessionDragPayload, index: number): ComposerSessionRef {
+  return {
+    id: createSessionRefId(index),
+    sessionId: payload.id,
+    profile: normalizeSessionProfile(payload.profile),
+    title: sessionRefLabel(payload),
+    status: "ready",
+  };
+}
+
+function isSessionRefBusy(ref: ComposerSessionRef): boolean {
+  return ref.status === "processing";
+}
+
+function shortSessionId(sessionId: string): string {
+  return sessionId.length > 10 ? `${sessionId.slice(0, 8)}…` : sessionId;
+}
+
+function sessionRefDetail(ref: ComposerSessionRef): string {
+  if (ref.error) return ref.error;
+  if (ref.status === "processing") return "处理中";
+  if (ref.status === "done") return "已引用";
+  return `@session:${ref.profile}/${shortSessionId(ref.sessionId)}`;
+}
+
+function SessionRefTray({
+  sessionRefs,
+  onRemove,
+}: {
+  sessionRefs: ComposerSessionRef[];
+  onRemove: (id: string) => void;
+}) {
+  if (!sessionRefs.length) return null;
+
+  return (
+    <div className={s.sessionRefTray}>
+      {sessionRefs.map((ref) => (
+        <span
+          key={ref.id}
+          className={s.sessionRefChip}
+          data-status={ref.status}
+          title={`@session:${ref.profile}/${ref.sessionId}`}
+        >
+          <MessageSquare aria-hidden="true" />
+          <span className={s.sessionRefKicker}>Session</span>
+          <span className={s.sessionRefName}>{ref.title}</span>
+          <span className={s.sessionRefDetail}>{sessionRefDetail(ref)}</span>
+          <button
+            type="button"
+            onClick={() => onRemove(ref.id)}
+            disabled={isSessionRefBusy(ref)}
+            aria-label={`移除会话引用 ${ref.title}`}
+            title="移除引用"
+          >
+            <X aria-hidden="true" />
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function GooseComposer({
   onSend,
   onStop,
@@ -177,6 +254,7 @@ export function GooseComposer({
   const isBig = variant === "big";
   const [value, setValue] = useState(initial);
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const [sessionRefs, setSessionRefs] = useState<ComposerSessionRef[]>([]);
   const [selectionStart, setSelectionStart] = useState(initial.length);
   const [selectionEnd, setSelectionEnd] = useState(initial.length);
   const [workspacePath, setWorkspacePath] = useState(
@@ -195,7 +273,7 @@ export function GooseComposer({
   const [selectedSkill, setSelectedSkill] = useState<ComposerSkillCandidate | null>(null);
   const [skillActiveIndex, setSkillActiveIndex] = useState(0);
   const [dismissedSlashToken, setDismissedSlashToken] = useState("");
-  const [dragActive, setDragActive] = useState(false);
+  const [dragKind, setDragKind] = useState<ComposerDragKind>(null);
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "recording" | "transcribing">("idle");
   const [voiceElapsedSeconds, setVoiceElapsedSeconds] = useState(0);
   const { handle: micRecorder, level: voiceLevel } = useMicRecorder();
@@ -211,6 +289,7 @@ export function GooseComposer({
   const voiceIntervalRef = useRef<number | null>(null);
   const voiceTimeoutRef = useRef<number | null>(null);
   const hasProcessingAttachment = attachments.some(isAttachmentBusy);
+  const hasProcessingSessionRef = sessionRefs.some(isSessionRefBusy);
   const sttEnabled = sttEnabledFromConfig(voiceConfig);
   const maxRecordingSeconds = voiceMaxRecordingSecondsFromConfig(voiceConfig);
   const contextRisk = contextUsageRisk(contextUsage);
@@ -222,9 +301,10 @@ export function GooseComposer({
     : value.trim();
   const displayedTextLength = value.length;
   const canSend =
-    (submitText.length > 0 || attachments.length > 0) &&
+    (submitText.length > 0 || attachments.length > 0 || sessionRefs.length > 0) &&
     !controlsDisabled &&
-    !hasProcessingAttachment;
+    !hasProcessingAttachment &&
+    !hasProcessingSessionRef;
   const slashToken = useMemo(
     () => selectedSkill ? null : getLeadingSlashToken(value, selectionStart, selectionEnd),
     [selectionEnd, selectionStart, selectedSkill, value],
@@ -441,7 +521,7 @@ export function GooseComposer({
     setWorkspacePickerOpen(false);
     setModelOpen(false);
     setDismissedSlashToken("");
-    setDragActive(false);
+    setDragKind(null);
     dragDepthRef.current = 0;
   }, [controlsDisabled]);
 
@@ -501,6 +581,17 @@ export function GooseComposer({
     appendAttachmentDrafts(accepted.map((file, index) => createFileAttachment(file, index)));
   };
 
+  const addSessionRef = (payload: SessionDragPayload) => {
+    const draft = createSessionRef(payload, sessionRefs.length);
+    const identity = sessionRefIdentity(draft);
+    if (!identity) return;
+    setSubmitError("");
+    setSessionRefs((current) => {
+      const existing = new Set(current.map(sessionRefIdentity));
+      return existing.has(identity) ? current : [...current, draft];
+    });
+  };
+
   const pickFiles = async () => {
     if (controlsDisabled) return;
     setSubmitError("");
@@ -554,6 +645,10 @@ export function GooseComposer({
     });
   };
 
+  const removeSessionRef = (id: string) => {
+    setSessionRefs((current) => current.filter((item) => item.id !== id));
+  };
+
   const markAttachmentsProcessing = () => {
     setAttachments((current) =>
       current.map((item) => ({
@@ -561,6 +656,26 @@ export function GooseComposer({
         status: isAttachmentBusy(item) ? item.status : "processing",
         error: undefined,
         progress: item.status === "uploading" ? item.progress : undefined,
+      })),
+    );
+  };
+
+  const markSessionRefsProcessing = () => {
+    setSessionRefs((current) =>
+      current.map((item) => ({
+        ...item,
+        status: isSessionRefBusy(item) ? item.status : "processing",
+        error: undefined,
+      })),
+    );
+  };
+
+  const restoreSessionRefState = () => {
+    setSessionRefs((current) =>
+      current.map((item) => ({
+        ...item,
+        status: "ready",
+        error: undefined,
       })),
     );
   };
@@ -587,6 +702,12 @@ export function GooseComposer({
 
   const updateAttachment: ComposerSubmitControls["updateAttachment"] = (id, patch) => {
     setAttachments((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  };
+
+  const updateSessionRef: ComposerSubmitControls["updateSessionRef"] = (id, patch) => {
+    setSessionRefs((current) =>
       current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     );
   };
@@ -651,6 +772,7 @@ export function GooseComposer({
     const payload: ComposerSubmitPayload = {
       text: submitText,
       attachments,
+      sessionRefs,
       workspacePath: workspacePath.trim() || undefined,
       modelSelection: selectedModelRef.current ?? undefined,
       skillCommandNames: skillPicker?.skills.map((skill) => skill.name),
@@ -658,18 +780,21 @@ export function GooseComposer({
 
     setSubmitError("");
     markAttachmentsProcessing();
+    markSessionRefsProcessing();
     try {
-      await onSend?.(payload, { updateAttachment });
+      await onSend?.(payload, { updateAttachment, updateSessionRef });
       setValue("");
       setSelectedSkill(null);
       setSelectionStart(0);
       setSelectionEnd(0);
       setDismissedSlashToken("");
+      setSessionRefs([]);
       setAttachments((current) => {
         current.forEach(revokeAttachmentPreview);
         return [];
       });
     } catch (error) {
+      restoreSessionRefState();
       restoreAttachmentState(error);
     }
   };
@@ -741,29 +866,34 @@ export function GooseComposer({
     addBrowserFiles(files);
   };
 
-  const hasDroppableData = (event: DragEvent<HTMLDivElement>): boolean => {
+  const dragKindOf = (event: DragEvent<HTMLDivElement>): ComposerDragKind => {
+    if (dragHasSession(event.dataTransfer)) return "session";
     const types = Array.from(event.dataTransfer.types);
-    return types.includes("Files") || types.includes("text/plain") || types.includes("text/uri-list");
+    if (types.includes("Files") || types.includes("text/plain") || types.includes("text/uri-list")) {
+      return "files";
+    }
+    return null;
   };
 
   const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
-    if (controlsDisabled || !hasDroppableData(event)) return;
+    const nextDragKind = controlsDisabled ? null : dragKindOf(event);
+    if (!nextDragKind) return;
     event.preventDefault();
     dragDepthRef.current += 1;
-    setDragActive(true);
+    setDragKind(nextDragKind);
   };
 
   const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
-    if (!dragActive) return;
+    if (!dragKind) return;
     event.preventDefault();
     dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
     if (dragDepthRef.current === 0) {
-      setDragActive(false);
+      setDragKind(null);
     }
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (controlsDisabled || !hasDroppableData(event)) return;
+    if (controlsDisabled || !dragKindOf(event)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
   };
@@ -771,8 +901,14 @@ export function GooseComposer({
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     dragDepthRef.current = 0;
-    setDragActive(false);
+    setDragKind(null);
     if (controlsDisabled) return;
+
+    const session = readSessionDrag(event.dataTransfer);
+    if (session) {
+      addSessionRef(session);
+      return;
+    }
 
     const paths: string[] = [];
     const text = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
@@ -888,7 +1024,8 @@ export function GooseComposer({
       <div
         className={s.box}
         data-disabled={disabled}
-        data-drag-active={dragActive}
+        data-drag-active={dragKind ? "true" : undefined}
+        data-drag-kind={dragKind ?? undefined}
         data-variant={variant}
         onDrop={handleDrop}
         onDragEnter={handleDragEnter}
@@ -903,7 +1040,11 @@ export function GooseComposer({
           onChange={handleFileInputChange}
           tabIndex={-1}
         />
-        {dragActive ? <div className={s.dropOverlay}>释放以添加到当前消息</div> : null}
+        {dragKind ? (
+          <div className={s.dropOverlay}>
+            {dragKind === "session" ? "释放以引用该会话" : "释放以添加到当前消息"}
+          </div>
+        ) : null}
 
         {isBig ? (
           <div className={s.bigHeader}>
@@ -924,6 +1065,7 @@ export function GooseComposer({
         ) : null}
 
         <AttachmentTray attachments={attachments} onRemove={removeAttachment} />
+        <SessionRefTray sessionRefs={sessionRefs} onRemove={removeSessionRef} />
 
         {selectedSkill ? (
           <div className={s.selectedSkillRow}>

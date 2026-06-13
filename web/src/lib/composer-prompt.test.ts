@@ -65,6 +65,32 @@ describe("composer prompt preparation", () => {
     expect(stripHermesUiWorkspaceContext(storedPrompt)).toBe("看一下这张图里面是什么内容\n\n附件：ga.png");
   });
 
+
+  it("includes session refs in the transport prompt while keeping display text friendly", async () => {
+    const result = await prepareComposerPrompt(
+      "s1",
+      {
+        text: "继续总结这段上下文",
+        attachments: [],
+        sessionRefs: [{
+          id: "ref-1",
+          sessionId: "session-id",
+          profile: "default",
+          title: "架构讨论",
+          status: "ready",
+        }],
+      },
+      {
+        attachImage: vi.fn(),
+        detectDroppedPath: vi.fn(),
+      },
+    );
+
+    expect(result.promptText).toContain("@session:`default/session-id`");
+    expect(result.promptText.endsWith("继续总结这段上下文")).toBe(true);
+    expect(result.displayText).toBe("继续总结这段上下文\n\n引用会话：架构讨论");
+  });
+
   it("uses a dispatched skill invocation as transport text without changing display text", async () => {
     const result = await prepareComposerPrompt(
       "s1",

@@ -4,6 +4,7 @@ import type { ReasoningEffort } from "@/lib/reasoning-effort";
 export type ComposerAttachmentKind = "image" | "file" | "directory";
 export type ComposerAttachmentSource = "browser" | "path" | "uploaded";
 export type ComposerAttachmentStatus = "ready" | "uploading" | "processing" | "done" | "error";
+export type ComposerSessionRefStatus = "ready" | "processing" | "done" | "error";
 
 export interface ComposerAttachment {
   id: string;
@@ -19,6 +20,15 @@ export interface ComposerAttachment {
   uploadedPath?: string;
   uploadedName?: string;
   progress?: number;
+  error?: string;
+}
+
+export interface ComposerSessionRef {
+  id: string;
+  sessionId: string;
+  profile: string;
+  title: string;
+  status: ComposerSessionRefStatus;
   error?: string;
 }
 
@@ -41,6 +51,7 @@ export interface ComposerContextUsage {
 export interface ComposerSubmitPayload {
   text: string;
   attachments: ComposerAttachment[];
+  sessionRefs?: ComposerSessionRef[];
   workspacePath?: string;
   modelSelection?: ComposerModelSelection;
   skillCommandNames?: string[];
@@ -48,6 +59,7 @@ export interface ComposerSubmitPayload {
 
 export interface ComposerSubmitControls {
   updateAttachment(id: string, patch: Partial<ComposerAttachment>): void;
+  updateSessionRef?(id: string, patch: Partial<ComposerSessionRef>): void;
 }
 
 export interface ComposerModelPickerProps {
