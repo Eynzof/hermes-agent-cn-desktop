@@ -559,6 +559,8 @@ semver 规则（3.4）须正确处理 pre-release 与跨档：
 ## 12. 覆盖安装 / 原地升级安全性（v0.3.2 → 新版，发版前必读）
 
 > 背景：当前线上用户主力是 **v0.3.2**，外壳尚无自更新（轨道 C 未建），用户升级 = **下载新安装包直接覆盖装**。本节给出"会不会出问题"的代码级结论 + 发版 checklist。
+>
+> 📌 本节的发版 checklist 已固化为项目技能 **`.codex/skills/desktop-release-preflight/SKILL.md`**（每次发版前先过），与 `desktop-release-sync-landing`（版本同步 + 官网 `latest.json`）配套使用。
 
 ### 12.1 结论：设计上安全，因为状态与二进制分离
 
