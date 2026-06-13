@@ -1,6 +1,11 @@
 export const MINIMUM_LOCAL_CONTEXT_LENGTH = 64_000;
 export const RECOMMENDED_LOCAL_CONTEXT_LENGTH = 65_536;
 
+export const HERMES_CONTEXT_REQUIREMENTS_URL =
+  "https://hermesagent.org.cn/en/docs/getting-started/quickstart";
+export const HERMES_PROVIDER_CONTEXT_URL =
+  "https://hermes-agent.nousresearch.com/docs/integrations/providers";
+
 export type LocalContextWarningSource = "configured" | "detected";
 
 export interface LocalContextWarning {

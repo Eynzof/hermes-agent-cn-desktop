@@ -1,12 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
   getLocalContextWarning,
+  HERMES_CONTEXT_REQUIREMENTS_URL,
+  HERMES_PROVIDER_CONTEXT_URL,
   MINIMUM_LOCAL_CONTEXT_LENGTH,
   parseLocalContextWindow,
   RECOMMENDED_LOCAL_CONTEXT_LENGTH,
 } from "./local-provider-context";
 
 describe("local provider context helpers", () => {
+  it("exports stable documentation URLs for local provider onboarding", () => {
+    expect(HERMES_CONTEXT_REQUIREMENTS_URL).toBe(
+      "https://hermesagent.org.cn/en/docs/getting-started/quickstart",
+    );
+    expect(HERMES_PROVIDER_CONTEXT_URL).toBe(
+      "https://hermes-agent.nousresearch.com/docs/integrations/providers",
+    );
+  });
+
   it("parses empty and invalid context windows as unset", () => {
     expect(parseLocalContextWindow("")).toBeUndefined();
     expect(parseLocalContextWindow("   ")).toBeUndefined();

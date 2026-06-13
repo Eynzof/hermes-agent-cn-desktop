@@ -44,11 +44,15 @@ import { ModelCombobox } from "@/components/settings/model-combobox";
 import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
 import { fetchExternalJSON } from "@/lib/transport";
+import { openExternalUrl } from "@/lib/external-links";
 import {
   getLocalContextWarning,
+  HERMES_CONTEXT_REQUIREMENTS_URL,
+  HERMES_PROVIDER_CONTEXT_URL,
   RECOMMENDED_LOCAL_CONTEXT_LENGTH,
 } from "@/lib/local-provider-context";
 import type { EnvVarInfo } from "@hermes/protocol";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Alert, Button, Field, Input, Select, Textarea } from "@hermes/shared-ui";
 import { OAuthProvidersSection } from "./settings-oauth-section";
 import s from "./settings.module.css";
@@ -333,6 +337,38 @@ const LOCAL_PROVIDER_PRESETS: LocalProviderPreset[] = [
     tutorial: "启动 llama-server 的 OpenAI 兼容接口时使用 --ctx-size 65536；未启用鉴权时 API Key 留空即可。",
   },
 ];
+
+const LOCAL_PROVIDER_DOC_LINKS = [
+  { label: "Quickstart 说明", url: HERMES_CONTEXT_REQUIREMENTS_URL },
+  { label: "Providers 指引", url: HERMES_PROVIDER_CONTEXT_URL },
+] as const;
+
+function LocalProviderDocLinks() {
+  return (
+    <div className={s.localProviderDocLinks}>
+      {LOCAL_PROVIDER_DOC_LINKS.map((item) => (
+        <div key={item.url} className={s.localProviderDocLinkRow}>
+          <a
+            className={s.link}
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => {
+              event.preventDefault();
+              void openExternalUrl(item.url);
+            }}
+          >
+            {item.label} ↗
+          </a>
+          <code className={s.localProviderDocUrl}>{item.url}</code>
+          <CopyButton className={s.localProviderDocCopy} text={item.url} showStatusIcon={false}>
+            复制
+          </CopyButton>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const AUXILIARY_TASK_BY_ID = Object.fromEntries(
   AUXILIARY_TASKS.map((task) => [task.id, task]),
@@ -1898,6 +1934,7 @@ export function ModelsSection() {
                       Hermes Agent 会拒绝低于 64,000 tokens 的模型上下文。建议在本地运行时和下方「上下文窗口」中都设为{" "}
                       {RECOMMENDED_LOCAL_CONTEXT_LENGTH.toLocaleString()}，并在 LM Studio / Ollama / vLLM / llama.cpp 中重新加载模型。
                     </p>
+                    <LocalProviderDocLinks />
                   </div>
                   <div className={s.localProviderGuide} aria-label="常用本地部署端点">
                     {LOCAL_PROVIDER_PRESETS.map((preset) => (
