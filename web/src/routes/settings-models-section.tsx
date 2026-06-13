@@ -46,8 +46,6 @@ import { rememberLastUsedModel } from "@/lib/last-used-model";
 import { fetchExternalJSON } from "@/lib/transport";
 import {
   getLocalContextWarning,
-  HERMES_CONTEXT_REQUIREMENTS_URL,
-  HERMES_PROVIDER_CONTEXT_URL,
   RECOMMENDED_LOCAL_CONTEXT_LENGTH,
 } from "@/lib/local-provider-context";
 import type { EnvVarInfo } from "@hermes/protocol";
@@ -1717,10 +1715,7 @@ export function ModelsSection() {
                       </div>
                       {selectedLocalContextWarning && (
                         <div className={s.localContextWarning} role="alert">
-                          {selectedLocalContextWarning.message}{" "}
-                          <a href={HERMES_CONTEXT_REQUIREMENTS_URL} target="_blank" rel="noreferrer" className={s.link}>
-                            64K 要求说明 ↗
-                          </a>
+                          {selectedLocalContextWarning.message}
                         </div>
                       )}
                       {selectedProviderIsCurrent && modelInfo && (
@@ -1903,15 +1898,6 @@ export function ModelsSection() {
                       Hermes Agent 会拒绝低于 64,000 tokens 的模型上下文。建议在本地运行时和下方「上下文窗口」中都设为{" "}
                       {RECOMMENDED_LOCAL_CONTEXT_LENGTH.toLocaleString()}，并在 LM Studio / Ollama / vLLM / llama.cpp 中重新加载模型。
                     </p>
-                    <div>
-                      <a href={HERMES_CONTEXT_REQUIREMENTS_URL} target="_blank" rel="noreferrer" className={s.link}>
-                        Quickstart 说明 ↗
-                      </a>
-                      {" · "}
-                      <a href={HERMES_PROVIDER_CONTEXT_URL} target="_blank" rel="noreferrer" className={s.link}>
-                        Providers 指引 ↗
-                      </a>
-                    </div>
                   </div>
                   <div className={s.localProviderGuide} aria-label="常用本地部署端点">
                     {LOCAL_PROVIDER_PRESETS.map((preset) => (
@@ -1977,10 +1963,7 @@ export function ModelsSection() {
                   </div>
                   {customLocalContextWarning && (
                     <div className={s.localContextWarning} role="alert">
-                      {customLocalContextWarning.message}{" "}
-                      <a href={HERMES_CONTEXT_REQUIREMENTS_URL} target="_blank" rel="noreferrer" className={s.link}>
-                        查看说明 ↗
-                      </a>
+                      {customLocalContextWarning.message}
                     </div>
                   )}
                 </>
