@@ -18,11 +18,12 @@ import {
   extractBodyAfterLeadingSlashToken,
   filterComposerSkills,
   getLeadingSlashToken,
+  getSkillNamespaceToken,
   replaceLeadingSlashToken,
   type ComposerSkillCandidate,
 } from "@/lib/composer-skills";
 import {
-  filterBuiltinCommands,
+  filterComposerCommands,
   isBuiltinComposerCommandToken,
   type ComposerCommandCandidate,
 } from "@/lib/builtin-commands";
@@ -176,37 +177,49 @@ export function GooseComposer({
     (submitText.length > 0 || attachments.length > 0) &&
     !controlsDisabled &&
     !hasProcessingAttachment;
+  // Two-tier slash palette: typing "/" lists top-level commands (/skill,
+  // /compress) via slashToken (command mode); typing "/skill <name>" lists the
+  // skill catalog via skillToken (skill mode). The two tokens are disjoint by
+  // caret position, so at most one is active at a time.
   const slashToken = useMemo(
     () => selectedSkill ? null : getLeadingSlashToken(value, selectionStart, selectionEnd),
     [selectionEnd, selectionStart, selectedSkill, value],
   );
+  const skillToken = useMemo(
+    () => selectedSkill ? null : getSkillNamespaceToken(value, selectionStart, selectionEnd),
+    [selectionEnd, selectionStart, selectedSkill, value],
+  );
+  const activeToken = skillToken ?? slashToken;
   // A built-in slash command (e.g. /compress) is handled client-side on submit,
-  // so keep the skill picker out of its way — otherwise Enter could select a
-  // fuzzy skill match instead of running the command.
+  // so keep the picker out of its way — otherwise Enter could select a fuzzy
+  // match instead of running the command.
   const builtinSlash = useMemo(
     () => Boolean(slashToken && isBuiltinComposerCommandToken(slashToken.token)),
     [slashToken],
   );
+  const skillsAvailable = Boolean(skillPicker && !skillPicker.disabled);
   const skillCandidates = useMemo(
-    () => slashToken && skillPicker && !builtinSlash
-      ? filterComposerSkills(skillPicker.skills, slashToken.query)
+    () => skillToken && skillPicker
+      ? filterComposerSkills(skillPicker.skills, skillToken.query)
       : [],
-    [builtinSlash, skillPicker, slashToken],
+    [skillPicker, skillToken],
   );
-  // Built-in commands (e.g. /compress) share the suggestion panel with skills.
-  // They surface for partial input ("/comp"); a fully-typed "/compress" sets
-  // builtinSlash, the panel closes, and Enter runs the command immediately.
+  // Command mode only: rank top-level commands (skill namespace shown only where
+  // a skill picker is wired). A fully-typed "/compress" sets builtinSlash, the
+  // panel closes, and Enter runs the command immediately.
   const commandCandidates = useMemo(
-    () => slashToken && !builtinSlash ? filterBuiltinCommands(slashToken.query) : [],
-    [builtinSlash, slashToken],
+    () => !skillToken && slashToken && !builtinSlash
+      ? filterComposerCommands(slashToken.query, { skillsAvailable })
+      : [],
+    [builtinSlash, skillsAvailable, skillToken, slashToken],
   );
   const totalCandidates = commandCandidates.length + skillCandidates.length;
   const skillPanelOpen = Boolean(
-    slashToken &&
+    activeToken &&
     !builtinSlash &&
     !controlsDisabled &&
-    dismissedSlashToken !== slashToken.token &&
-    (commandCandidates.length > 0 || (skillPicker && !skillPicker.disabled)),
+    dismissedSlashToken !== activeToken.token &&
+    (commandCandidates.length > 0 || (skillToken && skillsAvailable)),
   );
   const resolvedPlaceholder = selectedSkill
     ? `继续描述给 ${selectedSkill.displayName} 的任务…`
@@ -277,7 +290,7 @@ export function GooseComposer({
 
   useEffect(() => {
     setSkillActiveIndex(0);
-  }, [slashToken?.token, commandCandidates.length, skillCandidates.length]);
+  }, [activeToken?.token, commandCandidates.length, skillCandidates.length]);
 
   // Picker now groups candidates internally (recent / configured /
   // recommended / more) from the catalog + usage log. Composer just hands it
@@ -429,8 +442,8 @@ export function GooseComposer({
   };
 
   const commitSkillSelection = (candidate: ComposerSkillCandidate) => {
-    if (!slashToken) return;
-    const next = extractBodyAfterLeadingSlashToken(value, slashToken);
+    if (!activeToken) return;
+    const next = extractBodyAfterLeadingSlashToken(value, activeToken);
     setSelectedSkill(candidate);
     setValue(next.text);
     setSelectionStart(next.cursor);
@@ -448,9 +461,10 @@ export function GooseComposer({
 
   const commitCommandSelection = (candidate: ComposerCommandCandidate) => {
     if (!slashToken) return;
-    // Fill "/compress " so the user can optionally append a focus topic; a
-    // following Enter runs it via the detail-route built-in interception.
-    const next = replaceLeadingSlashToken(value, slashToken, candidate.name);
+    // Fill "/skill " (then the skill sub-picker opens) or "/compress " (then the
+    // user can append a focus topic; a following Enter runs it via the
+    // detail-route built-in interception).
+    const next = replaceLeadingSlashToken(value, slashToken, candidate.token);
     setValue(next.text);
     setSelectionStart(next.cursor);
     setSelectionEnd(next.cursor);
@@ -520,7 +534,7 @@ export function GooseComposer({
     if (skillPanelOpen && !event.nativeEvent.isComposing) {
       if (event.key === "Escape") {
         event.preventDefault();
-        setDismissedSlashToken(slashToken?.token ?? "");
+        setDismissedSlashToken(activeToken?.token ?? "");
         return;
       }
       if (event.key === "ArrowDown") {
@@ -795,11 +809,11 @@ export function GooseComposer({
         />
 
         {skillPanelOpen ? (
-          <div className={s.skillPanel} role="listbox" aria-label="命令与 Skill">
+          <div className={s.skillPanel} role="listbox" aria-label={skillToken ? "选择 Skill" : "斜杠命令"}>
             <div className={s.skillPanelHead}>
               <span>
                 <Sparkles aria-hidden="true" />
-                命令与 Skill
+                {skillToken ? "选择 Skill" : "斜杠命令"}
               </span>
               <small>Enter / Tab 选择，Esc 关闭</small>
             </div>
@@ -807,7 +821,7 @@ export function GooseComposer({
               <div className={s.skillList}>
                 {commandCandidates.map((candidate, index) => (
                   <button
-                    key={`cmd-${candidate.name}`}
+                    key={`cmd-${candidate.token}`}
                     type="button"
                     className={s.skillOption}
                     data-active={index === skillActiveIndex}
@@ -823,18 +837,20 @@ export function GooseComposer({
                       <span className={s.skillName}>{candidate.displayName}</span>
                       <span className={s.skillDesc}>{candidate.description}</span>
                     </span>
-                    <span className={s.skillMeta}>内置命令</span>
+                    <span className={s.skillMeta}>
+                      {candidate.kind === "namespace" ? "命令组" : "内置命令"}
+                    </span>
                   </button>
                 ))}
               </div>
             ) : null}
-            {skillPicker?.loading && totalCandidates === 0 ? (
+            {skillToken && skillPicker?.loading && totalCandidates === 0 ? (
               <div className={s.skillPanelState}>正在读取已启用 Skill…</div>
-            ) : skillPicker?.error && totalCandidates === 0 ? (
+            ) : skillToken && skillPicker?.error && totalCandidates === 0 ? (
               <div className={s.skillPanelState} data-tone="error">
                 {skillPicker.error}
               </div>
-            ) : totalCandidates === 0 ? (
+            ) : skillToken && totalCandidates === 0 ? (
               <div className={s.skillPanelState}>没有匹配的 Skill</div>
             ) : skillCandidates.length > 0 ? (
               <div className={s.skillList}>

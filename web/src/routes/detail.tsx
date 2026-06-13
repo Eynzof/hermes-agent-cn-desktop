@@ -15,6 +15,7 @@ import {
   removeApprovalAtom,
 } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
+import { useSkills } from "@/hooks/use-skills";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
@@ -26,6 +27,7 @@ import { recordModelUsage } from "@/lib/model-usage-log";
 import { readSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { parseBuiltinComposerCommand } from "@/lib/builtin-commands";
+import { resolveComposerSkillCommand } from "@/lib/composer-skills";
 import { formatCompressNotice } from "@/lib/compress-feedback";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
@@ -90,12 +92,18 @@ export function DetailRoute() {
     getModelOptions,
     setSessionModel,
     setSessionReasoningEffort,
+    dispatchCommand,
     attachImage,
     detectDroppedPath,
   } = useGateway();
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
+  const skillsQuery = useSkills();
+  const enabledSkills = useMemo(
+    () => (skillsQuery.data ?? []).filter((skill) => skill.enabled),
+    [skillsQuery.data],
+  );
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(null);
   // 思考强度是全局配置（agent.reasoning_effort），不分会话；本地态仅用于
   // 选中后即时反馈，等 config 重新拉到后两者一致。null 表示尚未本地改过，
@@ -305,17 +313,32 @@ export function DetailRoute() {
       rememberSessionWorkspace(gatewaySessionId, payload.workspacePath);
       rememberSessionWorkspace(restSessionId, payload.workspacePath);
     }
+    // A `/skill <name>` invocation dispatches to the backend skill registry; the
+    // returned payload becomes the transport text while the composer still shows
+    // the literal command. Mirrors the new-task path in use-create-and-send-session.
+    let transportText: string | undefined;
+    const skillCommand = resolveComposerSkillCommand(payload.text, payload.skillCommandNames);
+    if (skillCommand) {
+      const dispatched = await dispatchCommand(
+        gatewaySessionId,
+        skillCommand.name,
+        skillCommand.arg,
+      );
+      if (dispatched.type === "skill" && dispatched.message?.trim()) {
+        transportText = dispatched.message;
+      }
+    }
     const prepared = await prepareComposerPrompt(gatewaySessionId, payload, {
       attachImage,
       detectDroppedPath,
       uploadFile: uploadAttachmentFile,
       onAttachmentUpdate: controls.updateAttachment,
-    });
+    }, { transportText });
     await sendPrompt(gatewaySessionId, prepared.promptText, {
       displayText: prepared.displayText,
       displayImages: prepared.displayImages,
     });
-  }, [attachImage, detectDroppedPath, ensureGatewaySession, restSessionId, runManualCompress, sendPrompt, taskId]);
+  }, [attachImage, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, runManualCompress, sendPrompt, taskId]);
 
   // Capability discovery is server-global — don't piggy-back on
   // ensureGatewaySession here. That helper can trigger session.resume, which
@@ -527,6 +550,14 @@ export function DetailRoute() {
               reasoningPicker={{
                 value: reasoningEffort,
                 onSelect: onReasoningEffortSelect,
+                disabled: runtimeIsBusy,
+              }}
+              skillPicker={{
+                skills: enabledSkills,
+                loading: skillsQuery.isLoading || skillsQuery.isFetching,
+                error: skillsQuery.isError
+                  ? (skillsQuery.error instanceof Error ? skillsQuery.error.message : "Skill 加载失败")
+                  : undefined,
                 disabled: runtimeIsBusy,
               }}
               contextUsage={contextUsage}
