@@ -172,13 +172,57 @@
 
 /* ── File preview ────────────────────────────────────────────────────────── */
 
+/* File tab: resizable two-pane layout (browser on top, content below). */
+.fileLayout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .fileBrowser {
+  /* Height is driven by the draggable splitter (inline style). */
   flex: 0 0 auto;
-  max-height: 38%;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-bottom: 1px solid var(--h-line-soft);
   padding: 4px;
+}
+
+/* Drag handle between the directory browser and the content. */
+.splitter {
+  flex: 0 0 auto;
+  height: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  border-top: 1px solid var(--h-line-soft);
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-soft);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.splitterGrip {
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--h-line);
+}
+
+.splitter:hover .splitterGrip,
+.splitter:active .splitterGrip {
+  background: var(--h-accent-border);
+}
+
+.fileLower {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .crumb {

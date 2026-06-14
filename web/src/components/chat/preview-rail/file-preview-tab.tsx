@@ -1,4 +1,12 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { ChevronUp, File as FileIcon, Folder, RefreshCw } from "lucide-react";
 import { useFsList } from "@/hooks/use-fs-list";
 import type { FilePreview } from "@/lib/runtime";
@@ -20,6 +28,12 @@ function basename(path: string): string {
 // 200ms FILE_RELOAD_DEBOUNCE_MS) collapses into one re-read.
 const RELOAD_DEBOUNCE_MS = 200;
 
+// Draggable split between the directory browser and the file content.
+const BROWSER_DEFAULT_HEIGHT = 200;
+const BROWSER_MIN_HEIGHT = 72;
+const BROWSER_MIN_BOTTOM = 120;
+const SPLITTER_HEIGHT = 7;
+
 export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePreviewTabProps) {
   const [dir, setDir] = useState(workspaceRoot);
 
@@ -38,6 +52,36 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
   }, [list.data?.entries]);
   const canGoUp = Boolean(dir && workspaceRoot && dir !== workspaceRoot && list.data?.parent);
   const crumbs = useMemo(() => buildBreadcrumbs(dir), [dir]);
+
+  // Draggable split between the directory browser (top) and the content (below).
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const [browserHeight, setBrowserHeight] = useState(BROWSER_DEFAULT_HEIGHT);
+  const onSplitterDown = useCallback(
+    (event: ReactPointerEvent) => {
+      event.preventDefault();
+      const layout = layoutRef.current;
+      if (!layout) return;
+      const layoutHeight = layout.getBoundingClientRect().height;
+      const startY = event.clientY;
+      const startHeight = browserHeight;
+
+      const onMove = (move: PointerEvent) => {
+        const maxTop = layoutHeight - BROWSER_MIN_BOTTOM - SPLITTER_HEIGHT;
+        const next = Math.max(
+          BROWSER_MIN_HEIGHT,
+          Math.min(startHeight + (move.clientY - startY), maxTop),
+        );
+        setBrowserHeight(next);
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [browserHeight],
+  );
 
   const [preview, setPreview] = useState<FilePreview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -115,8 +159,8 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
   }
 
   return (
-    <>
-      <div className={s.fileBrowser}>
+    <div className={s.fileLayout} ref={layoutRef}>
+      <div className={s.fileBrowser} style={{ height: browserHeight }}>
         <nav className={s.breadcrumb} aria-label="目录路径">
           {crumbs.map((crumb, index) => {
             const isLast = index === crumbs.length - 1;
@@ -175,27 +219,39 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
         ) : null}
       </div>
 
-      {filePath ? (
-        <>
-          <div className={s.fileMeta}>
-            <span className={s.fileMetaName} title={filePath}>
-              {basename(filePath)}
-            </span>
-            {preview ? <span>{formatBytes(preview.byteSize)}</span> : null}
-            {preview?.truncated ? <span>· 已截断预览</span> : null}
-            {loading ? <RefreshCw size={12} aria-hidden /> : null}
+      <div
+        className={s.splitter}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="调整目录与内容的高度"
+        onPointerDown={onSplitterDown}
+      >
+        <div className={s.splitterGrip} />
+      </div>
+
+      <div className={s.fileLower}>
+        {filePath ? (
+          <>
+            <div className={s.fileMeta}>
+              <span className={s.fileMetaName} title={filePath}>
+                {basename(filePath)}
+              </span>
+              {preview ? <span>{formatBytes(preview.byteSize)}</span> : null}
+              {preview?.truncated ? <span>· 已截断预览</span> : null}
+              {loading ? <RefreshCw size={12} aria-hidden /> : null}
+            </div>
+            <div className={s.fileContent}>
+              <FileContent path={filePath} preview={preview} error={loadError} loading={loading} />
+            </div>
+          </>
+        ) : (
+          <div className={s.empty}>
+            <FileIcon size={24} aria-hidden />
+            <p>从上方选择一个文件预览。修改磁盘上的文件后，这里会自动刷新。</p>
           </div>
-          <div className={s.fileContent}>
-            <FileContent path={filePath} preview={preview} error={loadError} loading={loading} />
-          </div>
-        </>
-      ) : (
-        <div className={s.empty}>
-          <FileIcon size={24} aria-hidden />
-          <p>从上方选择一个文件预览。修改磁盘上的文件后，这里会自动刷新。</p>
-        </div>
-      )}
-    </>
+        )}
+      </div>
+    </div>
   );
 }
 
