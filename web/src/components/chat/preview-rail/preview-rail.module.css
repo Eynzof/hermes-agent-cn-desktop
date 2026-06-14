@@ -332,8 +332,14 @@
   min-height: 0;
   overflow: auto;
   padding: 10px 12px;
-  /* File content must be selectable/copyable despite the global
-     user-select:none (styles/global.css). */
+  cursor: text;
+}
+
+/* The global reset disables selection via `#root *` (ID specificity), so a
+   plain class rule can't re-enable it — match that specificity. Mirrors the
+   standalone /logs route's approach. */
+:global(#root) .fileContent,
+:global(#root) .fileContent * {
   -webkit-user-select: text;
   user-select: text;
 }
@@ -393,11 +399,14 @@
   font-family: var(--h-font-mono);
   font-size: 11.5px;
   line-height: 1.55;
-  /* Opt back into text selection — the app sets a global user-select:none
-     (styles/global.css) for a native feel, but logs must be copyable. */
+  cursor: text;
+}
+
+/* Re-enable selection for log text at `#root *` specificity (line numbers stay
+   unselectable so copies don't include them). Mirrors the /logs route. */
+:global(#root) .logViewport .lineText {
   -webkit-user-select: text;
   user-select: text;
-  cursor: text;
 }
 
 .logLine {
