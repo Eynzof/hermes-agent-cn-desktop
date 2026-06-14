@@ -258,6 +258,23 @@
   margin: 0 auto;
 }
 
+/* Raw source view: plain, always-visible, horizontally scrollable. */
+.codePre {
+  margin: 0;
+  white-space: pre;
+  tab-size: 2;
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--h-text);
+}
+
+.markdownView {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--h-text);
+}
+
 /* ── Logs ────────────────────────────────────────────────────────────────── */
 
 .segmented {

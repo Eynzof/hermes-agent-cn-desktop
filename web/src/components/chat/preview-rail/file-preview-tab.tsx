@@ -2,13 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronUp, File as FileIcon, Folder, RefreshCw } from "lucide-react";
 import { useFsList } from "@/hooks/use-fs-list";
 import type { FilePreview } from "@/lib/runtime";
-import {
-  detectLanguage,
-  fileExtension,
-  formatBytes,
-  isMarkdownPath,
-  toFencedMarkdown,
-} from "@/lib/preview-rail";
+import { formatBytes, isMarkdownPath } from "@/lib/preview-rail";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import s from "./preview-rail.module.css";
 
@@ -199,8 +193,20 @@ function FileContent({
     return <div className={s.notice}>二进制文件（{formatBytes(preview.byteSize)}），暂不支持预览。</div>;
   }
   const text = preview.text ?? "";
-  if (isMarkdownPath(path)) {
-    return <MarkdownText text={text} />;
+  if (text.length === 0) {
+    return <div className={s.notice}>空文件。</div>;
   }
-  return <MarkdownText text={toFencedMarkdown(text, detectLanguage(path) ?? fileExtension(path))} />;
+  // Markdown renders formatted; everything else shows raw source in a plain,
+  // reliable <pre>. Routing arbitrary source through the heavyweight markdown
+  // pipeline (Streamdown + math + mermaid) was fragile/slow and could render
+  // blank — a plain <pre> always shows the content. Mirrors the upstream
+  // source view.
+  if (isMarkdownPath(path)) {
+    return (
+      <div className={s.markdownView}>
+        <MarkdownText text={text} />
+      </div>
+    );
+  }
+  return <pre className={s.codePre}>{text}</pre>;
 }
