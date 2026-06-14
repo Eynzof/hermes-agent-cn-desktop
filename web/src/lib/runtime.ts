@@ -58,6 +58,18 @@ export interface ElectronFilePickerResult {
   paths: string[];
 }
 
+export interface DownloadExternalImageInput {
+  url: string;
+}
+
+export interface DownloadedImageResult {
+  finalUrl: string;
+  filename: string;
+  mimeType: string;
+  dataBase64: string;
+  size: number;
+}
+
 export interface ElectronSimpleResult {
   ok: boolean;
   message?: string | null;
@@ -254,6 +266,15 @@ export interface PreviewFileChangedPayload {
   path: string;
 }
 
+export interface DesktopFileDropPayload {
+  phase: "enter" | "over" | "drop" | "leave";
+  paths: string[];
+  position?: {
+    x: number;
+    y: number;
+  };
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -274,6 +295,7 @@ declare global {
       request(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       externalRequest?(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;
+      downloadExternalImage?(input: DownloadExternalImageInput): Promise<DownloadedImageResult>;
       pickFiles?(): Promise<ElectronFilePickerResult>;
       pickDirectory?(): Promise<ElectronFilePickerResult>;
       requestMicrophoneAccess?(): Promise<boolean>;
@@ -330,6 +352,7 @@ declare global {
       watchPreviewFile?(input: { path: string }): Promise<WatchPreviewFileResult>;
       stopPreviewFileWatch?(input: { watchId: string }): Promise<boolean>;
       onPreviewFileChanged?(handler: (payload: PreviewFileChangedPayload) => void): () => void;
+      onFileDrop?(handler: (payload: DesktopFileDropPayload) => void): () => void;
       onSystemResume?(handler: () => void): () => void;
     };
   }
