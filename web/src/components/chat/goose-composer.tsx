@@ -8,6 +8,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { useAtomValue } from "jotai";
 import { useNavigate } from "react-router-dom";
@@ -121,6 +122,16 @@ interface GooseComposerProps {
   autoFocus?: boolean;
   disabled?: boolean;
   loading?: boolean;
+  /** When true, the user can still submit (Enter / a secondary send button)
+   * while `loading` — the parent decides what a busy submit does (queue /
+   * interrupt / steer). The Stop button stays the primary CTA. */
+  allowSubmitWhileBusy?: boolean;
+  /** Placeholder shown while busy when busy-submit is allowed; communicates the
+   * active busy-input mode (e.g. "引导当前回合（不打断）…"). */
+  busyHint?: string;
+  /** Optional control rendered in the toolbar (e.g. the busy-input-mode
+   * quick-switcher). Kept as a slot so the composer stays decoupled from config. */
+  busyModeControl?: ReactNode;
   showMeta?: boolean;
   compact?: boolean;
   /** "big" makes the composer the page hero: shows a header bar (label + char count
@@ -199,6 +210,9 @@ export function GooseComposer({
   autoFocus = false,
   disabled = false,
   loading = false,
+  allowSubmitWhileBusy = false,
+  busyHint,
+  busyModeControl,
   showMeta = true,
   compact = false,
   variant = "default",
@@ -265,7 +279,12 @@ export function GooseComposer({
   const maxRecordingSeconds = voiceMaxRecordingSecondsFromConfig(voiceConfig);
   const contextRisk = contextUsageRisk(contextUsage);
   const contextWarning = contextRiskText(contextRisk, loading);
+  // `controlsDisabled` keeps the toolbar/pickers/panels locked during a turn.
+  // The SEND path is gated separately: while busy it stays open iff the parent
+  // opted into busy-submit (queue / interrupt / steer), so Enter and the
+  // secondary send button can dispatch a busy submission.
   const controlsDisabled = disabled || loading;
+  const sendBlocked = disabled || (loading && !allowSubmitWhileBusy);
   const modelPickerDisabled = controlsDisabled || Boolean(modelPicker?.disabled);
   const submitText = selectedSkill
     ? buildSkillCommandText(selectedSkill.skill.name, value)
@@ -273,7 +292,7 @@ export function GooseComposer({
   const displayedTextLength = value.length;
   const canSend =
     (submitText.length > 0 || attachments.length > 0) &&
-    !controlsDisabled &&
+    !sendBlocked &&
     !hasProcessingAttachment;
   // Two-tier slash palette: typing "/" lists top-level commands (/skill,
   // /compress) via slashToken (command mode); typing "/skill <name>" lists the
@@ -1223,7 +1242,7 @@ export function GooseComposer({
           onClick={syncTextareaSelection}
           onSelect={syncTextareaSelection}
           onPaste={handlePaste}
-          placeholder={loading ? (loadingPlaceholder || "Hermes 正在响应...") : resolvedPlaceholder}
+          placeholder={loading ? ((allowSubmitWhileBusy && busyHint) || loadingPlaceholder || "Hermes 正在响应...") : resolvedPlaceholder}
           rows={1}
           className={s.textarea}
           disabled={disabled}
@@ -1440,6 +1459,7 @@ export function GooseComposer({
                 disabled={controlsDisabled || reasoningPicker.disabled}
               />
             ) : null}
+            {busyModeControl}
             {showMeta && (
               <>
                 <span className={s.pill}>本地模式</span>
@@ -1458,17 +1478,33 @@ export function GooseComposer({
               <span className={s.liveDot} aria-hidden="true" />
             ) : null}
             {loading && onStop ? (
-              <button
-                className={s.sendButton}
-                type="button"
-                data-mode="stop"
-                onClick={() => void onStop()}
-                disabled={disabled}
-                aria-label="中止响应"
-                title="中止响应"
-              >
-                <StopIcon />
-              </button>
+              <>
+                {allowSubmitWhileBusy ? (
+                  <button
+                    className={s.sendButton}
+                    type="button"
+                    data-mode="busy-send"
+                    data-ready={canSend}
+                    onClick={() => void send()}
+                    disabled={!canSend}
+                    aria-label={busyHint || "运行中发送"}
+                    title={busyHint || "运行中发送"}
+                  >
+                    <SendIcon />
+                  </button>
+                ) : null}
+                <button
+                  className={s.sendButton}
+                  type="button"
+                  data-mode="stop"
+                  onClick={() => void onStop()}
+                  disabled={disabled}
+                  aria-label="中止响应"
+                  title="中止响应"
+                >
+                  <StopIcon />
+                </button>
+              </>
             ) : (
               <button
                 className={s.sendButton}

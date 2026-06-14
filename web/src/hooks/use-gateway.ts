@@ -15,6 +15,7 @@ import {
   SlashCompletionResult,
   SessionUsageResult,
   SessionCompressResult,
+  SessionSteerResult,
   type GatewayEvent,
 } from "@hermes/protocol";
 import { CN_BACKEND_PROVIDER_SLUGS } from "@/lib/cn-provider-slugs";
@@ -26,6 +27,7 @@ import {
 } from "@/lib/model-options-cache";
 import { buildGatewayModelConfigValue } from "@/lib/provider-id";
 import type { ReasoningEffort } from "@/lib/reasoning-effort";
+import type { BusyInputMode } from "@/lib/busy-input-mode";
 import {
   rememberSessionMapping,
   resolveGatewaySessionId,
@@ -569,6 +571,26 @@ export function useGateway() {
     [ensureSubscribed, queryClient],
   );
 
+  // 运行时输入行为（busy_input_mode）走和思考强度同一条路：网关 config.set
+  // （key="busy"）把字面值写进 config.yaml 的 display.busy_input_mode。桌面端
+  // 纯前端读取该值决定运行中提交的行为，因此设置后只需刷新 config 查询即可。
+  const setBusyInputMode = useCallback(
+    async (mode: BusyInputMode): Promise<ConfigSetResult> => {
+      ensureSubscribed();
+      const result = parseGatewayResult(
+        ConfigSetResult,
+        await getGatewayClient().request("config.set", {
+          key: "busy",
+          value: mode,
+        }),
+        "config.set",
+      );
+      await queryClient.invalidateQueries({ queryKey: ["config"] });
+      return result;
+    },
+    [ensureSubscribed, queryClient],
+  );
+
   const attachImage = useCallback(
     async (sessionId: string, path: string): Promise<ImageAttachResult> => {
       ensureSubscribed();
@@ -619,6 +641,33 @@ export function useGateway() {
       markSessionInterrupted(gatewaySessionId);
     },
     [ensureSubscribed, markSessionInterrupted, setSessionError],
+  );
+
+  // Inject a steer message into the running turn WITHOUT interrupting it. The
+  // backend appends it to the next tool result; the model adapts on its next
+  // step. Crucially this must NOT touch frontend stream state — no
+  // markSessionInterrupted / resetStreamState — so the in-flight assistant
+  // message keeps streaming and the `interrupted` gate stays clear.
+  const steerSession = useCallback(
+    async (sessionId: string, text: string): Promise<SessionSteerResult> => {
+      const gatewaySessionId = resolveGatewaySessionId(sessionId) ?? sessionId;
+      ensureSubscribed();
+      try {
+        return parseGatewayResult(
+          SessionSteerResult,
+          await getGatewayClient().request(
+            "session.steer",
+            { session_id: gatewaySessionId, text },
+            { timeoutMs: 10_000 },
+          ),
+          "session.steer",
+        );
+      } catch (error) {
+        setSessionError({ sessionId: gatewaySessionId, message: errorMessage(error) });
+        throw error;
+      }
+    },
+    [ensureSubscribed, setSessionError],
   );
 
   const setSessionTitle = useCallback(
@@ -673,9 +722,11 @@ export function useGateway() {
     setSessionModel,
     setRuntimeModel,
     setSessionReasoningEffort,
+    setBusyInputMode,
     attachImage,
     detectDroppedPath,
     interruptSession,
+    steerSession,
     setSessionTitle,
     disconnect,
   };

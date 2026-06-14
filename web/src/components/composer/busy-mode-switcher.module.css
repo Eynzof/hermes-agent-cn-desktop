@@ -1,0 +1,132 @@
+/* Trigger — 与 goose-composer 的 .toolButton / 思考强度入口视觉对齐。 */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 1 auto;
+  gap: 6px;
+  height: var(--composer-tool-height, 28px);
+  padding: 0 10px;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--h-r-md);
+  background: var(--h-bg-soft);
+  color: var(--h-text-2);
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.trigger:hover:not(:disabled),
+.trigger[data-active="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.trigger:disabled {
+  cursor: not-allowed;
+  color: var(--h-text-3);
+  opacity: 0.55;
+}
+
+.triggerIcon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.trigger span {
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.trigger small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  opacity: 0.76;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.menu {
+  width: 232px;
+  padding: 4px;
+  background: var(--h-bg-pane);
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  box-shadow: var(--h-shadow-l);
+  font-family: var(--h-font-cn);
+}
+
+.menuTitle {
+  padding: 6px 10px 4px;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--h-text-3);
+  font-weight: 500;
+}
+
+.menuList {
+  display: flex;
+  flex-direction: column;
+}
+
+.menuItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--h-r-sm);
+  text-align: left;
+  font-family: var(--h-font-cn);
+  color: var(--h-text);
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: var(--h-line-soft);
+}
+
+.menuItem[data-active="true"] {
+  background: var(--h-bg-chip);
+}
+
+.menuItemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.menuItemLabel {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.menuItemDesc {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--h-text-3);
+}
+
+.menuCheck {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+  color: var(--h-accent);
+}
