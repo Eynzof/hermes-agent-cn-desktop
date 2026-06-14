@@ -6,7 +6,7 @@
 use std::fs;
 use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::LazyLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -755,6 +755,12 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     prefix_args.extend(api_args);
 
     let mut cmd = Command::new(&program);
+    if let Some(program_dir) = Path::new(&program)
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        cmd.current_dir(program_dir);
+    }
     // User-configured $HERMES_HOME/.env goes in first so every explicit
     // .env(...) below — and the env_remove for HERMES_YOLO_MODE — wins
     // over file contents. Re-read on every respawn so profile switches and
@@ -904,8 +910,8 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
 async fn dashboard_is_compatible(api_base_url: &str, hermes_home: &str) -> bool {
     // `/api/ws` is upstream-native — every runtime this desktop can manage
     // serves it, so compatibility only needs the fork's upload route and a
-    // matching HERMES_HOME. (The old `/api/v2/*` SSE probe is gone with the
-    // SSE transport.)
+    // matching HERMES_HOME. The legacy `/api/v2/*` transport probe was removed
+    // when the desktop switched to WS-only Gateway traffic.
     probe_dashboard(api_base_url).await
         && dashboard_supports_uploads(api_base_url).await
         && dashboard_matches_hermes_home(api_base_url, hermes_home).await
