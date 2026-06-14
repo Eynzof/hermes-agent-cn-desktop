@@ -128,7 +128,7 @@ interface GooseComposerProps {
   variant?: "default" | "big";
   /** Label shown on the left of the big-variant header bar. Default "新任务". */
   headerLabel?: string;
-  /** Empty-state hints shown only in big variant when textarea is empty. */
+  /** Empty-state hints shown when the textarea is empty. */
   hints?: ComposerHint[];
   /** Keyboard shortcut for submitting; defaults to the global composer setting. */
   submitShortcut?: ComposerSubmitShortcut;
@@ -138,6 +138,8 @@ interface GooseComposerProps {
   skillPicker?: ComposerSkillPickerProps;
   mentionPicker?: ComposerMentionPickerProps;
   contextUsage?: ComposerContextUsage | null;
+  /** Hide `/compress` affordances when the composer is not bound to an existing session. */
+  showCompressCommand?: boolean;
   initialWorkspacePath?: string;
   voiceConfig?: Record<string, unknown> | null;
 }
@@ -211,6 +213,7 @@ export function GooseComposer({
   skillPicker,
   mentionPicker,
   contextUsage,
+  showCompressCommand = true,
   initialWorkspacePath = "",
   voiceConfig = null,
 }: GooseComposerProps) {
@@ -292,8 +295,12 @@ export function GooseComposer({
   // so keep the picker out of its way — otherwise Enter could select a fuzzy
   // match instead of running the command.
   const builtinSlash = useMemo(
-    () => Boolean(slashToken && isBuiltinComposerCommandToken(slashToken.token)),
-    [slashToken],
+    () => Boolean(
+      showCompressCommand &&
+      slashToken &&
+      isBuiltinComposerCommandToken(slashToken.token),
+    ),
+    [showCompressCommand, slashToken],
   );
   const skillsAvailable = Boolean(skillPicker && !skillPicker.disabled);
   const skillCandidates = useMemo(
@@ -307,9 +314,12 @@ export function GooseComposer({
   // panel closes, and Enter runs the command immediately.
   const commandCandidates = useMemo(
     () => !skillToken && slashToken && !builtinSlash
-      ? filterComposerCommands(slashToken.query, { skillsAvailable })
+      ? filterComposerCommands(slashToken.query, {
+          skillsAvailable,
+          includeCompress: showCompressCommand,
+        })
       : [],
-    [builtinSlash, skillsAvailable, skillToken, slashToken],
+    [builtinSlash, showCompressCommand, skillsAvailable, skillToken, slashToken],
   );
   const totalCandidates = commandCandidates.length + skillCandidates.length;
   const skillPanelOpen = Boolean(
@@ -1112,6 +1122,7 @@ export function GooseComposer({
                 <ContextIndicator
                   usage={contextUsage}
                   active={loading}
+                  showCompressCommand={showCompressCommand}
                 />
               ) : null}
             </span>
@@ -1316,7 +1327,7 @@ export function GooseComposer({
           </div>
         ) : null}
 
-        {isBig && !selectedSkill && hints && hints.length > 0 && value.length === 0 ? (
+        {!selectedSkill && hints && hints.length > 0 && value.length === 0 ? (
           <div className={s.hintRow}>
             {hints.map((hint, idx) => (
               <span key={`${hint.label}-${idx}`} className={s.hintItem}>
@@ -1419,6 +1430,7 @@ export function GooseComposer({
               <ContextIndicator
                 usage={contextUsage}
                 active={loading}
+                showCompressCommand={showCompressCommand}
               />
             ) : loading ? (
               <span className={s.liveDot} aria-hidden="true" />
