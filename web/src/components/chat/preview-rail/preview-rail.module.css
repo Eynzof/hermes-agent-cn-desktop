@@ -192,6 +192,45 @@
   word-break: break-all;
 }
 
+/* Clickable path breadcrumb above the file list. */
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.crumbItem {
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  font: inherit;
+  padding: 1px 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.crumbItem:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.crumbCurrent {
+  color: var(--h-text);
+  padding: 1px 3px;
+  white-space: nowrap;
+}
+
+.crumbSep {
+  color: var(--h-text-4);
+  user-select: none;
+}
+
 .fileEntry {
   display: flex;
   align-items: center;
@@ -249,6 +288,10 @@
   min-height: 0;
   overflow: auto;
   padding: 10px 12px;
+  /* File content must be selectable/copyable despite the global
+     user-select:none (styles/global.css). */
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .fileImage {
@@ -306,6 +349,11 @@
   font-family: var(--h-font-mono);
   font-size: 11.5px;
   line-height: 1.55;
+  /* Opt back into text selection — the app sets a global user-select:none
+     (styles/global.css) for a native feel, but logs must be copyable. */
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .logLine {
@@ -328,6 +376,8 @@
   width: 34px;
   text-align: right;
   color: var(--h-text-4);
+  /* Keep line numbers out of copied selections. */
+  -webkit-user-select: none;
   user-select: none;
 }
 

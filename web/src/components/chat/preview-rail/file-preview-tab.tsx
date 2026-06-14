@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronUp, File as FileIcon, Folder, RefreshCw } from "lucide-react";
 import { useFsList } from "@/hooks/use-fs-list";
 import type { FilePreview } from "@/lib/runtime";
-import { formatBytes, isMarkdownPath } from "@/lib/preview-rail";
+import { buildBreadcrumbs, formatBytes, isMarkdownPath } from "@/lib/preview-rail";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import s from "./preview-rail.module.css";
 
@@ -37,6 +37,7 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
     });
   }, [list.data?.entries]);
   const canGoUp = Boolean(dir && workspaceRoot && dir !== workspaceRoot && list.data?.parent);
+  const crumbs = useMemo(() => buildBreadcrumbs(dir), [dir]);
 
   const [preview, setPreview] = useState<FilePreview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -116,7 +117,29 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
   return (
     <>
       <div className={s.fileBrowser}>
-        <div className={s.crumb}>{dir}</div>
+        <nav className={s.breadcrumb} aria-label="目录路径">
+          {crumbs.map((crumb, index) => {
+            const isLast = index === crumbs.length - 1;
+            const showSep = index > 0 && crumbs[index - 1]?.path !== "/";
+            return (
+              <Fragment key={crumb.path}>
+                {showSep ? <span className={s.crumbSep}>/</span> : null}
+                {isLast ? (
+                  <span className={s.crumbCurrent}>{crumb.label}</span>
+                ) : (
+                  <button
+                    type="button"
+                    className={s.crumbItem}
+                    onClick={() => setDir(crumb.path)}
+                    title={crumb.path}
+                  >
+                    {crumb.label}
+                  </button>
+                )}
+              </Fragment>
+            );
+          })}
+        </nav>
         {canGoUp ? (
           <button
             type="button"
@@ -145,7 +168,11 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
             {entry.name}
           </button>
         ))}
-        {!list.isLoading && entries.length === 0 ? <div className={s.crumb}>空目录</div> : null}
+        {list.isError ? (
+          <div className={s.crumb}>无法打开此目录（可能超出可访问范围）。</div>
+        ) : !list.isLoading && entries.length === 0 ? (
+          <div className={s.crumb}>空目录</div>
+        ) : null}
       </div>
 
       {filePath ? (
