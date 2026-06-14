@@ -40,6 +40,12 @@ import {
 } from "@/lib/context-usage";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { reasoningEffortFromConfig, type ReasoningEffort } from "@/lib/reasoning-effort";
+import {
+  busyInputModeFromConfig,
+  resolveBusySubmitAction,
+  BUSY_INPUT_MODE_HINTS,
+  type BusyInputMode,
+} from "@/lib/busy-input-mode";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
   readSessionTitleOverrides,
@@ -55,6 +61,7 @@ import {
 import { TopBar, TopBarActionButton, TopBarActions } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
 import { QueuePanel } from "@/components/composer/queue-panel";
+import { BusyModeSwitcher } from "@/components/composer/busy-mode-switcher";
 import {
   enqueueQueuedPrompt,
   removeQueuedPrompt,
@@ -102,6 +109,8 @@ export function DetailRoute() {
     resumeSession,
     sendPrompt,
     interruptSession,
+    steerSession,
+    setBusyInputMode,
     getSessionUsage,
     compressSession,
     getModelOptions,
@@ -113,6 +122,10 @@ export function DetailRoute() {
     detectDroppedPath,
   } = useGateway();
   const { data: config } = useConfig();
+  // 运行时输入行为：override 提供即时反馈，config 重新拉到后一致（与思考强度同款）。
+  const configBusyMode = useMemo(() => busyInputModeFromConfig(config), [config]);
+  const [busyModeOverride, setBusyModeOverride] = useState<BusyInputMode | null>(null);
+  const busyMode = busyModeOverride ?? configBusyMode;
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
   const skillsQuery = useSkills();
@@ -389,14 +402,43 @@ export function DetailRoute() {
       void runManualCompress(sessionId, builtin.arg);
       return;
     }
-    // Park the submission while the agent is busy; the composer clears on resolve
-    // and the queue drains (auto on settle, or manually) when it frees up.
+    // Busy submit: route through the active busy-input mode (引导/打断/排队).
+    // CLI parity — see web/src/lib/busy-input-mode.ts.
     if (runtimeIsBusy) {
-      enqueueQueuedPrompt(taskId, { text: payload.text, attachments: payload.attachments }, Date.now());
+      const action = resolveBusySubmitAction(busyMode, {
+        text: payload.text,
+        hasAttachments: payload.attachments.length > 0,
+      });
+      if (action.kind === "queue") {
+        // Park it; the queue drains on settle (or manually via the panel).
+        enqueueQueuedPrompt(taskId, { text: payload.text, attachments: payload.attachments }, Date.now());
+        return;
+      }
+      if (action.kind === "interrupt") {
+        // Stop the current turn and resend as a fresh turn. sendPrompt's
+        // busy-retry (4009) does the interrupt+resubmit. Suppress exactly one
+        // auto-drain so a queued entry doesn't race the resubmit.
+        userInterruptedRef.current = true;
+        await submitPayload(payload, controls.updateAttachment);
+        return;
+      }
+      // steer: inject into the running turn without interrupting. No new user
+      // turn is created, so surface the steered text as a notice for context.
+      const sid = await ensureGatewaySession();
+      try {
+        const res = await steerSession(sid, payload.text);
+        appendNotice({
+          sessionId: sid,
+          text: res.status === "rejected" ? "引导未被接受（当前无法注入）" : `已引导：${payload.text}`,
+          level: res.status === "rejected" ? "info" : "system",
+        });
+      } catch {
+        appendNotice({ sessionId: sid, text: "引导失败，请重试或改用打断/排队。", level: "error" });
+      }
       return;
     }
     await submitPayload(payload, controls.updateAttachment);
-  }, [ensureGatewaySession, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
+  }, [appendNotice, busyMode, ensureGatewaySession, runManualCompress, runtimeIsBusy, steerSession, submitPayload, taskId]);
 
   // ---- Send queue (drain on settle, send-now / edit / delete) --------------
   const queuedPrompts = useQueuedPrompts(taskId);
@@ -519,6 +561,16 @@ export function DetailRoute() {
     userInterruptedRef.current = true;
     await interruptSession(sessionId);
   }, [interruptSession, runtimeIsBusy, runtimeSessionId, taskId]);
+
+  const onBusyModeSelect = useCallback(async (mode: BusyInputMode) => {
+    setBusyModeOverride(mode); // 立即反馈，等 config 重新拉到后一致
+    try {
+      await setBusyInputMode(mode);
+    } catch (error) {
+      setBusyModeOverride(null);
+      console.error("设置运行时输入行为失败：", error);
+    }
+  }, [setBusyInputMode]);
 
   const title = sessionData || sessionSummary
     ? sessionDisplayTitle({
@@ -695,6 +747,14 @@ export function DetailRoute() {
               showMeta={false}
               loading={runtimeIsBusy}
               onStop={onStop}
+              allowSubmitWhileBusy
+              busyHint={BUSY_INPUT_MODE_HINTS[busyMode]}
+              busyModeControl={
+                <BusyModeSwitcher
+                  value={busyMode}
+                  onSelect={onBusyModeSelect}
+                />
+              }
               voiceConfig={config ?? null}
               modelPicker={{
                 selected: contextSelection,

@@ -894,6 +894,21 @@ export const SessionCompressResult = z.object({
 }).passthrough();
 export type SessionCompressResult = z.infer<typeof SessionCompressResult>;
 
+// session.steer — inject a user message into the running turn without
+// interrupting it. The agent picks it up after the current tool batch.
+// Core (tui_gateway/server.py) returns {status:"queued"|"rejected", text}.
+export const SessionSteerParams = z.object({
+  session_id: z.string(),
+  text: z.string(),
+});
+export type SessionSteerParams = z.infer<typeof SessionSteerParams>;
+
+export const SessionSteerResult = z.object({
+  status: z.enum(["queued", "rejected"]).optional(),
+  text: z.string().optional(),
+}).passthrough();
+export type SessionSteerResult = z.infer<typeof SessionSteerResult>;
+
 export const GatewayModelProvider = z.object({
   slug: z.string(),
   name: z.string().optional(),

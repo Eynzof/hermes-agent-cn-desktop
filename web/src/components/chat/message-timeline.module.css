@@ -128,7 +128,13 @@
 
 .systemNoticeIcon {
   flex-shrink: 0;
-  margin-top: 2px;
+  align-self: start;
+  /* Center the icon within the first text line box instead of a fixed offset,
+     so it stays optically aligned with the copy at any conversation density.
+     Uses the same font-size/line-height vars the notice text uses. */
+  margin-top: calc(
+    (var(--conversation-font-size, 12.5px) * var(--conversation-line-height, 1.6) - 15px) / 2
+  );
   color: var(--h-text-3);
 }
 
